@@ -1,0 +1,5 @@
+{
+  "name": "NoteVix",
+  "description": "Premium one-page notes for CBSE students (Class 6-10). Features include chapter summaries, important questions, and an AI doubt solver.",
+  "requestFramePermissions": ["camera", "microphone"]
+}

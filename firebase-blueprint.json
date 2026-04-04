@@ -1,0 +1,75 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Student profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "class": { "type": "string", "enum": ["6", "7", "8", "9", "10"] },
+        "role": { "type": "string", "enum": ["student", "admin"] },
+        "savedNotes": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Chapter": {
+      "title": "Chapter",
+      "description": "Chapter-wise notes and important questions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "class": { "type": "string" },
+        "subject": { "type": "string" },
+        "title": { "type": "string" },
+        "summary": { "type": "string" },
+        "keyPoints": { "type": "array", "items": { "type": "string" } },
+        "formulas": { "type": "array", "items": { "type": "string" } },
+        "diagrams": { "type": "array", "items": { "type": "string" } },
+        "importantQuestions": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "question": { "type": "string" },
+              "answer": { "type": "string" }
+            }
+          } 
+        },
+        "pdfUrl": { "type": "string" },
+        "isPremium": { "type": "boolean" }
+      },
+      "required": ["class", "subject", "title"]
+    },
+    "Doubt": {
+      "title": "Doubt",
+      "description": "AI Chat history for student doubts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "query": { "type": "string" },
+        "response": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "query", "response"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile data"
+    },
+    "/chapters/{chapterId}": {
+      "schema": "Chapter",
+      "description": "Chapter notes and questions"
+    },
+    "/doubts/{doubtId}": {
+      "schema": "Doubt",
+      "description": "AI doubt solver history"
+    }
+  }
+}
