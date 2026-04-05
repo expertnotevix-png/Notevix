@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, where, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Chapter } from '../types';
 import { Plus, Trash2, Edit2, Save, X, ChevronLeft, Database } from 'lucide-react';
@@ -24,7 +24,17 @@ export default function Admin() {
 
   useEffect(() => {
     fetchChapters();
+    autoSeedResources();
   }, []);
+
+  const autoSeedResources = async () => {
+    const q = query(collection(db, 'subject_resources'), limit(1));
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      console.log("Auto-seeding subject resources...");
+      await addSampleData();
+    }
+  };
 
   const fetchChapters = async () => {
     const querySnapshot = await getDocs(collection(db, 'chapters'));
@@ -62,7 +72,7 @@ export default function Admin() {
   };
 
   const addSampleData = async () => {
-    const samples = [
+    const chapterSamples = [
       {
         class: '10',
         subject: 'maths',
@@ -108,11 +118,112 @@ export default function Admin() {
       }
     ];
 
-    for (const sample of samples) {
-      await addDoc(collection(db, 'chapters'), sample);
+    for (const sample of chapterSamples) {
+      const q = query(collection(db, 'chapters'), where('title', '==', sample.title), where('class', '==', sample.class));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        await addDoc(collection(db, 'chapters'), sample);
+      }
     }
+
+    // Add Subject Resources from User Request
+    const subjectResources = [
+      {
+        class: '8', subject: 'science',
+        onePageNotesUrl: 'https://drive.google.com/file/d/1ka-QeoholdXB3xaX7jX2QNXO-kP2n-ES/view?usp=drivesdk',
+        fullNotesUrl: 'https://drive.google.com/file/d/1wCuBo0YApmkqef-UnT29CtRd1tOcrb9v/view?usp=drivesdk',
+        importantQuestionsUrl: 'https://drive.google.com/file/d/1UB0-QptnzsAOEU5lKwA60HtVfFo5_P_g/view?usp=drivesdk',
+        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1F5OA8aK6ncJLD0iVYTIR_etSDjBqKheB/view?usp=drivesdk'
+      },
+      {
+        class: '8', subject: 'sst',
+        onePageNotesUrl: 'https://drive.google.com/file/d/1mV5bcLIz8j3IEE61Ijwdo2RDrq-j05yG/view?usp=drivesdk',
+        fullNotesUrl: 'https://drive.google.com/file/d/1USJWh6tDlRH7ATYRrsHC_HgESYHAzb8D/view?usp=drivesdk',
+        importantQuestionsUrl: 'https://drive.google.com/file/d/1TCAEGb4e9s1bd6ttGmHiDVYsimaH3_Pd/view?usp=drivesdk',
+        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1cVOUmI7StT61OlrZC16oE0mE1pV8YnNk/view?usp=drivesdk'
+      },
+      {
+        class: '8', subject: 'maths',
+        onePageNotesUrl: 'https://drive.google.com/file/d/1GcVbFswV7OB3dutymQjdHbOXheuK9Ysn/view?usp=drivesdk',
+        fullNotesUrl: 'https://drive.google.com/file/d/1K64QsZT9lNwS_12r5HioULIHVXFDm_oB/view?usp=drivesdk',
+        importantQuestionsUrl: 'https://drive.google.com/file/d/1d1-V1u8oWALR49tKMKBWe1Dtnz3nnOBH/view?usp=drivesdk',
+        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1z-cvLUQQAT02csfWiM03_b8dcPFObtE0/view?usp=drivesdk'
+      },
+      {
+        class: '8', subject: 'english',
+        onePageNotesUrl: 'https://drive.google.com/file/d/1CCK6uzH1ma5I0E5sWWW57_BbUo9PrlHX/view?usp=drivesdk',
+        fullNotesUrl: 'https://drive.google.com/file/d/1IXSc8wcjttmkOVpVY7ocKZkTuRVI0iTZ/view?usp=drivesdk',
+        importantQuestionsUrl: 'https://drive.google.com/file/d/1Cr_fvccNKi-PBWTRb6CF6DB27qz73r3z/view?usp=drivesdk',
+        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1nuGRofcxb9LKD7d0-7ngBU1mmrhCSjgX/view?usp=drivesdk'
+      },
+      {
+        class: '9', subject: 'science',
+        onePageNotesUrl: 'https://drive.google.com/file/d/16J3l5x2tiNwhtG1YUH6Xpc1VyhlbEhaU/view?usp=drivesdk',
+        fullNotesUrl: 'https://drive.google.com/file/d/19KV_y1pdj4TN9mSg1pnymrjF7RVpghGH/view?usp=drivesdk',
+        importantQuestionsUrl: 'https://drive.google.com/file/d/1_Nr1VeZX7a3g9HM3j6nhzZ5xe9XXA-3_/view?usp=drivesdk',
+        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1IGo5ErM6jnmJ1KrM60o-XjAt1XgEj5sc/view?usp=drivesdk'
+      },
+      {
+        class: '9', subject: 'sst',
+        onePageNotesUrl: 'https://drive.google.com/file/d/1Nhof272xWczHbg7hX_ageR4NvXPJNrJP/view?usp=drivesdk',
+        fullNotesUrl: 'https://drive.google.com/file/d/1Ig18ncXDHEQ0Mxu-sM7akb_01Ab3H02j/view?usp=drivesdk',
+        importantQuestionsUrl: 'https://drive.google.com/file/d/1rig4ZYP8nk22Kfr35OR9VLxv7WQy7n9a/view?usp=drivesdk',
+        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1lDAxdI-_b7JcYkWPdt6uegR4LdQuxQ3h/view?usp=drivesdk'
+      },
+      {
+        class: '9', subject: 'maths',
+        onePageNotesUrl: 'https://drive.google.com/file/d/1aIa3PGgzZu8K1p9NY5yejDcgzMPHZ2ZP/view?usp=drivesdk',
+        fullNotesUrl: 'https://drive.google.com/file/d/1iW1BUO46koPSud20WlGPAf1VMNlXUNyI/view?usp=drivesdk',
+        importantQuestionsUrl: 'https://drive.google.com/file/d/1DJEF8yHKGWDnsJt7tGGTkH0DgGbn9yRp/view?usp=drivesdk'
+      },
+      {
+        class: '9', subject: 'english',
+        onePageNotesUrl: 'https://drive.google.com/file/d/1k_7qp8KYIyIvYME5sfO1Oq-nt7LjxyOL/view?usp=drivesdk',
+        fullNotesUrl: 'https://drive.google.com/file/d/1B81cuGvF5-jJnhUA1n-Yy6nAk-H9W-B3/view?usp=drivesdk',
+        importantQuestionsUrl: 'https://drive.google.com/file/d/10X16DY-AxnxyXrIDwbNqJSt_Y8NRZyv7/view?usp=drivesdk',
+        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1n4_HnHrShSzIMkfiVQYDtuJSWPnkqqO2/view?usp=drivesdk'
+      },
+      {
+        class: '10', subject: 'science',
+        onePageNotesUrl: 'https://drive.google.com/file/d/1vVRXXenGoaFzn1R2cEs_es5gDzzEzO9J/view?usp=drivesdk',
+        fullNotesUrl: 'https://drive.google.com/file/d/1Rer-yq5_lUAx79ziwtXDR0AXgaoB10Eh/view?usp=drivesdk',
+        importantQuestionsUrl: 'https://drive.google.com/file/d/17gHE4BBgTcFbq6Z1jUMEaooPuDhSxrFR/view?usp=drivesdk',
+        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1lGG-l-89veqwwbEIltxRtXql1Xhb1uVT/view?usp=drivesdk'
+      },
+      {
+        class: '10', subject: 'sst',
+        onePageNotesUrl: 'https://drive.google.com/file/d/1C5HNfr4u_8vQ9eArzdZRSUhE_Owy4h8c/view?usp=drivesdk',
+        fullNotesUrl: 'https://drive.google.com/file/d/1hUk1u-XnJb47lAFvU3qvWUK_kTMHwVc6/view?usp=drivesdk',
+        importantQuestionsUrl: 'https://drive.google.com/file/d/1B_s9nxd9df3uR2Zas-sna9S5sthtt-1w/view?usp=drivesdk',
+        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1Bo5ON7oLLp_uhra5dOx5vVk82x07WGCJ/view?usp=drivesdk'
+      },
+      {
+        class: '10', subject: 'maths',
+        onePageNotesUrl: 'https://drive.google.com/file/d/1KX_F1r4IHYCu91TrMUNMq8OTcdHrADY8/view?usp=drivesdk',
+        fullNotesUrl: 'https://drive.google.com/file/d/1K1N9t9aHeurE9FXt3sYuEYUPbL_PZgh4/view?usp=drivesdk',
+        importantQuestionsUrl: 'https://drive.google.com/file/d/1gQeKMBnrQ0ke4LoruKq_Mk4faEh2kcG_/view?usp=drivesdk',
+        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1apDQ1U9eUINJ5DWtJx3KqjqlRmM7iVV9/view?usp=drivesdk'
+      },
+      {
+        class: '10', subject: 'english',
+        onePageNotesUrl: 'https://drive.google.com/file/d/161HIkuYtIOD5esDsmjwnI5lq6PPltOZG/view?usp=drivesdk',
+        fullNotesUrl: 'https://drive.google.com/file/d/158isO5zrYWgdKafIiRdzOXLHJaYEeu35/view?usp=drivesdk',
+        importantQuestionsUrl: 'https://drive.google.com/file/d/1ELq7c3bOUDaVFAsu2OcDtuwYiOikTm74/view?usp=drivesdk',
+        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1DcvYECk1QfqhAu2isR3PHnolvcMtx4n5/view?usp=drivesdk'
+      }
+    ];
+
+    for (const res of subjectResources) {
+      // Check if already exists
+      const q = query(collection(db, 'subject_resources'), where('class', '==', res.class), where('subject', '==', res.subject));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        await addDoc(collection(db, 'subject_resources'), res);
+      }
+    }
+
     fetchChapters();
-    alert("Sample data added!");
+    alert("Sample data and subject resources added!");
   };
 
   return (
@@ -161,7 +272,7 @@ export default function Admin() {
                     onChange={(e) => setFormData({ ...formData, class: e.target.value })}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm"
                   >
-                    {['6', '7', '8', '9', '10'].map(c => <option key={c} value={c}>Class {c}</option>)}
+                    {['8', '9', '10'].map(c => <option key={c} value={c}>Class {c}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1">

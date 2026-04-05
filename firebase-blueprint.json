@@ -9,7 +9,7 @@
         "email": { "type": "string", "format": "email" },
         "displayName": { "type": "string" },
         "photoURL": { "type": "string" },
-        "class": { "type": "string", "enum": ["6", "7", "8", "9", "10"] },
+        "class": { "type": "string", "enum": ["8", "9", "10"] },
         "role": { "type": "string", "enum": ["student", "admin"] },
         "savedNotes": { "type": "array", "items": { "type": "string" } },
         "createdAt": { "type": "string", "format": "date-time" }
@@ -56,6 +56,21 @@
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "query", "response"]
+    },
+    "SubjectResource": {
+      "title": "SubjectResource",
+      "description": "Subject-level PDF resources",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "class": { "type": "string" },
+        "subject": { "type": "string" },
+        "onePageNotesUrl": { "type": "string" },
+        "fullNotesUrl": { "type": "string" },
+        "importantQuestionsUrl": { "type": "string" },
+        "examOrientedQuestionsUrl": { "type": "string" }
+      },
+      "required": ["class", "subject"]
     }
   },
   "firestore": {
@@ -70,6 +85,10 @@
     "/doubts/{doubtId}": {
       "schema": "Doubt",
       "description": "AI doubt solver history"
+    },
+    "/subject_resources/{resourceId}": {
+      "schema": "SubjectResource",
+      "description": "Subject-level resources"
     }
   }
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from './lib/firebase';
 import { UserProfile } from './types';
 
@@ -25,31 +25,51 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    let unsubscribeUser: (() => void) | undefined;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-        if (userDoc.exists()) {
-          setUser(userDoc.data() as UserProfile);
-        } else {
+        // Initial fetch and setup
+        const userRef = doc(db, 'users', firebaseUser.uid);
+        const userDoc = await getDoc(userRef);
+        
+        if (!userDoc.exists()) {
           const newUser: UserProfile = {
             uid: firebaseUser.uid,
             email: firebaseUser.email || '',
             displayName: firebaseUser.displayName || 'Student',
             photoURL: firebaseUser.photoURL || '',
-            role: 'student',
+            role: firebaseUser.email === 'expertraj8@gmail.com' ? 'admin' : 'student',
             savedNotes: [],
+            notificationsEnabled: true,
             createdAt: new Date().toISOString(),
           };
-          await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
-          setUser(newUser);
+          await setDoc(userRef, newUser);
         }
+
+        // Listen for real-time updates
+        unsubscribeUser = onSnapshot(userRef, (doc) => {
+          if (doc.exists()) {
+            const userData = doc.data() as UserProfile;
+            // Auto-promote admin if needed
+            if (firebaseUser.email === 'expertraj8@gmail.com' && userData.role !== 'admin') {
+              updateDoc(userRef, { role: 'admin' });
+            }
+            setUser(userData);
+          }
+        });
+
       } else {
         setUser(null);
+        if (unsubscribeUser) unsubscribeUser();
       }
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeUser) unsubscribeUser();
+    };
   }, []);
 
   if (loading) {

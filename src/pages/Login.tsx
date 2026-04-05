@@ -2,6 +2,7 @@ import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
 import { motion } from 'motion/react';
 import { LogIn } from 'lucide-react';
+import { Logo } from '../components/Logo';
 
 export default function Login() {
   const handleLogin = async () => {
@@ -20,11 +21,9 @@ export default function Login() {
         className="text-center space-y-8 max-w-sm w-full"
       >
         <div className="space-y-4">
-          <div className="w-24 h-24 bg-purple-600 rounded-full flex items-center justify-center mx-auto shadow-2xl shadow-purple-500/20">
-            <span className="text-5xl font-bold text-white">N</span>
-          </div>
+          <Logo className="w-24 h-24 mx-auto shadow-2xl shadow-purple-500/20" />
           <h1 className="text-4xl font-bold tracking-tight">NoteVix</h1>
-          <p className="text-gray-400">Premium one-page notes for Class 6-10 toppers.</p>
+          <p className="text-gray-400">Premium one-page notes for Class 8-10 toppers.</p>
         </div>
 
         <div className="space-y-4">

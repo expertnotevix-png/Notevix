@@ -6,6 +6,7 @@ export interface UserProfile {
   class?: string;
   role: 'student' | 'admin';
   savedNotes: string[];
+  notificationsEnabled?: boolean;
   createdAt: string;
 }
 
@@ -32,4 +33,14 @@ export interface Doubt {
   query: string;
   response: string;
   timestamp: string;
+}
+
+export interface SubjectResource {
+  id: string;
+  class: string;
+  subject: string;
+  onePageNotesUrl?: string;
+  fullNotesUrl?: string;
+  importantQuestionsUrl?: string;
+  examOrientedQuestionsUrl?: string;
 }
