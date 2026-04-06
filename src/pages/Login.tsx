@@ -8,8 +8,15 @@ export default function Login() {
   const handleLogin = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed:", error);
+      if (error.code === 'auth/popup-blocked') {
+        alert("The login popup was blocked by your browser. Please allow popups for this site and try again.");
+      } else if (error.code === 'auth/unauthorized-domain') {
+        alert("This domain is not authorized for Google Sign-in. Please add this URL to your Firebase Console 'Authorized Domains'.");
+      } else {
+        alert("Login failed. Please check your internet connection or try again later.");
+      }
     }
   };
 
@@ -38,6 +45,11 @@ export default function Login() {
           <p className="text-xs text-gray-500 px-4">
             By continuing, you agree to our Terms of Service and Privacy Policy.
           </p>
+          
+          <div className="pt-4 text-[10px] text-gray-600 space-y-1">
+            <p>Having trouble? Ensure popups are enabled.</p>
+            <p className="break-all">Add <span className="font-mono text-purple-400">{window.location.origin}</span> and <span className="font-mono text-purple-400">NoteVix.netlify.app</span> to Firebase Authorized Domains.</p>
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-4 pt-8">

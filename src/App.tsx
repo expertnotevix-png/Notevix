@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
-import { auth, db } from './lib/firebase';
+import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
 import { UserProfile } from './types';
 
 // Pages
@@ -31,7 +31,13 @@ export default function App() {
       if (firebaseUser) {
         // Initial fetch and setup
         const userRef = doc(db, 'users', firebaseUser.uid);
-        const userDoc = await getDoc(userRef);
+        let userDoc;
+        try {
+          userDoc = await getDoc(userRef);
+        } catch (error) {
+          handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
+          return;
+        }
         
         if (!userDoc.exists()) {
           const newUser: UserProfile = {
@@ -44,7 +50,11 @@ export default function App() {
             notificationsEnabled: true,
             createdAt: new Date().toISOString(),
           };
-          await setDoc(userRef, newUser);
+          try {
+            await setDoc(userRef, newUser);
+          } catch (error) {
+            handleFirestoreError(error, OperationType.CREATE, `users/${firebaseUser.uid}`);
+          }
         }
 
         // Listen for real-time updates
@@ -53,10 +63,14 @@ export default function App() {
             const userData = doc.data() as UserProfile;
             // Auto-promote admin if needed
             if (firebaseUser.email === 'expertraj8@gmail.com' && userData.role !== 'admin') {
-              updateDoc(userRef, { role: 'admin' });
+              updateDoc(userRef, { role: 'admin' }).catch(err => 
+                handleFirestoreError(err, OperationType.UPDATE, `users/${firebaseUser.uid}`)
+              );
             }
             setUser(userData);
           }
+        }, (error) => {
+          handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
         });
 
       } else {

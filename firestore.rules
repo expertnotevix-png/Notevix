@@ -1,3 +1,52 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: {userId} (Firebase Auth UID)
+// Fields:
+//   - uid: string (required) - User's unique ID
+//   - email: string (required, email format) - User's email address
+//   - displayName: string (optional) - User's display name
+//   - photoURL: string (optional, url format) - User's profile photo URL
+//   - class: string (optional, enum: ["8", "9", "10"]) - User's selected class
+//   - role: string (required, enum: ["student", "admin"]) - User's role
+//   - savedNotes: list (optional, strings) - List of saved note IDs
+//   - notificationsEnabled: bool (optional) - Notification preference
+//   - createdAt: string (required, iso8601) - Account creation timestamp
+//
+// Collection: chapters
+// Document ID: {chapterId}
+// Fields:
+//   - class: string (required) - Class level
+//   - subject: string (required) - Subject name
+//   - title: string (required) - Chapter title
+//   - summary: string (optional) - Chapter summary
+//   - keyPoints: list (optional, strings) - Key points
+//   - importantQuestions: list (optional, objects) - Q&A pairs
+//   - pdfUrl: string (optional, url format) - PDF link
+//   - isPremium: bool (optional) - Premium status
+//
+// Collection: doubts
+// Document ID: {doubtId}
+// Fields:
+//   - userId: string (required) - Owner's UID
+//   - query: string (required) - User's question
+//   - response: string (required) - AI response
+//   - timestamp: string (required, iso8601) - Query timestamp
+//
+// Collection: subject_resources
+// Document ID: {resourceId}
+// Fields:
+//   - class: string (required) - Class level
+//   - subject: string (required) - Subject name
+//   - onePageNotesUrl: string (optional, url format)
+//   - fullNotesUrl: string (optional, url format)
+//   - importantQuestionsUrl: string (optional, url format)
+//   - examOrientedQuestionsUrl: string (optional, url format)
+//
+// ===============================================================
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -5,6 +54,7 @@ service cloud.firestore {
     // ===============================================================
     // Helper Functions
     // ===============================================================
+
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -19,59 +69,78 @@ service cloud.firestore {
          (request.auth.token.email == "expertraj8@gmail.com" && request.auth.token.email_verified == true));
     }
 
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUrl(url) {
+      return url is string && (url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
     function isValidUser(data) {
-      return data.keys().hasAll(['uid', 'email', 'role']) &&
-             data.uid is string &&
-             data.email is string &&
-             data.role in ['student', 'admin'];
+      return data.keys().hasAll(['uid', 'email', 'role', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             isValidEmail(data.email) &&
+             data.role in ['student', 'admin'] &&
+             isValidDateString(data.createdAt) &&
+             (!('photoURL' in data) || isValidUrl(data.photoURL)) &&
+             (!('class' in data) || data.class in ['8', '9', '10']);
     }
 
     function isValidChapter(data) {
       return data.keys().hasAll(['class', 'subject', 'title']) &&
-             data.class is string &&
-             data.subject is string &&
-             data.title is string;
+             data.class is string && data.class.size() > 0 &&
+             data.subject is string && data.subject.size() > 0 &&
+             data.title is string && data.title.size() > 0 &&
+             (!('pdfUrl' in data) || isValidUrl(data.pdfUrl));
     }
 
     function isValidDoubt(data) {
-      return data.keys().hasAll(['userId', 'query', 'response']) &&
-             data.userId == request.auth.uid;
+      return data.keys().hasAll(['userId', 'query', 'response', 'timestamp']) &&
+             data.userId == request.auth.uid &&
+             data.query is string && data.query.size() > 0 && data.query.size() < 5000 &&
+             data.response is string && data.response.size() > 0 &&
+             isValidDateString(data.timestamp);
     }
 
     // ===============================================================
     // Rules
     // ===============================================================
 
-    // User Profiles
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && 
+                    (request.resource.data.role == 'student' || isAdmin());
       allow update: if isOwner(userId) && isValidUser(request.resource.data) && 
-                    request.resource.data.role == resource.data.role; // Prevent self-escalation
-      allow delete: if isAdmin();
+                    (request.resource.data.role == resource.data.role || isAdmin());
     }
 
-    // Chapters (Notes)
     match /chapters/{chapterId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isAdmin() && isValidChapter(request.resource.data);
+      allow write: if isAdmin() && isValidChapter(request.resource.data);
     }
 
-    // Doubts (AI Chat)
     match /doubts/{doubtId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isAuthenticated() && isValidDoubt(request.resource.data);
-      allow update, delete: if isAdmin();
+      allow update, delete: if false; // Doubts are immutable history
     }
 
-    // Subject Resources
     match /subject_resources/{resourceId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
-    // Default Deny
-    match /{document=**} {
+    // Default deny
+    match /{path=**} {
       allow read, write: if false;
     }
   }
