@@ -1,21 +1,30 @@
-import { signInWithPopup } from 'firebase/auth';
+import { useState } from 'react';
+import { signInWithPopup, signInWithRedirect } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
 import { motion } from 'motion/react';
-import { LogIn } from 'lucide-react';
+import { LogIn, Loader2 } from 'lucide-react';
 import { Logo } from '../components/Logo';
 
 export default function Login() {
-  const handleLogin = async () => {
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async (useRedirect = false) => {
+    setLoading(true);
     try {
-      await signInWithPopup(auth, googleProvider);
+      if (useRedirect) {
+        await signInWithRedirect(auth, googleProvider);
+      } else {
+        await signInWithPopup(auth, googleProvider);
+      }
     } catch (error: any) {
+      setLoading(false);
       console.error("Login failed:", error);
       if (error.code === 'auth/popup-blocked') {
-        alert("The login popup was blocked by your browser. Please allow popups for this site and try again.");
+        alert("The login popup was blocked by your browser. Please allow popups or try the 'Redirect' method below.");
       } else if (error.code === 'auth/unauthorized-domain') {
         alert("This domain is not authorized for Google Sign-in. Please add this URL to your Firebase Console 'Authorized Domains'.");
       } else {
-        alert("Login failed. Please check your internet connection or try again later.");
+        alert("Login failed. Please check your internet connection or try the 'Redirect' method.");
       }
     }
   };
@@ -35,11 +44,20 @@ export default function Login() {
 
         <div className="space-y-4">
           <button
-            onClick={handleLogin}
-            className="w-full purple-gradient text-white font-semibold py-4 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-purple-500/30 active:scale-95 transition-transform"
+            onClick={() => handleLogin(false)}
+            disabled={loading}
+            className="w-full purple-gradient text-white font-semibold py-4 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-purple-500/30 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <LogIn className="w-5 h-5" />
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
             Continue with Google
+          </button>
+
+          <button
+            onClick={() => handleLogin(true)}
+            disabled={loading}
+            className="w-full bg-white/5 text-gray-300 font-medium py-3 px-6 rounded-2xl flex items-center justify-center gap-3 border border-white/10 active:scale-95 transition-transform disabled:opacity-50"
+          >
+            Trouble? Use Redirect Method
           </button>
           
           <p className="text-xs text-gray-500 px-4">
