@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI } from '@google/genai';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Bot, User, Sparkles, ChevronLeft, Trash2 } from 'lucide-react';
 import { UserProfile, Doubt } from '../types';
@@ -32,16 +31,22 @@ export default function DoubtSolver({ user }: DoubtSolverProps) {
     setLoading(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: userMessage,
-        config: {
-          systemInstruction: "You are NoteVix AI, a helpful tutor for CBSE students (Class 6-10). Provide clear, concise, and exam-focused answers. Use simple language and examples where possible. If the question is not related to studies, politely redirect the student to focus on their exams.",
-        },
+      const response = await fetch('/api/ai/doubt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: userMessage,
+          systemInstruction: "You are NoteVix AI, a helpful tutor for CBSE students (Class 6-10). Provide clear, concise, and exam-focused answers. Use simple language and examples where possible. If the question is not related to studies, politely redirect the student to focus on their exams."
+        })
       });
 
-      const botResponse = response.text || "I'm sorry, I couldn't process that. Please try again.";
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to get response');
+      }
+
+      const data = await response.json();
+      const botResponse = data.text || "I'm sorry, I couldn't process that. Please try again.";
       setMessages(prev => [...prev, { role: 'bot', text: botResponse }]);
 
       // Save to Firestore

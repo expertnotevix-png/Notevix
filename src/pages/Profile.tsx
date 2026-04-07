@@ -2,7 +2,7 @@ import { auth, db } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
 import { UserProfile } from '../types';
-import { LogOut, Settings, Shield, CreditCard, Bell, ChevronRight, Award } from 'lucide-react';
+import { LogOut, Settings, Shield, CreditCard, Bell, ChevronRight, Award, Instagram, Send, BookOpen, Moon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 
@@ -22,6 +22,11 @@ export default function Profile({ user }: ProfileProps) {
     await updateDoc(userRef, { notificationsEnabled: !user.notificationsEnabled });
   };
 
+  const toggleStudyMode = async () => {
+    const userRef = doc(db, 'users', user.uid);
+    await updateDoc(userRef, { studyModeEnabled: !user.studyModeEnabled });
+  };
+
   const updateClass = async (cls: string) => {
     const userRef = doc(db, 'users', user.uid);
     await updateDoc(userRef, { class: cls });
@@ -30,7 +35,13 @@ export default function Profile({ user }: ProfileProps) {
   const menuItems = [
     { icon: CreditCard, label: 'Subscription', sub: 'Manage your plan', color: 'text-yellow-500', action: () => {} },
     { icon: Bell, label: 'Notifications', sub: user.notificationsEnabled ? 'Enabled' : 'Disabled', color: user.notificationsEnabled ? 'text-green-500' : 'text-blue-500', action: toggleNotifications },
+    { icon: Moon, label: 'Study Mode', sub: user.studyModeEnabled ? 'Distraction-free on' : 'Standard mode', color: user.studyModeEnabled ? 'text-purple-500' : 'text-gray-400', action: toggleStudyMode },
     { icon: Settings, label: 'Settings', sub: 'App preferences', color: 'text-gray-400', action: () => {} },
+  ];
+
+  const socialLinks = [
+    { icon: Instagram, label: 'Instagram', handle: '@_notevix', url: 'https://instagram.com/_notevix', color: 'text-pink-500' },
+    { icon: Send, label: 'Telegram', handle: 'NoteVix Official', url: 'https://t.me/NoteVix', color: 'text-blue-400' },
   ];
 
   if (user.role === 'admin') {
@@ -125,6 +136,30 @@ export default function Profile({ user }: ProfileProps) {
           </div>
           <span className="font-bold text-sm">Logout</span>
         </button>
+      </div>
+
+      {/* Social Links */}
+      <div className="space-y-4">
+        <h3 className="font-bold text-gray-400 uppercase text-xs tracking-widest">Connect with us</h3>
+        <div className="grid grid-cols-2 gap-3">
+          {socialLinks.map((social) => (
+            <a
+              key={social.label}
+              href={social.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="glass-card p-4 rounded-2xl flex flex-col items-center gap-2 text-center hover:border-purple-500/50 transition-colors"
+            >
+              <div className={`w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center ${social.color}`}>
+                <social.icon className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-xs">{social.label}</h4>
+                <p className="text-[10px] text-gray-500">{social.handle}</p>
+              </div>
+            </a>
+          ))}
+        </div>
       </div>
 
       <div className="text-center pt-4">

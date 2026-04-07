@@ -7,6 +7,7 @@ export interface UserProfile {
   role: 'student' | 'admin';
   savedNotes: string[];
   notificationsEnabled?: boolean;
+  studyModeEnabled?: boolean;
   createdAt: string;
 }
 

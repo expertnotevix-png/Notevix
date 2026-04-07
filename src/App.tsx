@@ -53,6 +53,7 @@ export default function App() {
             role: firebaseUser.email === 'expertraj8@gmail.com' ? 'admin' : 'student',
             savedNotes: [],
             notificationsEnabled: true,
+            studyModeEnabled: false,
             createdAt: new Date().toISOString(),
           };
           try {
