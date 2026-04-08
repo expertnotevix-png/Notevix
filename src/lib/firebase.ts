@@ -4,9 +4,11 @@ import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
+
+// Use more robust Firestore settings for restricted network environments
 export const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-}, firebaseConfig.firestoreDatabaseId);
+  experimentalAutoDetectLongPolling: true,
+}, firebaseConfig.firestoreDatabaseId || '(default)');
 
 // Use initializeAuth with browserPopupRedirectResolver to handle third-party cookie blocking better
 export const auth = initializeAuth(app, {
