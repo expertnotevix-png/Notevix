@@ -65,8 +65,8 @@ export default function Login() {
           </p>
           
           <div className="pt-4 text-[10px] text-gray-600 space-y-1">
-            <p>Having trouble? Ensure popups are enabled.</p>
-            <p className="break-all">Add <span className="font-mono text-purple-400">{window.location.origin}</span> and <span className="font-mono text-purple-400">NoteVix.netlify.app</span> to Firebase Authorized Domains.</p>
+            <p>Having trouble? Ensure popups are enabled and third-party cookies are allowed for Firebase.</p>
+            <p className="break-all">Add <span className="font-mono text-purple-400">notevix.pages.dev</span> and <span className="font-mono text-purple-400">{window.location.origin}</span> to Firebase Authorized Domains.</p>
           </div>
         </div>
 
