@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Chapter } from '../types';
-import { Search, Filter, BookOpen, Lock } from 'lucide-react';
+import { Search, Filter, BookOpen, Lock, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function Explore() {
@@ -11,25 +11,42 @@ export default function Explore() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSearch = async () => {
-    if (!searchTerm.trim()) return;
+  const handleSearch = async (term: string = searchTerm) => {
+    if (!term.trim()) {
+      setResults([]);
+      return;
+    }
     setLoading(true);
-    // Note: Firestore doesn't support full-text search natively well.
-    // For a real app, we'd use Algolia or similar.
-    // Here we'll just fetch all and filter client-side for the demo.
-    const q = query(collection(db, 'chapters'));
-    const querySnapshot = await getDocs(q);
-    const allChapters = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Chapter));
-    const filtered = allChapters.filter(c => 
-      c.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.subject.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    setResults(filtered);
-    setLoading(false);
+    try {
+      const q = query(collection(db, 'chapters'));
+      const querySnapshot = await getDocs(q);
+      const allChapters = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Chapter));
+      const filtered = allChapters.filter(c => 
+        c.title.toLowerCase().includes(term.toLowerCase()) ||
+        c.subject.toLowerCase().includes(term.toLowerCase())
+      );
+      setResults(filtered);
+    } catch (error) {
+      console.error("Search error:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (searchTerm) {
+        handleSearch(searchTerm);
+      } else {
+        setResults([]);
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm]);
+
   return (
-    <div className="p-6 space-y-8">
+    <div className="p-6 space-y-8 pb-24">
       <div className="space-y-2">
         <h1 className="text-2xl font-bold">Explore</h1>
         <p className="text-gray-500 text-sm">Find notes by chapter or subject.</p>
@@ -44,11 +61,22 @@ export default function Explore() {
             onChange={(e) => setSearchTerm(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
             placeholder="Search chapters..."
-            className="w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-purple-500 transition-colors"
+            className="w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-12 py-3 text-sm focus:outline-none focus:border-purple-500 transition-colors"
           />
+          {searchTerm && (
+            <button 
+              onClick={() => setSearchTerm('')}
+              className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-white/10 rounded-full"
+            >
+              <X className="w-4 h-4 text-gray-500" />
+            </button>
+          )}
         </div>
-        <button className="p-3 glass-card rounded-2xl">
-          <Filter className="w-6 h-6 text-gray-400" />
+        <button 
+          onClick={() => handleSearch()}
+          className="p-3 purple-gradient rounded-2xl shadow-lg shadow-purple-500/20 active:scale-95 transition-transform"
+        >
+          <Search className="w-6 h-6 text-white" />
         </button>
       </div>
 
