@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { signInWithPopup, signInWithRedirect } from 'firebase/auth';
-import { auth, googleProvider } from '../lib/firebase';
+import { auth, googleProvider, analytics } from '../lib/firebase';
+import { logEvent } from 'firebase/analytics';
 import { motion } from 'motion/react';
 import { LogIn, Loader2, Check } from 'lucide-react';
 import { Logo } from '../components/Logo';
@@ -16,12 +17,15 @@ export default function Login() {
       if (useRedirect) {
         await signInWithRedirect(auth, googleProvider);
       } else {
-        await signInWithPopup(auth, googleProvider);
+        const result = await signInWithPopup(auth, googleProvider);
+        // Log login event
+        analytics.then(a => {
+          if (a) logEvent(a, 'login', { method: 'Google' });
+        });
       }
     } catch (error: any) {
       setLoading(false);
       console.error("Login failed:", error);
-      // Removed alert() as per instructions
     }
   };
 
