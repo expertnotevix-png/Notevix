@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { signInWithPopup, signInWithRedirect } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
 import { motion } from 'motion/react';
-import { LogIn, Loader2 } from 'lucide-react';
+import { LogIn, Loader2, Check } from 'lucide-react';
 import { Logo } from '../components/Logo';
+import { Link } from 'react-router-dom';
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
+  const [agreed, setAgreed] = useState(false);
 
   const handleLogin = async (useRedirect = false) => {
     setLoading(true);
@@ -36,31 +38,38 @@ export default function Login() {
           <p className="text-gray-400">Premium one-page notes for Class 8-10 toppers.</p>
         </div>
 
-        <div className="space-y-4">
-          <button
-            onClick={() => handleLogin(false)}
-            disabled={loading}
-            className="w-full purple-gradient text-white font-semibold py-4 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-purple-500/30 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
-            Continue with Google
-          </button>
+        <div className="space-y-6">
+          <div className="flex items-start gap-3 text-left px-2">
+            <button 
+              onClick={() => setAgreed(!agreed)}
+              className={`mt-0.5 w-5 h-5 rounded-md border transition-all flex items-center justify-center flex-shrink-0 ${
+                agreed ? 'bg-purple-600 border-purple-600' : 'border-white/20 bg-white/5'
+              }`}
+            >
+              {agreed && <Check className="w-3.5 h-3.5 text-white" />}
+            </button>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              I agree to the <Link to="/terms" className="text-purple-400 hover:underline">Terms of Service</Link> and <Link to="/privacy" className="text-purple-400 hover:underline">Privacy Policy</Link>.
+            </p>
+          </div>
 
-          <button
-            onClick={() => handleLogin(true)}
-            disabled={loading}
-            className="w-full bg-white/5 text-gray-300 font-medium py-3 px-6 rounded-2xl flex items-center justify-center gap-3 border border-white/10 active:scale-95 transition-transform disabled:opacity-50"
-          >
-            Trouble? Use Redirect Method
-          </button>
-          
-          <p className="text-xs text-gray-500 px-4">
-            By continuing, you agree to our Terms of Service and Privacy Policy.
-          </p>
-          
-          <div className="pt-4 text-[10px] text-gray-600 space-y-1">
-            <p>Having trouble? Ensure popups are enabled and third-party cookies are allowed for Firebase.</p>
-            <p className="break-all">Add <span className="font-mono text-purple-400">notevix.pages.dev</span> and <span className="font-mono text-purple-400">{window.location.origin}</span> to Firebase Authorized Domains.</p>
+          <div className="space-y-4">
+            <button
+              onClick={() => handleLogin(false)}
+              disabled={loading || !agreed}
+              className="w-full purple-gradient text-white font-semibold py-4 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-purple-500/30 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
+              Continue with Google
+            </button>
+
+            <button
+              onClick={() => handleLogin(true)}
+              disabled={loading || !agreed}
+              className="w-full bg-white/5 text-gray-300 font-medium py-3 px-6 rounded-2xl flex items-center justify-center gap-3 border border-white/10 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Trouble? Use Redirect Method
+            </button>
           </div>
         </div>
 

@@ -15,6 +15,10 @@ import ChapterList from './pages/ChapterList';
 import NoteView from './pages/NoteView';
 import FocusTimer from './pages/FocusTimer';
 import Admin from './pages/Admin';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import AboutUs from './pages/AboutUs';
+import Contact from './pages/Contact';
+import TermsOfService from './pages/TermsOfService';
 
 // Components
 import BottomNav from './components/BottomNav';
@@ -146,6 +150,10 @@ export default function App() {
           <Route path="/class/:classId/:subjectId" element={user ? <ChapterList /> : <Navigate to="/login" />} />
           <Route path="/note/:noteId" element={user ? <NoteView user={user} /> : <Navigate to="/login" />} />
           <Route path="/focus" element={user ? <FocusTimer user={user} /> : <Navigate to="/login" />} />
+          <Route path="/privacy" element={user ? <PrivacyPolicy /> : <Navigate to="/login" />} />
+          <Route path="/about" element={user ? <AboutUs /> : <Navigate to="/login" />} />
+          <Route path="/contact" element={user ? <Contact /> : <Navigate to="/login" />} />
+          <Route path="/terms" element={user ? <TermsOfService /> : <Navigate to="/login" />} />
           
           <Route path="/admin" element={user?.role === 'admin' ? <Admin /> : <Navigate to="/" />} />
         </Routes>

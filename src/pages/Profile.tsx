@@ -130,7 +130,31 @@ export default function Profile({ user }: ProfileProps) {
             <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-white transition-colors" />
           </button>
         ))}
+      </div>
 
+      {/* Legal & Support */}
+      <div className="space-y-3">
+        <h3 className="font-bold text-gray-400 uppercase text-xs tracking-widest">Legal & Support</h3>
+        <div className="grid grid-cols-1 gap-2">
+          {[
+            { label: 'About Us', path: '/about' },
+            { label: 'Contact Us', path: '/contact' },
+            { label: 'Privacy Policy', path: '/privacy' },
+            { label: 'Terms of Service', path: '/terms' },
+          ].map((link) => (
+            <button
+              key={link.label}
+              onClick={() => navigate(link.path)}
+              className="w-full glass-card p-4 rounded-2xl flex items-center justify-between group"
+            >
+              <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">{link.label}</span>
+              <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-white transition-colors" />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-3">
         <button
           onClick={handleLogout}
           className="w-full glass-card p-4 rounded-2xl flex items-center gap-4 text-red-500 mt-4"

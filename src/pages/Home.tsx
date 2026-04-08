@@ -18,6 +18,7 @@ const subjects = [
 ];
 
 import { Logo } from '../components/Logo';
+import { AdBanner } from '../components/AdBanner';
 
 const classes = ['8', '9', '10'];
 
@@ -272,6 +273,8 @@ export default function Home({ user }: HomeProps) {
           </div>
         </motion.div>
       </div>
+
+      <AdBanner slot="home_banner" />
 
       {/* Class Selector */}
       <div className="space-y-4">

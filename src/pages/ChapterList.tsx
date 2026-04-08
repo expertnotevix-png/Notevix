@@ -5,6 +5,7 @@ import { db } from '../lib/firebase';
 import { SubjectResource } from '../types';
 import { motion } from 'motion/react';
 import { ChevronLeft, FileText, Book, HelpCircle, Calculator, History, ChevronRight, RefreshCw } from 'lucide-react';
+import { AdBanner } from '../components/AdBanner';
 
 export default function ChapterList() {
   const { classId, subjectId } = useParams();
@@ -80,6 +81,8 @@ export default function ChapterList() {
           <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
+
+      <AdBanner slot="chapter_list_banner" />
 
       <div className="w-full h-px bg-white/10" />
 
