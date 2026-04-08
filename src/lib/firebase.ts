@@ -1,10 +1,21 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getAnalytics, isSupported } from 'firebase/analytics';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Ensure we only initialize once
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+
+// Initialize Analytics lazily
+export const analytics = isSupported().then(yes => {
+  if (yes) {
+    const instance = getAnalytics(app);
+    console.log("Firebase Analytics initialized with ID:", firebaseConfig.measurementId);
+    return instance;
+  }
+  return null;
+});
 
 // Use robust Firestore settings
 export const db = initializeFirestore(app, {
