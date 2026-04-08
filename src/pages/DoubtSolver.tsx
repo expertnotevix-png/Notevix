@@ -5,10 +5,14 @@ import { UserProfile, Doubt } from '../types';
 import { collection, addDoc, query, where, orderBy, limit, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import ReactMarkdown from 'react-markdown';
+import { GoogleGenAI } from "@google/genai";
 
 interface DoubtSolverProps {
   user: UserProfile;
 }
+
+// Initialize Gemini AI
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export default function DoubtSolver({ user }: DoubtSolverProps) {
   const [messages, setMessages] = useState<{ role: 'user' | 'bot'; text: string }[]>([]);
@@ -31,22 +35,15 @@ export default function DoubtSolver({ user }: DoubtSolverProps) {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/ai/doubt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: userMessage,
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: userMessage,
+        config: {
           systemInstruction: "You are NoteVix AI, a helpful tutor for CBSE students (Class 6-10). Provide clear, concise, and exam-focused answers. Use simple language and examples where possible. If the question is not related to studies, politely redirect the student to focus on their exams."
-        })
+        }
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to get response');
-      }
-
-      const data = await response.json();
-      const botResponse = data.text || "I'm sorry, I couldn't process that. Please try again.";
+      const botResponse = response.text || "I'm sorry, I couldn't process that. Please try again.";
       setMessages(prev => [...prev, { role: 'bot', text: botResponse }]);
 
       // Save to Firestore
@@ -56,8 +53,12 @@ export default function DoubtSolver({ user }: DoubtSolverProps) {
         response: botResponse,
         timestamp: new Date().toISOString(),
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("AI Error:", error);
+      // Log more details if available
+      if (error.message) {
+        console.error("Error Message:", error.message);
+      }
       setMessages(prev => [...prev, { role: 'bot', text: "Oops! Something went wrong. Check your connection." }]);
     } finally {
       setLoading(false);
