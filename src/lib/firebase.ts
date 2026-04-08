@@ -1,21 +1,17 @@
-import { initializeApp } from 'firebase/app';
-import { initializeAuth, GoogleAuthProvider, browserPopupRedirectResolver, browserLocalPersistence } from 'firebase/auth';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
+// Ensure we only initialize once
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Use more robust Firestore settings for restricted network environments
+// Use robust Firestore settings
 export const db = initializeFirestore(app, {
   experimentalAutoDetectLongPolling: true,
 }, firebaseConfig.firestoreDatabaseId || '(default)');
 
-// Use initializeAuth with browserPopupRedirectResolver to handle third-party cookie blocking better
-export const auth = initializeAuth(app, {
-  persistence: browserLocalPersistence,
-  popupRedirectResolver: browserPopupRedirectResolver,
-});
-
+export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
 export enum OperationType {

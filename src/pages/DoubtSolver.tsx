@@ -11,14 +11,26 @@ interface DoubtSolverProps {
   user: UserProfile;
 }
 
-// Initialize Gemini AI
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Initialize Gemini AI lazily to prevent crashes if key is missing
+const getAI = () => {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key || key === 'undefined') {
+    console.warn("NoteVix: Gemini API key is missing!");
+    return null;
+  }
+  return new GoogleGenAI({ apiKey: key });
+};
 
 export default function DoubtSolver({ user }: DoubtSolverProps) {
   const [messages, setMessages] = useState<{ role: 'user' | 'bot'; text: string }[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const aiRef = useRef<GoogleGenAI | null>(null);
+
+  useEffect(() => {
+    aiRef.current = getAI();
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -28,6 +40,11 @@ export default function DoubtSolver({ user }: DoubtSolverProps) {
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
+    
+    if (!aiRef.current) {
+      setMessages(prev => [...prev, { role: 'bot', text: "AI is currently unavailable. Please check the API key configuration." }]);
+      return;
+    }
 
     const userMessage = input.trim();
     setInput('');
@@ -35,7 +52,7 @@ export default function DoubtSolver({ user }: DoubtSolverProps) {
     setLoading(true);
 
     try {
-      const response = await ai.models.generateContent({
+      const response = await aiRef.current.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: userMessage,
         config: {

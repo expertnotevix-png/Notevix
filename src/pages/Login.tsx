@@ -19,13 +19,7 @@ export default function Login() {
     } catch (error: any) {
       setLoading(false);
       console.error("Login failed:", error);
-      if (error.code === 'auth/popup-blocked') {
-        alert("The login popup was blocked by your browser. Please allow popups or try the 'Redirect' method below.");
-      } else if (error.code === 'auth/unauthorized-domain') {
-        alert("This domain is not authorized for Google Sign-in. Please add this URL to your Firebase Console 'Authorized Domains'.");
-      } else {
-        alert("Login failed. Please check your internet connection or try the 'Redirect' method.");
-      }
+      // Removed alert() as per instructions
     }
   };
 
