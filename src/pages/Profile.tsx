@@ -66,12 +66,16 @@ export default function Profile({ user }: ProfileProps) {
         </div>
         <div className="flex justify-center gap-4">
           <div className="glass-card px-4 py-2 rounded-xl">
-            <span className="text-xs text-gray-500 block">Class</span>
-            <span className="font-bold">{user.class || 'N/A'}</span>
+            <span className="text-xs text-gray-500 block">Streak</span>
+            <span className="font-bold">🔥 {user.streak?.currentCount || 0}</span>
+          </div>
+          <div className="glass-card px-4 py-2 rounded-xl">
+            <span className="text-xs text-gray-500 block">Focus</span>
+            <span className="font-bold">⌛ {user.totalFocusMinutes || 0}m</span>
           </div>
           <div className="glass-card px-4 py-2 rounded-xl">
             <span className="text-xs text-gray-500 block">Saved</span>
-            <span className="font-bold">{user.savedNotes.length}</span>
+            <span className="font-bold">🔖 {user.savedNotes.length}</span>
           </div>
         </div>
       </div>

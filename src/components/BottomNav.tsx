@@ -1,12 +1,12 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Search, Bookmark, User, MessageSquare } from 'lucide-react';
+import { Home, Search, Bookmark, User, Timer } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function BottomNav() {
   const navItems = [
     { icon: Home, label: 'Home', path: '/' },
     { icon: Search, label: 'Explore', path: '/explore' },
-    { icon: MessageSquare, label: 'Doubt', path: '/doubt' },
+    { icon: Timer, label: 'Focus', path: '/focus' },
     { icon: Bookmark, label: 'Saved', path: '/saved' },
     { icon: User, label: 'Profile', path: '/profile' },
   ];

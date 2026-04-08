@@ -8,6 +8,11 @@ export interface UserProfile {
   savedNotes: string[];
   notificationsEnabled?: boolean;
   studyModeEnabled?: boolean;
+  streak: {
+    currentCount: number;
+    lastUpdateDate: string; // ISO date string
+  };
+  totalFocusMinutes: number;
   createdAt: string;
 }
 

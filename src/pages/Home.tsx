@@ -211,6 +211,17 @@ export default function Home({ user }: HomeProps) {
     }
   };
 
+  const [recentlyViewed, setRecentlyViewed] = useState<any[]>([]);
+
+  useEffect(() => {
+    const saved = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
+    setRecentlyViewed(saved);
+  }, []);
+
+  const getSubjectData = (id: string) => {
+    return subjects.find(s => s.id === id) || subjects[0];
+  };
+
   return (
     <div className="p-6 space-y-8">
       {/* Header */}
@@ -227,27 +238,40 @@ export default function Home({ user }: HomeProps) {
         </div>
       </div>
 
-      {/* Premium Banner */}
-      <motion.div
-        whileHover={{ scale: 1.02 }}
-        className="purple-gradient p-6 rounded-3xl relative overflow-hidden shadow-xl shadow-purple-500/20"
-      >
-        <div className="relative z-10 space-y-2">
-          <div className="flex items-center gap-2">
-            <Crown className="w-5 h-5 text-yellow-300 fill-yellow-300" />
-            <span className="font-bold text-lg">Unlock NoteVix Pro</span>
+      {/* Streak & Focus Dashboard */}
+      <div className="grid grid-cols-2 gap-4">
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          className="purple-gradient p-5 rounded-3xl relative overflow-hidden shadow-xl shadow-purple-500/20"
+        >
+          <div className="relative z-10 space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">🔥</span>
+              <span className="font-bold text-lg">{user.streak?.currentCount || 0} Days</span>
+            </div>
+            <p className="text-white/80 text-[10px] uppercase tracking-wider font-bold">Daily Streak</p>
           </div>
-          <p className="text-white/80 text-sm max-w-[200px]">
-            Get access to all premium notes and important questions.
-          </p>
-          <button className="bg-white text-purple-600 px-4 py-2 rounded-xl text-sm font-bold mt-2">
-            Upgrade Now
-          </button>
-        </div>
-        <div className="absolute -right-4 -bottom-4 opacity-20">
-          <Crown className="w-32 h-32" />
-        </div>
-      </motion.div>
+          <div className="absolute -right-4 -bottom-4 opacity-10">
+            <Crown className="w-20 h-20" />
+          </div>
+        </motion.div>
+
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          className="bg-[#1a1635] p-5 rounded-3xl relative overflow-hidden border border-white/5 shadow-xl"
+        >
+          <div className="relative z-10 space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">⌛</span>
+              <span className="font-bold text-lg">{user.totalFocusMinutes || 0}m</span>
+            </div>
+            <p className="text-gray-400 text-[10px] uppercase tracking-wider font-bold">Focus Time</p>
+          </div>
+          <div className="absolute -right-4 -bottom-4 opacity-5">
+            <BookOpen className="w-20 h-20" />
+          </div>
+        </motion.div>
+      </div>
 
       {/* Class Selector */}
       <div className="space-y-4">
@@ -298,24 +322,43 @@ export default function Home({ user }: HomeProps) {
         </motion.div>
       )}
 
-      {/* Recently Viewed - Only show if class is selected */}
-      {selectedClass && (
+      {/* Recently Viewed - Only show if items exist */}
+      {recentlyViewed.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-lg">Recently Viewed</h3>
-            <button className="text-purple-400 text-sm font-medium">See All</button>
+            <button 
+              onClick={() => {
+                localStorage.removeItem('recentlyViewed');
+                setRecentlyViewed([]);
+              }}
+              className="text-purple-400 text-sm font-medium"
+            >
+              Clear
+            </button>
           </div>
-          <div className="glass-card p-4 rounded-3xl flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
-              <BookOpen className="w-6 h-6 text-blue-500" />
-            </div>
-            <div className="flex-1">
-              <h4 className="font-bold text-sm">Polynomials</h4>
-              <p className="text-xs text-gray-500">Mathematics • Class {selectedClass}</p>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
-              <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-            </div>
+          <div className="space-y-3">
+            {recentlyViewed.map((item, i) => {
+              const subjectData = getSubjectData(item.subjectId);
+              return (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  onClick={() => navigate(`/class/${item.classId}/${item.subjectId}`)}
+                  className="glass-card p-4 rounded-3xl flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-all"
+                >
+                  <div className={`w-12 h-12 ${subjectData.color} rounded-xl flex items-center justify-center shadow-lg`}>
+                    <subjectData.icon className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-bold text-sm capitalize">{item.subjectId} Resources</h4>
+                    <p className="text-xs text-gray-500">Subject • Class {item.classId}</p>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-600" />
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       )}

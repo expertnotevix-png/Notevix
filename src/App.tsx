@@ -13,7 +13,7 @@ import Profile from './pages/Profile';
 import Login from './pages/Login';
 import ChapterList from './pages/ChapterList';
 import NoteView from './pages/NoteView';
-import DoubtSolver from './pages/DoubtSolver';
+import FocusTimer from './pages/FocusTimer';
 import Admin from './pages/Admin';
 
 // Components
@@ -54,6 +54,11 @@ export default function App() {
             savedNotes: [],
             notificationsEnabled: true,
             studyModeEnabled: false,
+            streak: {
+              currentCount: 1,
+              lastUpdateDate: new Date().toISOString().split('T')[0],
+            },
+            totalFocusMinutes: 0,
             createdAt: new Date().toISOString(),
           };
           try {
@@ -64,9 +69,32 @@ export default function App() {
         }
 
         // Listen for real-time updates
-        unsubscribeUser = onSnapshot(userRef, (doc) => {
-          if (doc.exists()) {
-            const userData = doc.data() as UserProfile;
+        unsubscribeUser = onSnapshot(userRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const userData = docSnap.data() as UserProfile;
+            
+            // Streak Logic
+            const today = new Date().toISOString().split('T')[0];
+            const lastUpdate = userData.streak?.lastUpdateDate;
+            
+            if (lastUpdate !== today) {
+              const yesterday = new Date();
+              yesterday.setDate(yesterday.getDate() - 1);
+              const yesterdayStr = yesterday.toISOString().split('T')[0];
+              
+              let newCount = userData.streak?.currentCount || 0;
+              if (lastUpdate === yesterdayStr) {
+                newCount += 1;
+              } else {
+                newCount = 1;
+              }
+              
+              updateDoc(userRef, {
+                'streak.currentCount': newCount,
+                'streak.lastUpdateDate': today
+              }).catch(err => console.error("Streak update failed:", err));
+            }
+
             // Auto-promote admin if needed
             if (firebaseUser.email === 'expertraj8@gmail.com' && userData.role !== 'admin') {
               updateDoc(userRef, { role: 'admin' }).catch(err => 
@@ -117,7 +145,7 @@ export default function App() {
           
           <Route path="/class/:classId/:subjectId" element={user ? <ChapterList /> : <Navigate to="/login" />} />
           <Route path="/note/:noteId" element={user ? <NoteView user={user} /> : <Navigate to="/login" />} />
-          <Route path="/doubt" element={user ? <DoubtSolver user={user} /> : <Navigate to="/login" />} />
+          <Route path="/focus" element={user ? <FocusTimer user={user} /> : <Navigate to="/login" />} />
           
           <Route path="/admin" element={user?.role === 'admin' ? <Admin /> : <Navigate to="/" />} />
         </Routes>

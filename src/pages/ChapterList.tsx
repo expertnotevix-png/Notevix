@@ -32,6 +32,19 @@ export default function ChapterList() {
 
   useEffect(() => {
     fetchData();
+    
+    // Save to recently viewed
+    if (classId && subjectId) {
+      const recentlyViewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
+      const newItem = { classId, subjectId, timestamp: Date.now() };
+      
+      // Filter out duplicates and keep only last 3
+      const updated = [newItem, ...recentlyViewed.filter((item: any) => 
+        !(item.classId === classId && item.subjectId === subjectId)
+      )].slice(0, 3);
+      
+      localStorage.setItem('recentlyViewed', JSON.stringify(updated));
+    }
   }, [classId, subjectId]);
 
   if (loading) {
