@@ -5,7 +5,7 @@ import { db } from '../lib/firebase';
 import { SubjectResource } from '../types';
 import { motion } from 'motion/react';
 import { ChevronLeft, FileText, Book, HelpCircle, Calculator, History, ChevronRight, RefreshCw } from 'lucide-react';
-import { AdBanner } from '../components/AdBanner';
+import { MotivationalCarousel } from '../components/MotivationalCarousel';
 
 export default function ChapterList() {
   const { classId, subjectId } = useParams();
@@ -82,7 +82,7 @@ export default function ChapterList() {
         </button>
       </div>
 
-      <AdBanner slot="chapter_list_banner" />
+      <MotivationalCarousel />
 
       <div className="w-full h-px bg-white/10" />
 
