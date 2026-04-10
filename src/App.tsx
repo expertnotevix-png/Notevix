@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, getRedirectResult } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, onSnapshot, query, collection, where, getDocs, addDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, query, collection, where, getDocs, addDoc, increment } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
 import { UserProfile } from './types';
 
@@ -192,6 +192,21 @@ export default function App() {
       if (unsubscribeUser) unsubscribeUser();
     };
   }, []);
+
+  // Global Time Tracking (1 min = 10 points)
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(() => {
+      const userRef = doc(db, 'users', user.uid);
+      updateDoc(userRef, {
+        totalFocusMinutes: increment(1),
+        totalPoints: increment(10)
+      }).catch(err => console.error("Global time tracking failed:", err));
+    }, 60000); // Every minute
+
+    return () => clearInterval(interval);
+  }, [user?.uid]);
 
   if (loading) {
     return (

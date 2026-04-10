@@ -46,16 +46,7 @@ export default function FocusTimer({ user }: FocusTimerProps) {
 
     if (mode === 'focus') {
       setSessionsCompleted(prev => prev + 1);
-      // Update total focus minutes and points in Firestore
-      try {
-        const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, {
-          totalFocusMinutes: increment(MODES.focus.minutes),
-          totalPoints: increment(MODES.focus.minutes * 10)
-        });
-      } catch (error) {
-        console.error("Error updating focus minutes:", error);
-      }
+      // Points and minutes are now handled by the global time tracker in App.tsx
       
       // Suggest break
       setMode('shortBreak');
