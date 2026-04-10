@@ -13,6 +13,10 @@ export interface UserProfile {
     lastUpdateDate: string; // ISO date string
   };
   totalFocusMinutes: number;
+  referralCode: string;
+  referredBy?: string;
+  referralCount: number;
+  isPremium: boolean;
   createdAt: string;
 }
 

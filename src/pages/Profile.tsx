@@ -2,9 +2,11 @@ import { auth, db } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
 import { UserProfile } from '../types';
-import { LogOut, Settings, Shield, CreditCard, Bell, ChevronRight, Award, Instagram, Send, BookOpen, Moon } from 'lucide-react';
+import { LogOut, Settings, Shield, CreditCard, Bell, ChevronRight, Award, Instagram, Send, BookOpen, Moon, Bookmark, Share2, Copy, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
+import { useState } from 'react';
+import { motion } from 'motion/react';
 
 interface ProfileProps {
   user: UserProfile;
@@ -12,6 +14,7 @@ interface ProfileProps {
 
 export default function Profile({ user }: ProfileProps) {
   const navigate = useNavigate();
+  const [copied, setCopied] = useState(false);
 
   const handleLogout = () => {
     signOut(auth);
@@ -43,6 +46,26 @@ export default function Profile({ user }: ProfileProps) {
     { icon: Instagram, label: 'Instagram', handle: '@_notevix', url: 'https://instagram.com/_notevix', color: 'text-pink-500' },
     { icon: Send, label: 'Telegram', handle: 'NoteVix Official', url: 'https://t.me/NoteVix', color: 'text-blue-400' },
   ];
+
+  const referralLink = `${window.location.origin}/login?ref=${user.referralCode}`;
+
+  const copyReferral = () => {
+    navigator.clipboard.writeText(referralLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const shareReferral = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: 'Join NoteVix',
+        text: 'Unlock premium CBSE notes by joining NoteVix using my link!',
+        url: referralLink,
+      });
+    } else {
+      copyReferral();
+    }
+  };
 
   if (user.role === 'admin') {
     menuItems.unshift({ icon: Shield, label: 'Admin Panel', sub: 'Manage content', color: 'text-purple-500', action: () => navigate('/admin') });
@@ -81,16 +104,59 @@ export default function Profile({ user }: ProfileProps) {
       </div>
 
       {/* App Branding */}
-      <div className="glass-card p-4 rounded-3xl flex items-center justify-between">
+      <div className="glass-card p-4 rounded-3xl flex items-center justify-between border-purple-500/20 bg-purple-500/5">
         <div className="flex items-center gap-3">
           <Logo className="w-10 h-10" />
           <div>
-            <h4 className="font-bold text-sm">NoteVix Premium</h4>
+            <h4 className="font-bold text-sm">NoteVix {user.isPremium ? 'Premium' : 'Free'}</h4>
             <p className="text-[10px] text-gray-500 uppercase tracking-wider">Education for Toppers</p>
           </div>
         </div>
-        <div className="bg-purple-500/20 text-purple-400 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
-          Pro
+        <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${user.isPremium ? 'bg-yellow-500/20 text-yellow-500' : 'bg-purple-500/20 text-purple-400'}`}>
+          {user.isPremium ? 'Pro' : 'Free'}
+        </div>
+      </div>
+
+      {/* Referral System */}
+      <div className="glass-card p-6 rounded-3xl space-y-4 border-yellow-500/20 bg-yellow-500/5">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <h3 className="font-bold text-lg flex items-center gap-2">
+              <Share2 className="w-5 h-5 text-yellow-500" />
+              Refer & Earn Pro
+            </h3>
+            <p className="text-xs text-gray-400">Refer 3 friends to unlock Premium Notes!</p>
+          </div>
+          <div className="text-right">
+            <span className="text-2xl font-bold text-yellow-500">{user.referralCount}</span>
+            <span className="text-gray-500 text-xs">/3</span>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+          <motion.div 
+            initial={{ width: 0 }}
+            animate={{ width: `${Math.min((user.referralCount / 3) * 100, 100)}%` }}
+            className="h-full bg-yellow-500"
+          />
+        </div>
+
+        <div className="flex gap-2 pt-2">
+          <button 
+            onClick={copyReferral}
+            className="flex-1 glass-card py-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold active:scale-95 transition-transform"
+          >
+            {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+            {copied ? 'Copied!' : 'Copy Link'}
+          </button>
+          <button 
+            onClick={shareReferral}
+            className="flex-1 bg-yellow-500 text-black py-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold active:scale-95 transition-transform"
+          >
+            <Share2 className="w-4 h-4" />
+            Share Now
+          </button>
         </div>
       </div>
 
@@ -137,6 +203,7 @@ export default function Profile({ user }: ProfileProps) {
         <h3 className="font-bold text-gray-400 uppercase text-xs tracking-widest">Legal & Support</h3>
         <div className="grid grid-cols-1 gap-2">
           {[
+            { label: 'Saved Notes', path: '/saved', icon: Bookmark },
             { label: 'About Us', path: '/about' },
             { label: 'Contact Us', path: '/contact' },
             { label: 'Privacy Policy', path: '/privacy' },
@@ -147,7 +214,10 @@ export default function Profile({ user }: ProfileProps) {
               onClick={() => navigate(link.path)}
               className="w-full glass-card p-4 rounded-2xl flex items-center justify-between group"
             >
-              <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">{link.label}</span>
+              <div className="flex items-center gap-3">
+                {link.icon && <link.icon className="w-4 h-4 text-purple-400" />}
+                <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">{link.label}</span>
+              </div>
               <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-white transition-colors" />
             </button>
           ))}

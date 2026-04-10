@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { UserProfile } from '../types';
-import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight } from 'lucide-react';
+import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Trophy } from 'lucide-react';
 import { collection, query, where, getDocs, limit, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -276,6 +276,28 @@ export default function Home({ user }: HomeProps) {
       </div>
 
       <MotivationalCarousel />
+      
+      {/* Leaderboard Teaser */}
+      <motion.div
+        whileHover={{ scale: 1.01 }}
+        onClick={() => navigate('/leaderboard')}
+        className="glass-card p-5 rounded-3xl border-purple-500/30 bg-purple-500/5 flex items-center justify-between group cursor-pointer"
+      >
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-purple-500/20 rounded-2xl flex items-center justify-center">
+            <Trophy className="w-6 h-6 text-purple-500" />
+          </div>
+          <div>
+            <h4 className="font-bold text-sm">Global Leaderboard</h4>
+            <p className="text-xs text-gray-500">See how you rank against others!</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-purple-400">View Ranks</span>
+          <ChevronRight className="w-4 h-4 text-purple-500 group-hover:translate-x-1 transition-transform" />
+        </div>
+      </motion.div>
+
       <AdBanner slot="home_banner" />
 
       {/* Class Selector */}

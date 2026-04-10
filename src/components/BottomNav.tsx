@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Search, Bookmark, User, Timer } from 'lucide-react';
+import { Home, Search, Trophy, User, Timer } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function BottomNav() {
@@ -7,7 +7,7 @@ export default function BottomNav() {
     { icon: Home, label: 'Home', path: '/' },
     { icon: Search, label: 'Explore', path: '/explore' },
     { icon: Timer, label: 'Focus', path: '/focus' },
-    { icon: Bookmark, label: 'Saved', path: '/saved' },
+    { icon: Trophy, label: 'Ranks', path: '/leaderboard' },
     { icon: User, label: 'Profile', path: '/profile' },
   ];
 

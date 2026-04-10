@@ -4,7 +4,8 @@ import { doc, getDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firest
 import { db } from '../lib/firebase';
 import { Chapter, UserProfile } from '../types';
 import { motion } from 'motion/react';
-import { ChevronLeft, Bookmark, Download, Share2, Info, HelpCircle, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, Bookmark, Download, Share2, Info, HelpCircle, CheckCircle2, Lock, Share2 as ShareIcon } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 interface NoteViewProps {
   user: UserProfile;
@@ -60,6 +61,8 @@ export default function NoteView({ user }: NoteViewProps) {
     );
   }
 
+  const isPremiumLocked = chapter.isPremium && !user.isPremium && user.role !== 'admin';
+
   return (
     <div className="min-h-screen bg-white text-gray-900 pb-24">
       {/* Header */}
@@ -86,7 +89,38 @@ export default function NoteView({ user }: NoteViewProps) {
       </div>
 
       {/* One-Page Note Content */}
-      <div className="p-6 space-y-8 topper-note">
+      <div className={`p-6 space-y-8 topper-note relative ${isPremiumLocked ? 'max-h-[60vh] overflow-hidden' : ''}`}>
+        {isPremiumLocked && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-end pb-20 px-6">
+            <div className="absolute inset-0 bg-gradient-to-t from-white via-white/95 to-transparent" />
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="relative z-10 glass-card p-8 rounded-[2rem] border-yellow-500/30 bg-white shadow-2xl text-center space-y-6 max-w-sm border"
+            >
+              <div className="w-16 h-16 bg-yellow-500/10 rounded-full flex items-center justify-center mx-auto">
+                <Lock className="w-8 h-8 text-yellow-600" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-gray-900">Premium Note Locked</h3>
+                <p className="text-sm text-gray-500">This is a premium resource for Class {chapter.class} toppers.</p>
+              </div>
+              
+              <div className="bg-yellow-50 p-4 rounded-2xl border border-yellow-100">
+                <p className="text-xs font-bold text-yellow-700 uppercase tracking-widest mb-2">How to unlock?</p>
+                <p className="text-sm text-gray-700">Refer <span className="font-bold text-yellow-700">3 students</span> to NoteVix and get lifetime access to all premium notes!</p>
+              </div>
+
+              <button 
+                onClick={() => navigate('/profile')}
+                className="w-full bg-yellow-500 text-black font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-yellow-500/20 active:scale-95 transition-transform"
+              >
+                <ShareIcon className="w-5 h-5" />
+                Get Referral Link
+              </button>
+            </motion.div>
+          </div>
+        )}
         {/* Summary Section */}
         <section className="space-y-4">
           <div className="flex items-center gap-2 text-blue-600">
@@ -152,12 +186,14 @@ export default function NoteView({ user }: NoteViewProps) {
       </div>
 
       {/* Floating Action Bar */}
-      <div className="fixed bottom-24 left-6 right-6 flex gap-4 z-50">
-        <button className="flex-1 purple-gradient text-white font-bold py-4 rounded-2xl shadow-xl shadow-purple-500/30 flex items-center justify-center gap-2">
-          <Download className="w-5 h-5" />
-          Download PDF
-        </button>
-      </div>
+      {!isPremiumLocked && (
+        <div className="fixed bottom-24 left-6 right-6 flex gap-4 z-50">
+          <button className="flex-1 purple-gradient text-white font-bold py-4 rounded-2xl shadow-xl shadow-purple-500/30 flex items-center justify-center gap-2">
+            <Download className="w-5 h-5" />
+            Download PDF
+          </button>
+        </div>
+      )}
     </div>
   );
 }

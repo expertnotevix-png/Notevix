@@ -1,15 +1,23 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { signInWithPopup, signInWithRedirect } from 'firebase/auth';
 import { auth, googleProvider, analytics } from '../lib/firebase';
 import { logEvent } from 'firebase/analytics';
 import { motion } from 'motion/react';
 import { LogIn, Loader2, Check } from 'lucide-react';
 import { Logo } from '../components/Logo';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const ref = searchParams.get('ref');
+    if (ref) {
+      localStorage.setItem('referredBy', ref);
+    }
+  }, [searchParams]);
 
   const handleLogin = async (useRedirect = false) => {
     setLoading(true);

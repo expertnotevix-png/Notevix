@@ -12,6 +12,11 @@
         "class": { "type": "string", "enum": ["8", "9", "10"] },
         "role": { "type": "string", "enum": ["student", "admin"] },
         "savedNotes": { "type": "array", "items": { "type": "string" } },
+        "totalFocusMinutes": { "type": "number" },
+        "referralCode": { "type": "string" },
+        "referredBy": { "type": "string" },
+        "referralCount": { "type": "number" },
+        "isPremium": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "email", "role"]
@@ -71,12 +76,29 @@
         "examOrientedQuestionsUrl": { "type": "string" }
       },
       "required": ["class", "subject"]
+    },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "Public profile data for leaderboard",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "totalFocusMinutes": { "type": "number" },
+        "class": { "type": "string" }
+      },
+      "required": ["uid", "displayName", "totalFocusMinutes"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "User",
       "description": "User profile data"
+    },
+    "/leaderboard/{userId}": {
+      "schema": "LeaderboardEntry",
+      "description": "Public leaderboard data"
     },
     "/chapters/{chapterId}": {
       "schema": "Chapter",

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, getRedirectResult } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, query, collection, where, getDocs } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
 import { UserProfile } from './types';
 
@@ -15,6 +15,7 @@ import ChapterList from './pages/ChapterList';
 import NoteView from './pages/NoteView';
 import FocusTimer from './pages/FocusTimer';
 import Admin from './pages/Admin';
+import Leaderboard from './pages/Leaderboard';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import AboutUs from './pages/AboutUs';
 import Contact from './pages/Contact';
@@ -49,6 +50,10 @@ export default function App() {
         }
         
         if (!userDoc.exists()) {
+          // Check for referral code in localStorage
+          const referredBy = localStorage.getItem('referredBy');
+          const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
           const newUser: UserProfile = {
             uid: firebaseUser.uid,
             email: firebaseUser.email || '',
@@ -63,10 +68,29 @@ export default function App() {
               lastUpdateDate: new Date().toISOString().split('T')[0],
             },
             totalFocusMinutes: 0,
+            referralCode,
+            referredBy: referredBy || undefined,
+            referralCount: 0,
+            isPremium: false,
             createdAt: new Date().toISOString(),
           };
           try {
             await setDoc(userRef, newUser);
+            
+            // If referred by someone, increment their count
+            if (referredBy) {
+              const qReferrer = query(collection(db, 'users'), where('referralCode', '==', referredBy));
+              const referrerSnap = await getDocs(qReferrer);
+              if (!referrerSnap.empty) {
+                const referrerDoc = referrerSnap.docs[0];
+                const newCount = (referrerDoc.data().referralCount || 0) + 1;
+                await updateDoc(doc(db, 'users', referrerDoc.id), {
+                  referralCount: newCount,
+                  isPremium: newCount >= 3
+                });
+              }
+              localStorage.removeItem('referredBy');
+            }
           } catch (error) {
             handleFirestoreError(error, OperationType.CREATE, `users/${firebaseUser.uid}`);
           }
@@ -106,6 +130,16 @@ export default function App() {
               );
             }
             setUser(userData);
+
+            // Sync to leaderboard (public data)
+            const leaderboardRef = doc(db, 'leaderboard', userData.uid);
+            setDoc(leaderboardRef, {
+              uid: userData.uid,
+              displayName: userData.displayName,
+              photoURL: userData.photoURL,
+              totalFocusMinutes: userData.totalFocusMinutes || 0,
+              class: userData.class || '?'
+            }, { merge: true }).catch(err => console.error("Leaderboard sync failed:", err));
           }
         }, (error) => {
           handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
@@ -144,6 +178,7 @@ export default function App() {
           
           <Route path="/" element={user ? <Home user={user} /> : <Navigate to="/login" />} />
           <Route path="/explore" element={user ? <Explore /> : <Navigate to="/login" />} />
+          <Route path="/leaderboard" element={user ? <Leaderboard user={user} /> : <Navigate to="/login" />} />
           <Route path="/saved" element={user ? <Saved user={user} /> : <Navigate to="/login" />} />
           <Route path="/profile" element={user ? <Profile user={user} /> : <Navigate to="/login" />} />
           
