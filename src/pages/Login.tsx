@@ -89,6 +89,13 @@ export default function Login() {
             </div>
           ))}
         </div>
+
+        <div className="pt-8 flex flex-wrap justify-center gap-x-6 gap-y-2 text-[10px] uppercase tracking-widest text-gray-500">
+          <Link to="/about" className="hover:text-purple-400 transition-colors">About Us</Link>
+          <Link to="/contact" className="hover:text-purple-400 transition-colors">Contact Us</Link>
+          <Link to="/privacy" className="hover:text-purple-400 transition-colors">Privacy</Link>
+          <Link to="/terms" className="hover:text-purple-400 transition-colors">Terms</Link>
+        </div>
       </motion.div>
     </div>
   );
