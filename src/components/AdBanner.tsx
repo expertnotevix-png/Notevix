@@ -44,7 +44,7 @@ export function AdBanner({ slot, format = 'auto', style }: AdBannerProps) {
         <ins
           className="adsbygoogle"
           style={style || { display: 'block', width: '100%' }}
-          data-ad-client="ca-pub-XXXXXXXXXXXXXXXX" // Replace with your Publisher ID
+          data-ad-client="ca-pub-5986123345229880" // Your Publisher ID
           data-ad-slot={slot}
           data-ad-format={format}
           data-full-width-responsive="true"
