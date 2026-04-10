@@ -112,10 +112,11 @@ service cloud.firestore {
     }
 
     function isValidLeaderboardEntry(data) {
-      return data.keys().hasAll(['uid', 'displayName', 'totalFocusMinutes']) &&
+      return data.keys().hasAll(['uid', 'displayName', 'totalFocusMinutes', 'totalPoints']) &&
              data.uid == request.auth.uid &&
              data.displayName is string &&
              data.totalFocusMinutes is number &&
+             data.totalPoints is number &&
              (!('photoURL' in data) || isValidUrl(data.photoURL)) &&
              (!('class' in data) || data.class is string);
     }
@@ -151,6 +152,27 @@ service cloud.firestore {
     match /subject_resources/{resourceId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /schedule/{taskId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    match /notifications/{notifId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAdmin() || (isAuthenticated() && request.resource.data.userId == request.auth.uid);
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && 
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
     // Default deny

@@ -16,7 +16,7 @@ export default function Leaderboard({ user }: LeaderboardProps) {
   useEffect(() => {
     const q = query(
       collection(db, 'leaderboard'),
-      orderBy('totalFocusMinutes', 'desc'),
+      orderBy('totalPoints', 'desc'),
       limit(20)
     );
 
@@ -83,7 +83,7 @@ export default function Leaderboard({ user }: LeaderboardProps) {
             </div>
             <span className="text-xs font-bold truncate w-20 text-center">{topUsers[1].displayName}</span>
             <div className="h-20 w-16 bg-gray-400/20 rounded-t-xl flex flex-col items-center justify-end pb-2">
-              <span className="text-[10px] font-bold">{topUsers[1].totalFocusMinutes}m</span>
+              <span className="text-[10px] font-bold">{topUsers[1].totalPoints} pts</span>
             </div>
           </motion.div>
         )}
@@ -109,7 +109,7 @@ export default function Leaderboard({ user }: LeaderboardProps) {
             </div>
             <span className="text-sm font-bold truncate w-24 text-center">{topUsers[0].displayName}</span>
             <div className="h-28 w-20 bg-yellow-400/20 rounded-t-xl flex flex-col items-center justify-end pb-2">
-              <span className="text-xs font-bold">{topUsers[0].totalFocusMinutes}m</span>
+              <span className="text-xs font-bold">{topUsers[0].totalPoints} pts</span>
             </div>
           </motion.div>
         )}
@@ -132,7 +132,7 @@ export default function Leaderboard({ user }: LeaderboardProps) {
             </div>
             <span className="text-xs font-bold truncate w-20 text-center">{topUsers[2].displayName}</span>
             <div className="h-16 w-16 bg-orange-400/20 rounded-t-xl flex flex-col items-center justify-end pb-2">
-              <span className="text-[10px] font-bold">{topUsers[2].totalFocusMinutes}m</span>
+              <span className="text-[10px] font-bold">{topUsers[2].totalPoints} pts</span>
             </div>
           </motion.div>
         )}
@@ -159,8 +159,8 @@ export default function Leaderboard({ user }: LeaderboardProps) {
               <p className="text-[10px] text-gray-500 uppercase tracking-wider">Class {u.class || '?'}</p>
             </div>
             <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl">
-              <Timer className="w-3.5 h-3.5 text-purple-400" />
-              <span className="text-xs font-bold">{u.totalFocusMinutes}m</span>
+              <Trophy className="w-3.5 h-3.5 text-purple-400" />
+              <span className="text-xs font-bold">{u.totalPoints} pts</span>
             </div>
           </motion.div>
         ))}
@@ -181,8 +181,8 @@ export default function Leaderboard({ user }: LeaderboardProps) {
               <p className="text-[10px] text-gray-500 uppercase tracking-wider">Keep studying to rank up!</p>
             </div>
             <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl">
-              <Timer className="w-3.5 h-3.5 text-purple-400" />
-              <span className="text-xs font-bold">{user.totalFocusMinutes}m</span>
+              <Trophy className="w-3.5 h-3.5 text-purple-400" />
+              <span className="text-xs font-bold">{user.totalPoints} pts</span>
             </div>
           </div>
         </div>

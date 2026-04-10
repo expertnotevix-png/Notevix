@@ -46,11 +46,12 @@ export default function FocusTimer({ user }: FocusTimerProps) {
 
     if (mode === 'focus') {
       setSessionsCompleted(prev => prev + 1);
-      // Update total focus minutes in Firestore
+      // Update total focus minutes and points in Firestore
       try {
         const userRef = doc(db, 'users', user.uid);
         await updateDoc(userRef, {
-          totalFocusMinutes: increment(MODES.focus.minutes)
+          totalFocusMinutes: increment(MODES.focus.minutes),
+          totalPoints: increment(MODES.focus.minutes * 10)
         });
       } catch (error) {
         console.error("Error updating focus minutes:", error);

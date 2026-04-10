@@ -1,15 +1,27 @@
 import { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, where, limit } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Chapter } from '../types';
-import { Plus, Trash2, Edit2, Save, X, ChevronLeft, Database } from 'lucide-react';
+import { Chapter, Message, Notification } from '../types';
+import { Plus, Trash2, Edit2, Save, X, ChevronLeft, Database, MessageSquare, Bell, Send, CheckCircle2, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function Admin() {
+  const [activeTab, setActiveTab] = useState<'chapters' | 'messages' | 'notifications'>('chapters');
   const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const navigate = useNavigate();
+
+  const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
+  const [notifData, setNotifData] = useState({ title: '', message: '', type: 'info' as const });
+
+  useEffect(() => {
+    if (activeTab === 'chapters') fetchChapters();
+    if (activeTab === 'messages') fetchMessages();
+    if (activeTab === 'notifications') fetchNotifications();
+  }, [activeTab]);
 
   const [formData, setFormData] = useState<Partial<Chapter>>({
     class: '10',
@@ -229,8 +241,77 @@ export default function Admin() {
     alert("Sample data and subject resources added!");
   };
 
+  const fetchMessages = async () => {
+    setLoading(true);
+    const q = query(collection(db, 'messages'), orderBy('timestamp', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
+      setMessages(data);
+      setLoading(false);
+    });
+    return unsubscribe;
+  };
+
+  const fetchNotifications = async () => {
+    setLoading(true);
+    const q = query(collection(db, 'notifications'), orderBy('timestamp', 'desc'), limit(50));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
+      setNotifications(data);
+      setLoading(false);
+    });
+    return unsubscribe;
+  };
+
+  const handleReply = async (messageId: string, userId: string) => {
+    const text = replyText[messageId];
+    if (!text?.trim()) return;
+
+    try {
+      // Update message status
+      await updateDoc(doc(db, 'messages', messageId), { status: 'replied' });
+      
+      // Send notification to user
+      await addDoc(collection(db, 'notifications'), {
+        userId,
+        title: 'New Reply from Admin',
+        message: text,
+        type: 'info',
+        read: false,
+        timestamp: new Date().toISOString()
+      });
+
+      setReplyText({ ...replyText, [messageId]: '' });
+      alert("Reply sent!");
+    } catch (error) {
+      console.error("Error replying:", error);
+    }
+  };
+
+  const sendGlobalNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!notifData.title || !notifData.message) return;
+
+    try {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const batch = usersSnap.docs.map(userDoc => 
+        addDoc(collection(db, 'notifications'), {
+          userId: userDoc.id,
+          ...notifData,
+          read: false,
+          timestamp: new Date().toISOString()
+        })
+      );
+      await Promise.all(batch);
+      setNotifData({ title: '', message: '', type: 'info' });
+      alert("Notification sent to all users!");
+    } catch (error) {
+      console.error("Error sending global notification:", error);
+    }
+  };
+
   return (
-    <div className="p-6 space-y-8">
+    <div className="p-6 space-y-8 pb-24">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="p-2 glass-card rounded-xl">
@@ -238,123 +319,178 @@ export default function Admin() {
           </button>
           <h1 className="text-2xl font-bold">Admin Panel</h1>
         </div>
-        <button
-          onClick={() => setIsAdding(true)}
-          className="purple-gradient p-3 rounded-xl shadow-lg shadow-purple-500/20"
-        >
-          <Plus className="w-6 h-6" />
-        </button>
+        {activeTab === 'chapters' && (
+          <button
+            onClick={() => setIsAdding(true)}
+            className="purple-gradient p-3 rounded-xl shadow-lg shadow-purple-500/20"
+          >
+            <Plus className="w-6 h-6" />
+          </button>
+        )}
       </div>
 
-      <div className="flex gap-4">
-        <button
-          onClick={addSampleData}
-          className="flex-1 glass-card p-4 rounded-2xl flex items-center justify-center gap-2 text-purple-400 font-bold"
-        >
-          <Database className="w-5 h-5" />
-          Add Sample Data
-        </button>
+      {/* Tabs */}
+      <div className="flex gap-2 p-1 bg-white/5 rounded-2xl">
+        {[
+          { id: 'chapters', label: 'Chapters', icon: Database },
+          { id: 'messages', label: 'Messages', icon: MessageSquare },
+          { id: 'notifications', label: 'Broadcast', icon: Bell },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all ${
+              activeTab === tab.id ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {isAdding && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-          <div className="glass-card w-full max-w-lg p-6 rounded-3xl space-y-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold">Add New Chapter</h2>
-              <button onClick={() => setIsAdding(false)} className="p-2 hover:bg-white/10 rounded-full">
-                <X className="w-6 h-6" />
-              </button>
-            </div>
+      {activeTab === 'chapters' && (
+        <div className="space-y-8">
+          <div className="flex gap-4">
+            <button
+              onClick={addSampleData}
+              className="flex-1 glass-card p-4 rounded-2xl flex items-center justify-center gap-2 text-purple-400 font-bold"
+            >
+              <Database className="w-5 h-5" />
+              Add Sample Data
+            </button>
+          </div>
 
-            <form onSubmit={handleAdd} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs text-gray-500 uppercase">Class</label>
-                  <select
-                    value={formData.class}
-                    onChange={(e) => setFormData({ ...formData, class: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm"
-                  >
-                    {['8', '9', '10'].map(c => <option key={c} value={c}>Class {c}</option>)}
-                  </select>
+          <div className="space-y-4">
+            <h3 className="font-bold text-gray-400 uppercase text-xs tracking-widest">Manage Content</h3>
+            {loading ? (
+              <div className="text-center py-10">
+                <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto" />
+              </div>
+            ) : (
+              chapters.map((chapter) => (
+                <div key={chapter.id} className="glass-card p-4 rounded-2xl flex items-center justify-between">
+                  <div>
+                    <h4 className="font-bold text-sm">{chapter.title}</h4>
+                    <p className="text-[10px] text-gray-500 uppercase">{chapter.subject} • Class {chapter.class}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button className="p-2 hover:bg-white/5 rounded-lg text-blue-400">
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => handleDelete(chapter.id)} className="p-2 hover:bg-white/5 rounded-lg text-red-400">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-gray-500 uppercase">Subject</label>
-                  <select
-                    value={formData.subject}
-                    onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm"
-                  >
-                    {['maths', 'science', 'sst', 'english'].map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs text-gray-500 uppercase">Title</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs text-gray-500 uppercase">Summary</label>
-                <textarea
-                  required
-                  value={formData.summary}
-                  onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm h-24"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="premium"
-                  checked={formData.isPremium}
-                  onChange={(e) => setFormData({ ...formData, isPremium: e.target.checked })}
-                  className="w-4 h-4 accent-purple-500"
-                />
-                <label htmlFor="premium" className="text-sm">Premium Content</label>
-              </div>
-
-              <button type="submit" className="w-full purple-gradient py-3 rounded-xl font-bold">
-                Save Chapter
-              </button>
-            </form>
+              ))
+            )}
           </div>
         </div>
       )}
 
-      <div className="space-y-4">
-        <h3 className="font-bold text-gray-400 uppercase text-xs tracking-widest">Manage Content</h3>
-        {loading ? (
-          <div className="text-center py-10">
-            <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          </div>
-        ) : (
-          chapters.map((chapter) => (
-            <div key={chapter.id} className="glass-card p-4 rounded-2xl flex items-center justify-between">
-              <div>
-                <h4 className="font-bold text-sm">{chapter.title}</h4>
-                <p className="text-[10px] text-gray-500 uppercase">{chapter.subject} • Class {chapter.class}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button className="p-2 hover:bg-white/5 rounded-lg text-blue-400">
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button onClick={() => handleDelete(chapter.id)} className="p-2 hover:bg-white/5 rounded-lg text-red-400">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+      {activeTab === 'messages' && (
+        <div className="space-y-4">
+          <h3 className="font-bold text-gray-400 uppercase text-xs tracking-widest">User Messages</h3>
+          {loading ? (
+            <div className="text-center py-10">
+              <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto" />
             </div>
-          ))
-        )}
-      </div>
+          ) : messages.length > 0 ? (
+            messages.map((msg) => (
+              <div key={msg.id} className="glass-card p-6 rounded-3xl space-y-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h4 className="font-bold text-sm">{msg.userName}</h4>
+                    <p className="text-[10px] text-gray-500">{msg.userEmail}</p>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-widest ${msg.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500' : 'bg-green-500/20 text-green-500'}`}>
+                    {msg.status}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-purple-400">{msg.subject}</p>
+                  <p className="text-sm text-gray-300 leading-relaxed">{msg.message}</p>
+                </div>
+                <div className="pt-2 space-y-3">
+                  <textarea
+                    value={replyText[msg.id || ''] || ''}
+                    onChange={(e) => setReplyText({ ...replyText, [msg.id || '']: e.target.value })}
+                    placeholder="Type your reply..."
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:outline-none focus:border-purple-500 transition-colors h-20"
+                  />
+                  <button
+                    onClick={() => handleReply(msg.id!, msg.userId)}
+                    className="w-full purple-gradient py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2"
+                  >
+                    <Send className="w-4 h-4" />
+                    Send Reply
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-20 text-gray-500">No messages found.</div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'notifications' && (
+        <div className="space-y-8">
+          <form onSubmit={sendGlobalNotification} className="glass-card p-6 rounded-3xl space-y-4">
+            <h3 className="font-bold text-lg">Broadcast Notification</h3>
+            <div className="space-y-4">
+              <input
+                type="text"
+                required
+                value={notifData.title}
+                onChange={(e) => setNotifData({ ...notifData, title: e.target.value })}
+                placeholder="Notification Title"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm"
+              />
+              <textarea
+                required
+                value={notifData.message}
+                onChange={(e) => setNotifData({ ...notifData, message: e.target.value })}
+                placeholder="Notification Message..."
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm h-24"
+              />
+              <div className="flex gap-2">
+                {['info', 'streak', 'rank'].map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setNotifData({ ...notifData, type: type as any })}
+                    className={`flex-1 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                      notifData.type === type ? 'bg-purple-500 border-purple-500 text-white' : 'border-white/10 text-gray-500'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+              <button type="submit" className="w-full purple-gradient py-4 rounded-2xl font-bold shadow-xl shadow-purple-500/20">
+                Send to All Users
+              </button>
+            </div>
+          </form>
+
+          <div className="space-y-4">
+            <h3 className="font-bold text-gray-400 uppercase text-xs tracking-widest">Recent Broadcasts</h3>
+            {notifications.slice(0, 10).map((n) => (
+              <div key={n.id} className="glass-card p-4 rounded-2xl flex items-center gap-4 opacity-70">
+                <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center">
+                  <Bell className="w-5 h-5 text-purple-400" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-bold text-sm">{n.title}</h4>
+                  <p className="text-[10px] text-gray-500 truncate">{n.message}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

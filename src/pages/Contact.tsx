@@ -2,15 +2,40 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import { ChevronLeft, Mail, Send, MessageCircle, MapPin, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { UserProfile } from '../types';
 
-export default function Contact() {
+interface ContactProps {
+  user: UserProfile;
+}
+
+export default function Contact({ user }: ContactProps) {
   const navigate = useNavigate();
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    // In a real app, you'd send this to a backend or email service
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'messages'), {
+        userId: user.uid,
+        userEmail: user.email,
+        userName: user.displayName,
+        subject,
+        message,
+        status: 'pending',
+        timestamp: serverTimestamp()
+      });
+      setSubmitted(true);
+    } catch (error) {
+      console.error("Error sending message:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -58,6 +83,8 @@ export default function Contact() {
               <input 
                 required
                 type="text" 
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
                 placeholder="What is this about?"
                 className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm focus:outline-none focus:border-purple-500 transition-colors"
               />
@@ -68,6 +95,8 @@ export default function Contact() {
               <textarea 
                 required
                 rows={5}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
                 placeholder="Type your message here..."
                 className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm focus:outline-none focus:border-purple-500 transition-colors resize-none"
               />
@@ -75,10 +104,15 @@ export default function Contact() {
 
             <button 
               type="submit"
-              className="w-full purple-gradient py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-purple-500/20 active:scale-95 transition-transform"
+              disabled={loading}
+              className="w-full purple-gradient py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-purple-500/20 active:scale-95 transition-transform disabled:opacity-50"
             >
-              <Send className="w-5 h-5" />
-              Send Message
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Send className="w-5 h-5" />
+              )}
+              {loading ? 'Sending...' : 'Send Message'}
             </button>
           </form>
         ) : (

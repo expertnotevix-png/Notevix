@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { UserProfile } from '../types';
-import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Trophy } from 'lucide-react';
+import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Trophy, Bell, Calendar } from 'lucide-react';
 import { collection, query, where, getDocs, limit, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -235,8 +235,17 @@ export default function Home({ user }: HomeProps) {
             <h1 className="text-xl font-bold">{user.displayName} 👋</h1>
           </div>
         </div>
-        <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-purple-500">
-          <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => navigate('/notifications')}
+            className="p-2 glass-card rounded-xl relative active:scale-95 transition-transform"
+          >
+            <Bell className="w-6 h-6 text-gray-400" />
+            <div className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-black" />
+          </button>
+          <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-purple-500">
+            <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+          </div>
         </div>
       </div>
 
@@ -277,28 +286,36 @@ export default function Home({ user }: HomeProps) {
 
       <MotivationalCarousel />
       
-      {/* Leaderboard Teaser */}
-      <motion.div
-        whileHover={{ scale: 1.01 }}
-        onClick={() => navigate('/leaderboard')}
-        className="glass-card p-5 rounded-3xl border-purple-500/30 bg-purple-500/5 flex items-center justify-between group cursor-pointer"
-      >
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-purple-500/20 rounded-2xl flex items-center justify-center">
-            <Trophy className="w-6 h-6 text-purple-500" />
+      {/* Quick Actions */}
+      <div className="grid grid-cols-2 gap-4">
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          onClick={() => navigate('/leaderboard')}
+          className="glass-card p-4 rounded-3xl border-purple-500/30 bg-purple-500/5 flex flex-col gap-3 group cursor-pointer"
+        >
+          <div className="w-10 h-10 bg-purple-500/20 rounded-2xl flex items-center justify-center">
+            <Trophy className="w-5 h-5 text-purple-500" />
           </div>
           <div>
-            <h4 className="font-bold text-sm">Global Leaderboard</h4>
-            <p className="text-xs text-gray-500">See how you rank against others!</p>
+            <h4 className="font-bold text-sm">Ranks</h4>
+            <p className="text-[10px] text-gray-500">Global Leaderboard</p>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-purple-400">View Ranks</span>
-          <ChevronRight className="w-4 h-4 text-purple-500 group-hover:translate-x-1 transition-transform" />
-        </div>
-      </motion.div>
+        </motion.div>
 
-      <AdBanner slot="home_banner" />
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          onClick={() => navigate('/schedule')}
+          className="glass-card p-4 rounded-3xl border-blue-500/30 bg-blue-500/5 flex flex-col gap-3 group cursor-pointer"
+        >
+          <div className="w-10 h-10 bg-blue-500/20 rounded-2xl flex items-center justify-center">
+            <Calendar className="w-5 h-5 text-blue-500" />
+          </div>
+          <div>
+            <h4 className="font-bold text-sm">Planner</h4>
+            <p className="text-[10px] text-gray-500">Daily Schedule</p>
+          </div>
+        </motion.div>
+      </div>
 
       {/* Class Selector */}
       <div className="space-y-4">

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, getRedirectResult } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, onSnapshot, query, collection, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, query, collection, where, getDocs, addDoc } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
 import { UserProfile } from './types';
 
@@ -16,6 +16,8 @@ import NoteView from './pages/NoteView';
 import FocusTimer from './pages/FocusTimer';
 import Admin from './pages/Admin';
 import Leaderboard from './pages/Leaderboard';
+import Schedule from './pages/Schedule';
+import Notifications from './pages/Notifications';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import AboutUs from './pages/AboutUs';
 import Contact from './pages/Contact';
@@ -68,6 +70,7 @@ export default function App() {
               lastUpdateDate: new Date().toISOString().split('T')[0],
             },
             totalFocusMinutes: 0,
+            totalPoints: 0,
             referralCode,
             referredBy: referredBy || undefined,
             referralCount: 0,
@@ -131,6 +134,37 @@ export default function App() {
             }
             setUser(userData);
 
+            // Client-side notification trigger (Demo/Prototype)
+            const lastNotifDate = localStorage.getItem('last_daily_notif');
+            if (lastNotifDate !== today) {
+              const checkDailyNotifs = async () => {
+                // Streak notification
+                if (userData.streak?.currentCount > 0) {
+                  await addDoc(collection(db, 'notifications'), {
+                    userId: userData.uid,
+                    title: 'Daily Streak Update',
+                    message: `You are on a ${userData.streak.currentCount} day streak! Keep it up!`,
+                    type: 'streak',
+                    read: false,
+                    timestamp: new Date().toISOString()
+                  });
+                }
+                
+                // Rank notification (simplified)
+                await addDoc(collection(db, 'notifications'), {
+                  userId: userData.uid,
+                  title: 'Rank Maintenance',
+                  message: 'Check the leaderboard to see your current rank and keep studying to stay on top!',
+                  type: 'rank',
+                  read: false,
+                  timestamp: new Date().toISOString()
+                });
+                
+                localStorage.setItem('last_daily_notif', today);
+              };
+              checkDailyNotifs().catch(err => console.error("Daily notif trigger failed:", err));
+            }
+
             // Sync to leaderboard (public data)
             const leaderboardRef = doc(db, 'leaderboard', userData.uid);
             setDoc(leaderboardRef, {
@@ -138,6 +172,7 @@ export default function App() {
               displayName: userData.displayName,
               photoURL: userData.photoURL,
               totalFocusMinutes: userData.totalFocusMinutes || 0,
+              totalPoints: userData.totalPoints || 0,
               class: userData.class || '?'
             }, { merge: true }).catch(err => console.error("Leaderboard sync failed:", err));
           }
@@ -179,6 +214,8 @@ export default function App() {
           <Route path="/" element={user ? <Home user={user} /> : <Navigate to="/login" />} />
           <Route path="/explore" element={user ? <Explore /> : <Navigate to="/login" />} />
           <Route path="/leaderboard" element={user ? <Leaderboard user={user} /> : <Navigate to="/login" />} />
+          <Route path="/schedule" element={user ? <Schedule user={user} /> : <Navigate to="/login" />} />
+          <Route path="/notifications" element={user ? <Notifications user={user} /> : <Navigate to="/login" />} />
           <Route path="/saved" element={user ? <Saved user={user} /> : <Navigate to="/login" />} />
           <Route path="/profile" element={user ? <Profile user={user} /> : <Navigate to="/login" />} />
           
@@ -187,7 +224,7 @@ export default function App() {
           <Route path="/focus" element={user ? <FocusTimer user={user} /> : <Navigate to="/login" />} />
           <Route path="/privacy" element={user ? <PrivacyPolicy /> : <Navigate to="/login" />} />
           <Route path="/about" element={user ? <AboutUs /> : <Navigate to="/login" />} />
-          <Route path="/contact" element={user ? <Contact /> : <Navigate to="/login" />} />
+          <Route path="/contact" element={user ? <Contact user={user} /> : <Navigate to="/login" />} />
           <Route path="/terms" element={user ? <TermsOfService /> : <Navigate to="/login" />} />
           
           <Route path="/admin" element={user?.role === 'admin' ? <Admin /> : <Navigate to="/" />} />

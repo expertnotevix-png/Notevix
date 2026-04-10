@@ -7,12 +7,14 @@ import { motion } from 'motion/react';
 import { ChevronLeft, FileText, Book, HelpCircle, Calculator, History, ChevronRight, RefreshCw } from 'lucide-react';
 import { MotivationalCarousel } from '../components/MotivationalCarousel';
 import { AdBanner } from '../components/AdBanner';
+import { PdfAdModal } from '../components/PdfAdModal';
 
 export default function ChapterList() {
   const { classId, subjectId } = useParams();
   const navigate = useNavigate();
   const [resource, setResource] = useState<SubjectResource | null>(null);
   const [loading, setLoading] = useState(true);
+  const [adModal, setAdModal] = useState<{ isOpen: boolean; url: string }>({ isOpen: false, url: '' });
 
   const fetchData = async () => {
     setLoading(true);
@@ -91,11 +93,13 @@ export default function ChapterList() {
       {/* Content Type Cards */}
       <div className="space-y-4">
         {resourceItems.map((item, index) => (
-          <motion.a
+          <motion.button
             key={item.label}
-            href={item.url && item.url !== '#' ? item.url : undefined}
-            target="_blank"
-            rel="noopener noreferrer"
+            onClick={() => {
+              if (item.url && item.url !== '#') {
+                setAdModal({ isOpen: true, url: item.url });
+              }
+            }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
@@ -114,9 +118,15 @@ export default function ChapterList() {
             <div className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center">
               <ChevronRight className="w-5 h-5 text-purple-400" />
             </div>
-          </motion.a>
+          </motion.button>
         ))}
       </div>
+
+      <PdfAdModal 
+        isOpen={adModal.isOpen} 
+        onClose={() => setAdModal({ ...adModal, isOpen: false })} 
+        pdfUrl={adModal.url} 
+      />
 
       {!resource && !loading && (
         <div className="text-center py-10 space-y-4">

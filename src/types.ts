@@ -13,11 +13,43 @@ export interface UserProfile {
     lastUpdateDate: string; // ISO date string
   };
   totalFocusMinutes: number;
+  totalPoints: number;
   referralCode: string;
   referredBy?: string;
   referralCount: number;
   isPremium: boolean;
   createdAt: string;
+}
+
+export interface Message {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  subject: string;
+  message: string;
+  status: 'pending' | 'replied';
+  reply?: string;
+  timestamp: string;
+}
+
+export interface ScheduleTask {
+  id: string;
+  userId: string;
+  task: string;
+  time: string;
+  completed: boolean;
+  date: string; // YYYY-MM-DD
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: 'streak' | 'rank' | 'system';
+  read: boolean;
+  timestamp: string;
 }
 
 export interface Chapter {
