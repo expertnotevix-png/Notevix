@@ -2,6 +2,7 @@ import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, FlaskConical, Globe, Languages, Shield, Zap, Trophy, Users, ChevronRight, Star } from 'lucide-react';
 import { Logo } from '../components/Logo';
+import { AdBanner } from '../components/AdBanner';
 
 const features = [
   {
@@ -190,6 +191,59 @@ export default function Landing() {
           <div className="space-y-2">
             <div className="text-4xl font-black text-purple-500">24/7</div>
             <div className="text-xs text-gray-500 uppercase tracking-widest font-bold">AI Support</div>
+          </div>
+        </div>
+      </section>
+
+      {/* Ad Banner */}
+      <div className="max-w-7xl mx-auto px-6 py-12">
+        <AdBanner slot="landing_middle" />
+      </div>
+
+      {/* Study Tips Section */}
+      <section className="py-24 px-6">
+        <div className="max-w-7xl mx-auto space-y-16">
+          <div className="text-center space-y-4">
+            <h2 className="text-3xl md:text-4xl font-black">Expert Study Tips</h2>
+            <p className="text-gray-500 max-w-xl mx-auto">Learn how to study more effectively with our expert-backed strategies.</p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-8">
+            {[
+              { title: 'The Pomodoro Technique', desc: 'Study for 25 minutes, then take a 5-minute break. This keeps your brain fresh and focused throughout your study session.' },
+              { title: 'Active Recall', desc: 'Instead of just reading, test yourself. Try to explain a concept in your own words without looking at your notes.' },
+              { title: 'Spaced Repetition', desc: 'Review your notes at increasing intervals (1 day, 3 days, 1 week) to move information into your long-term memory.' },
+              { title: 'Visual Learning', desc: 'Use diagrams, mind maps, and our one-page notes to visualize complex processes and relationships between topics.' }
+            ].map((tip, i) => (
+              <div key={i} className="glass-card p-8 rounded-3xl border-white/5 space-y-3">
+                <h3 className="text-lg font-bold text-purple-400">{tip.title}</h3>
+                <p className="text-sm text-gray-400 leading-relaxed">{tip.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ Section */}
+      <section className="py-24 px-6 bg-white/[0.01]">
+        <div className="max-w-3xl mx-auto space-y-12">
+          <div className="text-center space-y-4">
+            <h2 className="text-3xl md:text-4xl font-black">Frequently Asked Questions</h2>
+            <p className="text-gray-500">Everything you need to know about NoteVix.</p>
+          </div>
+
+          <div className="space-y-6">
+            {[
+              { q: 'Are the notes based on the latest CBSE syllabus?', a: 'Yes, all our notes and important questions are updated regularly to align with the latest NCERT and CBSE curriculum for the 2025-26 academic year.' },
+              { q: 'How can I unlock Premium Notes?', a: 'You can unlock premium content by subscribing to our Pro plan or by referring 3 friends to join NoteVix using your unique referral link.' },
+              { q: 'Is the AI Tutor really available 24/7?', a: 'Absolutely! Our AI-powered doubt solver is available around the clock to help you with any academic queries you might have.' },
+              { q: 'Can I download the notes for offline use?', a: 'Yes, Pro members can download high-quality PDF versions of all our notes and question banks for offline study.' }
+            ].map((faq, i) => (
+              <div key={i} className="glass-card p-6 rounded-2xl border-white/5 space-y-2">
+                <h4 className="font-bold text-white">{faq.q}</h4>
+                <p className="text-sm text-gray-400 leading-relaxed">{faq.a}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
