@@ -23,9 +23,13 @@ import AboutUs from './pages/AboutUs';
 import Contact from './pages/Contact';
 import TermsOfService from './pages/TermsOfService';
 import Landing from './pages/Landing';
+import AIDoubtSolver from './pages/AIDoubtSolver';
+import QuizGenerator from './pages/QuizGenerator';
+import Summarizer from './pages/Summarizer';
 
 // Components
 import BottomNav from './components/BottomNav';
+import { FloatingChatbot } from './components/FloatingChatbot';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
@@ -243,10 +247,15 @@ export default function App() {
           <Route path="/contact" element={<Contact user={user} />} />
           <Route path="/terms" element={<TermsOfService />} />
           
+          <Route path="/ai-doubts" element={user ? <AIDoubtSolver /> : <Navigate to="/login" />} />
+          <Route path="/ai-quiz" element={user ? <QuizGenerator /> : <Navigate to="/login" />} />
+          <Route path="/ai-summarizer" element={user ? <Summarizer /> : <Navigate to="/login" />} />
+          
           <Route path="/admin" element={user?.role === 'admin' ? <Admin /> : <Navigate to="/" />} />
         </Routes>
         
         <BottomNav user={user} />
+        <FloatingChatbot />
       </div>
     </Router>
   );

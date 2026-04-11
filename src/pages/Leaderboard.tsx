@@ -4,6 +4,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { UserProfile } from '../types';
 import { motion } from 'motion/react';
 import { Trophy, Medal, Crown, Timer, TrendingUp, Instagram, Star } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface LeaderboardProps {
   user: UserProfile | null;
@@ -12,6 +13,7 @@ interface LeaderboardProps {
 export default function Leaderboard({ user }: LeaderboardProps) {
   const [topUsers, setTopUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const q = query(

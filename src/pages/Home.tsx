@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { UserProfile } from '../types';
-import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Trophy, Bell, Calendar } from 'lucide-react';
+import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Trophy, Bell, Calendar, Sparkles, MessageSquare, BrainCircuit, FileText } from 'lucide-react';
 import { collection, query, where, getDocs, limit, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -285,6 +285,62 @@ export default function Home({ user }: HomeProps) {
       </div>
 
       <MotivationalCarousel />
+      
+      {/* AI Study Tools */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-purple-400" />
+          <h3 className="font-bold text-lg">AI Study Tools</h3>
+        </div>
+        <div className="grid grid-cols-1 gap-3">
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={() => navigate('/ai-doubts')}
+            className="glass-card p-5 rounded-3xl border-purple-500/30 bg-purple-500/5 flex items-center justify-between group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-purple-500/20 rounded-2xl flex items-center justify-center">
+                <MessageSquare className="w-6 h-6 text-purple-500" />
+              </div>
+              <div className="text-left">
+                <h4 className="font-bold">AI Doubt Solver</h4>
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Class 8-10 Doubts</p>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-purple-500 transition-colors" />
+          </motion.button>
+
+          <div className="grid grid-cols-2 gap-3">
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              onClick={() => navigate('/ai-quiz')}
+              className="glass-card p-5 rounded-3xl border-blue-500/30 bg-blue-500/5 flex flex-col gap-3 group"
+            >
+              <div className="w-10 h-10 bg-blue-500/20 rounded-2xl flex items-center justify-center">
+                <BrainCircuit className="w-5 h-5 text-blue-500" />
+              </div>
+              <div className="text-left">
+                <h4 className="font-bold text-sm">Auto Quiz</h4>
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">MCQ Generator</p>
+              </div>
+            </motion.button>
+
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              onClick={() => navigate('/ai-summarizer')}
+              className="glass-card p-5 rounded-3xl border-pink-500/30 bg-pink-500/5 flex flex-col gap-3 group"
+            >
+              <div className="w-10 h-10 bg-pink-500/20 rounded-2xl flex items-center justify-center">
+                <FileText className="w-5 h-5 text-pink-500" />
+              </div>
+              <div className="text-left">
+                <h4 className="font-bold text-sm">Summarizer</h4>
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Chapter Summary</p>
+              </div>
+            </motion.button>
+          </div>
+        </div>
+      </div>
       
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-4">
