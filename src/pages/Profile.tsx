@@ -2,11 +2,12 @@ import { auth, db } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
 import { UserProfile } from '../types';
-import { LogOut, Settings, Shield, CreditCard, Bell, ChevronRight, Award, Instagram, Send, BookOpen, Moon, Bookmark, Share2, Copy, Check } from 'lucide-react';
+import { LogOut, Settings, Shield, CreditCard, Bell, ChevronRight, Award, Instagram, Send, BookOpen, Moon, Bookmark, Share2, Copy, Check, Download, QrCode } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { useState } from 'react';
 import { motion } from 'motion/react';
+import { QRCodeCanvas } from 'qrcode.react';
 
 interface ProfileProps {
   user: UserProfile;
@@ -64,6 +65,19 @@ export default function Profile({ user }: ProfileProps) {
       });
     } else {
       copyReferral();
+    }
+  };
+
+  const downloadQR = () => {
+    const canvas = document.getElementById('qr-code') as HTMLCanvasElement;
+    if (canvas) {
+      const url = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'notevix-qr.png';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
@@ -222,6 +236,35 @@ export default function Profile({ user }: ProfileProps) {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* QR Code Section */}
+      <div className="glass-card p-6 rounded-3xl space-y-6 border-purple-500/20 bg-purple-500/5">
+        <div className="text-center space-y-2">
+          <h3 className="font-bold text-lg flex items-center justify-center gap-2">
+            <QrCode className="w-5 h-5 text-purple-500" />
+            Share Website
+          </h3>
+          <p className="text-xs text-gray-400">Scan this QR to open NoteVix on any device</p>
+        </div>
+        
+        <div className="flex justify-center p-4 bg-white rounded-2xl w-fit mx-auto shadow-xl">
+          <QRCodeCanvas 
+            id="qr-code"
+            value={window.location.origin} 
+            size={160}
+            level="H"
+            includeMargin={false}
+          />
+        </div>
+
+        <button 
+          onClick={downloadQR}
+          className="w-full purple-gradient py-4 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold active:scale-95 transition-transform shadow-lg shadow-purple-500/20"
+        >
+          <Download className="w-5 h-5" />
+          Download QR Code
+        </button>
       </div>
 
       <div className="space-y-3">
