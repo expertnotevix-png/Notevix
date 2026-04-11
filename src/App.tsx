@@ -35,6 +35,18 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     // Handle redirect result (for mobile/fallback)
@@ -228,6 +240,18 @@ export default function App() {
   return (
     <Router>
       <div className="min-h-screen bg-black text-white pb-20">
+        <AnimatePresence>
+          {isOffline && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="bg-red-500 text-white text-[10px] font-bold uppercase tracking-widest py-1 text-center sticky top-0 z-[100]"
+            >
+              You are offline. Some features may not work.
+            </motion.div>
+          )}
+        </AnimatePresence>
         <Routes>
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
           

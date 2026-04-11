@@ -5,6 +5,7 @@ import { getAnalytics, isSupported } from 'firebase/analytics';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Ensure we only initialize once
+console.log("Initializing Firebase with project:", firebaseConfig.projectId);
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 // Initialize Analytics lazily
@@ -18,9 +19,10 @@ export const analytics = isSupported().then(yes => {
 });
 
 // Use robust Firestore settings
+console.log("Initializing Firestore with database:", firebaseConfig.firestoreDatabaseId || '(default)');
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
-  experimentalAutoDetectLongPolling: false, // Force it
+  experimentalAutoDetectLongPolling: false,
 }, firebaseConfig.firestoreDatabaseId || '(default)');
 
 export const auth = getAuth(app);

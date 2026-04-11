@@ -4,12 +4,16 @@ let aiInstance: GoogleGenAI | null = null;
 
 function getAI() {
   if (!aiInstance) {
-    // In Vite, process.env.GEMINI_API_KEY is defined in vite.config.ts
     const apiKey = process.env.GEMINI_API_KEY;
     
     if (!apiKey || apiKey === 'undefined' || apiKey === '') {
-      console.error("GEMINI_API_KEY is missing or undefined");
-      throw new Error("Gemini API Key is missing. Please add it to 'Settings > Secrets' in AI Studio.");
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname.includes('ais-dev');
+      const message = isLocal 
+        ? "Gemini API Key is missing in AI Studio. Please add it to 'Settings > Secrets' and click 'Apply Changes'."
+        : "Gemini API Key is missing on this website. If this is a deployed site (like Cloudflare), you must add GEMINI_API_KEY to your hosting provider's Environment Variables.";
+      
+      console.error("GEMINI_API_KEY Error:", message);
+      throw new Error(message);
     }
     
     aiInstance = new GoogleGenAI({ apiKey });
