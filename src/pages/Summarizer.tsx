@@ -23,7 +23,7 @@ export default function Summarizer() {
       setSummary(result);
     } catch (err) {
       console.error(err);
-      setError('Failed to summarize text. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to summarize text. Please try again.');
     } finally {
       setLoading(false);
     }

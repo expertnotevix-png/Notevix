@@ -37,7 +37,8 @@ export function FloatingChatbot() {
       setMessages(prev => [...prev, { role: 'model', text: response || 'I am here to help!' }]);
     } catch (err) {
       console.error(err);
-      setMessages(prev => [...prev, { role: 'model', text: 'Sorry, I am having trouble connecting. Please try again later.' }]);
+      const errorMessage = err instanceof Error ? err.message : 'Sorry, I am having trouble connecting. Please try again later.';
+      setMessages(prev => [...prev, { role: 'model', text: errorMessage }]);
     } finally {
       setLoading(false);
     }

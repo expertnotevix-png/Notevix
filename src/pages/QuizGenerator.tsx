@@ -38,7 +38,7 @@ export default function QuizGenerator() {
       setShowExplanation(false);
     } catch (err) {
       console.error(err);
-      setError('Failed to generate quiz. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to generate quiz. Please try again.');
     } finally {
       setLoading(false);
     }

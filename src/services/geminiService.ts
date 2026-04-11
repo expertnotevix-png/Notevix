@@ -7,9 +7,9 @@ function getAI() {
     // In Vite, process.env.GEMINI_API_KEY is defined in vite.config.ts
     const apiKey = process.env.GEMINI_API_KEY;
     
-    if (!apiKey || apiKey === 'undefined') {
+    if (!apiKey || apiKey === 'undefined' || apiKey === '') {
       console.error("GEMINI_API_KEY is missing or undefined");
-      throw new Error("AI Service is currently unavailable. Please check configuration.");
+      throw new Error("Gemini API Key is missing. Please add it to 'Settings > Secrets' in AI Studio.");
     }
     
     aiInstance = new GoogleGenAI({ apiKey });

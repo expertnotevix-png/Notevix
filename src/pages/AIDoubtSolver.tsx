@@ -54,7 +54,7 @@ export default function AIDoubtSolver() {
       setMessages(prev => [...prev, aiMessage]);
     } catch (err) {
       console.error(err);
-      setError('Failed to get response. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to get response. Please try again.');
     } finally {
       setLoading(false);
     }
