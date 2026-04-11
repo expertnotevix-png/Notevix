@@ -20,6 +20,7 @@ export const analytics = isSupported().then(yes => {
 // Use robust Firestore settings
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
+  experimentalAutoDetectLongPolling: false, // Force it
 }, firebaseConfig.firestoreDatabaseId || '(default)');
 
 export const auth = getAuth(app);
