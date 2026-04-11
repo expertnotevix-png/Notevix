@@ -121,6 +121,16 @@ service cloud.firestore {
              (!('class' in data) || data.class is string);
     }
 
+    function isValidMessage(data) {
+      return data.keys().hasAll(['userId', 'userEmail', 'userName', 'subject', 'message', 'status', 'timestamp']) &&
+             (data.userId == 'anonymous' || (isAuthenticated() && data.userId == request.auth.uid)) &&
+             isValidEmail(data.userEmail) &&
+             data.userName is string &&
+             data.subject is string && data.subject.size() > 0 &&
+             data.message is string && data.message.size() > 0 &&
+             data.status == 'pending';
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -134,12 +144,12 @@ service cloud.firestore {
     }
 
     match /leaderboard/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isOwner(userId) && isValidLeaderboardEntry(request.resource.data);
     }
 
     match /chapters/{chapterId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isAdmin() && isValidChapter(request.resource.data);
     }
 
@@ -150,13 +160,13 @@ service cloud.firestore {
     }
 
     match /subject_resources/{resourceId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
     match /messages/{messageId} {
       allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow create: if isValidMessage(request.resource.data);
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }

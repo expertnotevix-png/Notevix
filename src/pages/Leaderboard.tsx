@@ -6,7 +6,7 @@ import { motion } from 'motion/react';
 import { Trophy, Medal, Crown, Timer, TrendingUp, Instagram, Star } from 'lucide-react';
 
 interface LeaderboardProps {
-  user: UserProfile;
+  user: UserProfile | null;
 }
 
 export default function Leaderboard({ user }: LeaderboardProps) {
@@ -183,7 +183,7 @@ export default function Leaderboard({ user }: LeaderboardProps) {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: index * 0.05 }}
-            className={`glass-card p-4 rounded-2xl flex items-center gap-4 ${u.uid === user.uid ? 'border-purple-500/50 bg-purple-500/5' : ''}`}
+            className={`glass-card p-4 rounded-2xl flex items-center gap-4 ${u.uid === user?.uid ? 'border-purple-500/50 bg-purple-500/5' : ''}`}
           >
             <div className="w-8 flex justify-center">
               <span className="text-gray-500 font-bold">{index + 4}</span>
@@ -203,8 +203,8 @@ export default function Leaderboard({ user }: LeaderboardProps) {
         ))}
       </div>
 
-      {/* User's Current Rank (if not in top 30) */}
-      {!topUsers.find(u => u.uid === user.uid) && (
+      {/* User's Current Rank (if not in top 30 and logged in) */}
+      {user && !topUsers.find(u => u.uid === user.uid) && (
         <div className="pt-4">
           <div className="glass-card p-4 rounded-2xl flex items-center gap-4 border-purple-500/50 bg-purple-500/5">
             <div className="w-8 flex justify-center">
@@ -221,6 +221,21 @@ export default function Leaderboard({ user }: LeaderboardProps) {
               <Trophy className="w-3.5 h-3.5 text-purple-400" />
               <span className="text-xs font-bold">{user.totalPoints} pts</span>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Guest Call to Action */}
+      {!user && (
+        <div className="pt-4">
+          <div className="glass-card p-6 rounded-3xl text-center space-y-4 border-purple-500/30 bg-purple-500/5">
+            <h3 className="font-bold">Want to see your rank?</h3>
+            <p className="text-sm text-gray-400">Sign in to track your study time and compete with students globally!</p>
+            <button 
+              onClick={() => navigate('/login')}
+              className="w-full purple-gradient py-3 rounded-xl font-bold text-sm shadow-lg shadow-purple-500/20"
+            >
+              Sign In Now
+            </button>
           </div>
         </div>
       )}

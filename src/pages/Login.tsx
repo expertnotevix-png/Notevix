@@ -33,6 +33,10 @@ export default function Login() {
       }
     } catch (error: any) {
       setLoading(false);
+      if (error.code === 'auth/popup-closed-by-user') {
+        // User closed the popup, just stop loading without error
+        return;
+      }
       console.error("Login failed:", error);
     }
   };

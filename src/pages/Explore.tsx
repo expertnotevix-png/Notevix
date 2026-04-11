@@ -109,6 +109,19 @@ export default function Explore() {
           <div className="text-center py-20 text-gray-500">No results found.</div>
         ) : (
           <div className="space-y-6">
+            {!loading && (
+              <div className="glass-card p-6 rounded-3xl text-center space-y-4 border-purple-500/30 bg-purple-500/5">
+                <h3 className="font-bold">Unlock Full Access</h3>
+                <p className="text-sm text-gray-400">Sign in to view premium notes, save your favorites, and track your progress!</p>
+                <button 
+                  onClick={() => navigate('/login')}
+                  className="w-full purple-gradient py-3 rounded-xl font-bold text-sm shadow-lg shadow-purple-500/20"
+                >
+                  Sign In to Start
+                </button>
+              </div>
+            )}
+            
             <h3 className="font-bold text-gray-400 uppercase text-xs tracking-widest">Trending Topics</h3>
             <div className="flex flex-wrap gap-2">
               {['Trigonometry', 'Cell Structure', 'French Revolution', 'Grammar', 'Probability'].map((tag) => (

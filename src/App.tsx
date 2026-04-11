@@ -228,8 +228,8 @@ export default function App() {
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
           
           <Route path="/" element={user ? <Home user={user} /> : <Landing />} />
-          <Route path="/explore" element={user ? <Explore /> : <Navigate to="/login" />} />
-          <Route path="/leaderboard" element={user ? <Leaderboard user={user} /> : <Navigate to="/login" />} />
+          <Route path="/explore" element={<Explore />} />
+          <Route path="/leaderboard" element={<Leaderboard user={user} />} />
           <Route path="/schedule" element={user ? <Schedule user={user} /> : <Navigate to="/login" />} />
           <Route path="/notifications" element={user ? <Notifications user={user} /> : <Navigate to="/login" />} />
           <Route path="/saved" element={user ? <Saved user={user} /> : <Navigate to="/login" />} />
@@ -238,15 +238,15 @@ export default function App() {
           <Route path="/class/:classId/:subjectId" element={user ? <ChapterList /> : <Navigate to="/login" />} />
           <Route path="/note/:noteId" element={user ? <NoteView user={user} /> : <Navigate to="/login" />} />
           <Route path="/focus" element={user ? <FocusTimer user={user} /> : <Navigate to="/login" />} />
-          <Route path="/privacy" element={user ? <PrivacyPolicy /> : <Navigate to="/login" />} />
-          <Route path="/about" element={user ? <AboutUs /> : <Navigate to="/login" />} />
-          <Route path="/contact" element={user ? <Contact user={user} /> : <Navigate to="/login" />} />
-          <Route path="/terms" element={user ? <TermsOfService /> : <Navigate to="/login" />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/about" element={<AboutUs />} />
+          <Route path="/contact" element={<Contact user={user} />} />
+          <Route path="/terms" element={<TermsOfService />} />
           
           <Route path="/admin" element={user?.role === 'admin' ? <Admin /> : <Navigate to="/" />} />
         </Routes>
         
-        {user && <BottomNav />}
+        <BottomNav user={user} />
       </div>
     </Router>
   );

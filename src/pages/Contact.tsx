@@ -7,7 +7,7 @@ import { db } from '../lib/firebase';
 import { UserProfile } from '../types';
 
 interface ContactProps {
-  user: UserProfile;
+  user: UserProfile | null;
 }
 
 export default function Contact({ user }: ContactProps) {
@@ -16,15 +16,16 @@ export default function Contact({ user }: ContactProps) {
   const [loading, setLoading] = useState(false);
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
+  const [email, setEmail] = useState(user?.email || '');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       await addDoc(collection(db, 'messages'), {
-        userId: user.uid,
-        userEmail: user.email,
-        userName: user.displayName,
+        userId: user?.uid || 'anonymous',
+        userEmail: email,
+        userName: user?.displayName || 'Guest',
         subject,
         message,
         status: 'pending',
@@ -78,6 +79,20 @@ export default function Contact({ user }: ContactProps) {
 
         {!submitted ? (
           <form onSubmit={handleSubmit} className="space-y-4">
+            {!user && (
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Your Email</label>
+                <input 
+                  required
+                  type="email" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Where can we reach you?"
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm focus:outline-none focus:border-purple-500 transition-colors"
+                />
+              </div>
+            )}
+            
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Subject</label>
               <input 
