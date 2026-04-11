@@ -22,6 +22,7 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import AboutUs from './pages/AboutUs';
 import Contact from './pages/Contact';
 import TermsOfService from './pages/TermsOfService';
+import Landing from './pages/Landing';
 
 // Components
 import BottomNav from './components/BottomNav';
@@ -226,7 +227,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
           
-          <Route path="/" element={user ? <Home user={user} /> : <Navigate to="/login" />} />
+          <Route path="/" element={user ? <Home user={user} /> : <Landing />} />
           <Route path="/explore" element={user ? <Explore /> : <Navigate to="/login" />} />
           <Route path="/leaderboard" element={user ? <Leaderboard user={user} /> : <Navigate to="/login" />} />
           <Route path="/schedule" element={user ? <Schedule user={user} /> : <Navigate to="/login" />} />

@@ -33,6 +33,9 @@ export default function AboutUs() {
           <p>
             NoteVix was founded with a single mission: to provide CBSE Class 8, 9, and 10 students with the highest quality, most concise study materials. We believe that smart work is better than hard work, and our "One Page Notes" are designed to help students revise entire chapters in minutes.
           </p>
+          <p>
+            In today's fast-paced world, students are often overwhelmed with massive textbooks and endless online resources. NoteVix aims to cut through the noise by providing only what is essential for exam success. Our content is designed to be visually engaging and easy to remember.
+          </p>
         </section>
 
         <section className="space-y-3">
@@ -41,7 +44,10 @@ export default function AboutUs() {
             <h2 className="font-bold">Who We Are</h2>
           </div>
           <p>
-            We are a team of educators and technology enthusiasts dedicated to making quality education accessible. Our resources are curated by subject matter experts and toppers to ensure accuracy and relevance to the latest CBSE curriculum.
+            We are a team of educators, technology enthusiasts, and former CBSE toppers dedicated to making quality education accessible. Our resources are curated by subject matter experts to ensure accuracy and relevance to the latest NCERT and CBSE curriculum.
+          </p>
+          <p>
+            Our team understands the pressure of board exams and school assessments. That's why we don't just provide notes; we provide a complete study ecosystem including AI-powered doubt solving and productivity tools.
           </p>
         </section>
 
