@@ -1,9 +1,21 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let aiInstance: GoogleGenAI | null = null;
+
+function getAI() {
+  if (!aiInstance) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY is not configured. Please add it to your secrets.");
+    }
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+}
 
 export const geminiService = {
   async solveDoubt(query: string) {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: query,
@@ -15,6 +27,7 @@ export const geminiService = {
   },
 
   async generateQuiz(subject: string, className: string) {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Generate 5 MCQ questions for CBSE Class ${className} ${subject}.`,
@@ -42,6 +55,7 @@ export const geminiService = {
   },
 
   async summarizeChapter(text: string) {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Summarize the following chapter text in 5 bullet points in simple Hinglish:\n\n${text}`,
@@ -52,7 +66,8 @@ export const geminiService = {
     return response.text;
   },
 
-  async chatWithBot(message: string, history: { role: 'user' | 'model', parts: { text: string }[] }[]) {
+  async chatWithBot(message: string, history: any[]) {
+    const ai = getAI();
     const chat = ai.chats.create({
       model: "gemini-3-flash-preview",
       config: {
