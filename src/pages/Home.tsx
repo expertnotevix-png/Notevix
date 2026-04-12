@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { UserProfile } from '../types';
-import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Trophy, Bell, Calendar, Sparkles, MessageSquare, BrainCircuit, FileText } from 'lucide-react';
-import { collection, query, where, getDocs, limit, addDoc, updateDoc, doc } from 'firebase/firestore';
+import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Trophy, Bell, Calendar, Sparkles, MessageSquare, BrainCircuit, FileText, Users } from 'lucide-react';
+import { collection, query, where, getDocs, limit, addDoc, updateDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 interface HomeProps {
@@ -48,6 +48,15 @@ export default function Home({ user }: HomeProps) {
     if (snap.empty) {
       console.log("Auto-seeding data...");
       
+      // Community Stats
+      await setDoc(doc(db, 'community_stats', 'global'), {
+        totalQuestions: 0,
+        totalAnswers: 0,
+        totalStudents: 0,
+        solvedToday: 0,
+        lastResetDate: new Date().toISOString().split('T')[0]
+      });
+
       // Subject Resources
       const subjectResources = [
         {
@@ -341,6 +350,35 @@ export default function Home({ user }: HomeProps) {
           </div>
         </div>
       </div>
+
+      {/* Community Teaser */}
+      <motion.div
+        whileTap={{ scale: 0.98 }}
+        onClick={() => navigate('/community')}
+        className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-white/10 rounded-3xl p-6 relative overflow-hidden group cursor-pointer"
+      >
+        <div className="relative z-10 flex items-center justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-blue-400" />
+              <h3 className="font-bold text-lg">Student Community</h3>
+            </div>
+            <p className="text-gray-400 text-xs">Join 5,000+ students discussing doubts!</p>
+            <div className="flex items-center gap-2 mt-3">
+              <div className="flex -space-x-2">
+                {[1, 2, 3].map(i => (
+                  <img key={i} src={`https://i.pravatar.cc/100?img=${i + 10}`} className="w-6 h-6 rounded-full border-2 border-black" alt="" />
+                ))}
+              </div>
+              <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Join Now</span>
+            </div>
+          </div>
+          <ChevronRight className="w-6 h-6 text-gray-500 group-hover:text-white transition-colors" />
+        </div>
+        <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:opacity-20 transition-opacity">
+          <MessageSquare className="w-24 h-24" />
+        </div>
+      </motion.div>
       
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-4">

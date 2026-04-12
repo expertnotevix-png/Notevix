@@ -81,6 +81,11 @@ service cloud.firestore {
       return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
     }
 
+    function isBanned() {
+      let modData = get(/databases/$(database)/documents/user_moderation/$(request.auth.uid)).data;
+      return modData.isPermanentlyBanned == true || (modData.banUntil != null && modData.banUntil > request.time.toIdString());
+    }
+
     // ===============================================================
     // Domain Validators
     // ===============================================================
@@ -131,12 +136,31 @@ service cloud.firestore {
              data.status == 'pending';
     }
 
+    function isValidPost(data) {
+      return data.keys().hasAll(['userId', 'title', 'description', 'subject', 'class', 'status', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.description is string && data.description.size() > 0 && data.description.size() < 5000 &&
+             data.subject in ["Science", "Maths", "SST", "English", "Hindi", "Other"] &&
+             data.class in ["Class 8", "Class 9", "Class 10"] &&
+             data.status in ["pending", "approved", "rejected"] &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidReply(data) {
+      return data.keys().hasAll(['postId', 'userId', 'text', 'status', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 5000 &&
+             data.status in ["pending", "approved", "rejected"] &&
+             isValidDateString(data.createdAt);
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
 
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
+      allow read: if isAuthenticated(); // Allow reading other profiles for community
       allow create: if isOwner(userId) && isValidUser(request.resource.data) && 
                     (request.resource.data.role == 'student' || isAdmin());
       allow update: if isOwner(userId) && isValidUser(request.resource.data) && 
@@ -183,6 +207,36 @@ service cloud.firestore {
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && 
                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && !isBanned() && isValidPost(request.resource.data);
+      allow update: if isAdmin() || (isAuthenticated() && !isBanned() && (
+        (isOwner(resource.data.userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'description', 'subject', 'class'])) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotes', 'downvotes', 'replyCount', 'isSolved', 'bestReplyId']))
+      ));
+      allow delete: if isAdmin() || (isAuthenticated() && isOwner(resource.data.userId));
+
+      match /replies/{replyId} {
+        allow read: if true;
+        allow create: if isAuthenticated() && !isBanned() && isValidReply(request.resource.data);
+        allow update: if isAdmin() || (isAuthenticated() && !isBanned() && (
+          (isOwner(resource.data.userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text'])) ||
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotes', 'downvotes', 'isBest']))
+        ));
+        allow delete: if isAdmin() || (isAuthenticated() && isOwner(resource.data.userId));
+      }
+    }
+
+    match /community_stats/global {
+      allow read: if true;
+      allow write: if isAdmin() || isAuthenticated(); // Allow incrementing stats
+    }
+
+    match /user_moderation/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
     }
 
     // Default deny

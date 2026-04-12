@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Chapter, Message, Notification } from '../types';
-import { Plus, Trash2, Edit2, Save, X, ChevronLeft, Database, MessageSquare, Bell, Send, CheckCircle2, Clock } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, ChevronLeft, Database, MessageSquare, Bell, Send, CheckCircle2, Clock, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import ModerationTab from '../components/community/ModerationTab';
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'chapters' | 'messages' | 'notifications'>('chapters');
+  const [activeTab, setActiveTab] = useState<'chapters' | 'messages' | 'notifications' | 'moderation'>('chapters');
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -330,11 +331,12 @@ export default function Admin() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 p-1 bg-white/5 rounded-2xl">
+      <div className="flex gap-2 p-1 bg-white/5 rounded-2xl overflow-x-auto no-scrollbar">
         {[
           { id: 'chapters', label: 'Chapters', icon: Database },
           { id: 'messages', label: 'Messages', icon: MessageSquare },
           { id: 'notifications', label: 'Broadcast', icon: Bell },
+          { id: 'moderation', label: 'Moderation', icon: Shield },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -491,6 +493,8 @@ export default function Admin() {
           </div>
         </div>
       )}
+
+      {activeTab === 'moderation' && <ModerationTab />}
     </div>
   );
 }

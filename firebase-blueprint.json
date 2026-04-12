@@ -129,11 +129,77 @@
         "userId": { "type": "string" },
         "title": { "type": "string" },
         "message": { "type": "string" },
-        "type": { "type": "string", "enum": ["streak", "rank", "system"] },
+        "type": { "type": "string", "enum": ["streak", "rank", "system", "reply", "best_answer", "warning"] },
         "read": { "type": "boolean" },
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "title", "message"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "Community forum post",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhoto": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "subject": { "type": "string", "enum": ["Science", "Maths", "SST", "English", "Hindi", "Other"] },
+        "class": { "type": "string", "enum": ["Class 8", "Class 9", "Class 10"] },
+        "upvotes": { "type": "array", "items": { "type": "string" } },
+        "downvotes": { "type": "array", "items": { "type": "string" } },
+        "replyCount": { "type": "number" },
+        "isSolved": { "type": "boolean" },
+        "bestReplyId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "description", "subject", "class", "status", "createdAt"]
+    },
+    "Reply": {
+      "title": "Reply",
+      "description": "Community forum reply",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "postId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhoto": { "type": "string" },
+        "text": { "type": "string" },
+        "upvotes": { "type": "array", "items": { "type": "string" } },
+        "downvotes": { "type": "array", "items": { "type": "string" } },
+        "isBest": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["postId", "userId", "text", "status", "createdAt"]
+    },
+    "CommunityStats": {
+      "title": "CommunityStats",
+      "description": "Global community statistics",
+      "type": "object",
+      "properties": {
+        "totalQuestions": { "type": "number" },
+        "totalAnswers": { "type": "number" },
+        "totalStudents": { "type": "number" },
+        "solvedToday": { "type": "number" },
+        "lastResetDate": { "type": "string" }
+      }
+    },
+    "UserModeration": {
+      "title": "UserModeration",
+      "description": "User moderation status and strikes",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "strikes": { "type": "number" },
+        "banUntil": { "type": "string", "format": "date-time" },
+        "isPermanentlyBanned": { "type": "boolean" }
+      },
+      "required": ["userId", "strikes"]
     }
   },
   "firestore": {
@@ -168,6 +234,22 @@
     "/notifications/{notificationId}": {
       "schema": "Notification",
       "description": "In-app notifications"
+    },
+    "/posts/{postId}": {
+      "schema": "Post",
+      "description": "Community forum posts"
+    },
+    "/posts/{postId}/replies/{replyId}": {
+      "schema": "Reply",
+      "description": "Replies to a post"
+    },
+    "/community_stats/global": {
+      "schema": "CommunityStats",
+      "description": "Global community stats"
+    },
+    "/user_moderation/{userId}": {
+      "schema": "UserModeration",
+      "description": "User moderation data"
     }
   }
 }

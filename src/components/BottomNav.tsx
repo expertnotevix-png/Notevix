@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Search, Trophy, User, Timer, LogIn } from 'lucide-react';
+import { Home, MessageSquare, Trophy, User, Timer, LogIn } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { UserProfile } from '../types';
 
@@ -10,7 +10,7 @@ interface BottomNavProps {
 export default function BottomNav({ user }: BottomNavProps) {
   const navItems = [
     { icon: Home, label: 'Home', path: '/' },
-    { icon: Search, label: 'Explore', path: '/explore' },
+    { icon: MessageSquare, label: 'Community', path: '/community' },
     { icon: Timer, label: 'Focus', path: '/focus' },
     { icon: Trophy, label: 'Ranks', path: '/leaderboard' },
     { icon: user ? User : LogIn, label: user ? 'Profile' : 'Login', path: user ? '/profile' : '/login' },

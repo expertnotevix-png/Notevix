@@ -105,5 +105,36 @@ export const geminiService = {
       console.error("Chatbot Error:", error);
       throw error;
     }
+  },
+
+  async moderateContent(text: string) {
+    try {
+      const ai = getAI();
+      const response = await ai.models.generateContent({
+        model: "gemini-flash-latest",
+        contents: `
+          Analyze the following text for a student community forum:
+          1. Abusive language/bad words.
+          2. Spam/promotional content.
+          3. Off-topic content.
+          4. Personal info.
+          
+          Text: "${text}"
+          
+          Respond ONLY with a JSON object:
+          {
+            "approved": boolean,
+            "reason": "Brief reason if rejected, otherwise null"
+          }
+        `,
+        config: {
+          responseMimeType: "application/json",
+        },
+      });
+      return JSON.parse(response.text);
+    } catch (error) {
+      console.error("Moderation Error:", error);
+      return { approved: true };
+    }
   }
 };

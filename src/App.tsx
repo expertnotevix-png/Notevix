@@ -26,6 +26,8 @@ import Landing from './pages/Landing';
 import AIDoubtSolver from './pages/AIDoubtSolver';
 import QuizGenerator from './pages/QuizGenerator';
 import Summarizer from './pages/Summarizer';
+import Community from './pages/Community';
+import PostDetail from './pages/PostDetail';
 
 // Components
 import BottomNav from './components/BottomNav';
@@ -274,6 +276,9 @@ export default function App() {
           <Route path="/ai-doubts" element={user ? <AIDoubtSolver /> : <Navigate to="/login" />} />
           <Route path="/ai-quiz" element={user ? <QuizGenerator /> : <Navigate to="/login" />} />
           <Route path="/ai-summarizer" element={user ? <Summarizer /> : <Navigate to="/login" />} />
+          
+          <Route path="/community" element={<Community user={user} />} />
+          <Route path="/community/post/:postId" element={<PostDetail user={user} />} />
           
           <Route path="/admin" element={user?.role === 'admin' ? <Admin /> : <Navigate to="/" />} />
         </Routes>

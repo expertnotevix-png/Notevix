@@ -1,11 +1,11 @@
 import { auth, db } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { UserProfile } from '../types';
-import { LogOut, Settings, Shield, CreditCard, Bell, ChevronRight, Award, Instagram, Send, BookOpen, Moon, Bookmark, Share2, Copy, Check, Download, QrCode } from 'lucide-react';
+import { LogOut, Settings, Shield, CreditCard, Bell, ChevronRight, Award, Instagram, Send, BookOpen, Moon, Bookmark, Share2, Copy, Check, Download, QrCode, MessageSquare, History } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { QRCodeCanvas } from 'qrcode.react';
 
@@ -16,6 +16,16 @@ interface ProfileProps {
 export default function Profile({ user }: ProfileProps) {
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
+  const [userPostsCount, setUserPostsCount] = useState(0);
+
+  useEffect(() => {
+    const fetchUserStats = async () => {
+      const q = query(collection(db, 'posts'), where('userId', '==', user.uid));
+      const snap = await getDocs(q);
+      setUserPostsCount(snap.size);
+    };
+    fetchUserStats();
+  }, [user.uid]);
 
   const handleLogout = () => {
     signOut(auth);
@@ -114,7 +124,31 @@ export default function Profile({ user }: ProfileProps) {
             <span className="text-xs text-gray-500 block">Saved</span>
             <span className="font-bold">🔖 {user.savedNotes.length}</span>
           </div>
+          <div className="glass-card px-4 py-2 rounded-xl">
+            <span className="text-xs text-gray-500 block">Posts</span>
+            <span className="font-bold">💬 {userPostsCount}</span>
+          </div>
         </div>
+      </div>
+
+      {/* Community Activity */}
+      <div className="space-y-4">
+        <h3 className="font-bold text-gray-400 uppercase text-xs tracking-widest">Community Activity</h3>
+        <button
+          onClick={() => navigate('/community')}
+          className="w-full glass-card p-4 rounded-3xl flex items-center justify-between border-blue-500/20 bg-blue-500/5 group"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center">
+              <MessageSquare className="w-6 h-6 text-blue-500" />
+            </div>
+            <div className="text-left">
+              <h4 className="font-bold">My Discussions</h4>
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">View your questions & replies</p>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-blue-500 transition-colors" />
+        </button>
       </div>
 
       {/* App Branding */}
