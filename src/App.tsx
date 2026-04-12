@@ -99,6 +99,11 @@ export default function App() {
           try {
             await setDoc(userRef, newUser);
             
+            // Update Community Stats
+            await setDoc(doc(db, 'community_stats', 'global'), {
+              totalStudents: increment(1)
+            }, { merge: true });
+
             // If referred by someone, increment their count
             if (referredBy) {
               const qReferrer = query(collection(db, 'users'), where('referralCode', '==', referredBy));
@@ -123,6 +128,20 @@ export default function App() {
           if (docSnap.exists()) {
             const userData = docSnap.data() as UserProfile;
             
+            // Initialize Community Stats if missing
+            const statsRef = doc(db, 'community_stats', 'global');
+            getDoc(statsRef).then(sSnap => {
+              if (!sSnap.exists()) {
+                setDoc(statsRef, {
+                  totalQuestions: 0,
+                  totalAnswers: 0,
+                  totalStudents: 1,
+                  solvedToday: 0,
+                  lastResetDate: new Date().toISOString().split('T')[0]
+                });
+              }
+            });
+
             // Streak Logic
             const today = new Date().toISOString().split('T')[0];
             const lastUpdate = userData.streak?.lastUpdateDate;

@@ -152,10 +152,13 @@ service cloud.firestore {
     }
 
     function isValidReply(data) {
-      return data.keys().hasAll(['postId', 'userId', 'text', 'status', 'createdAt']) &&
-             data.userId == request.auth.uid &&
-             data.text is string && data.text.size() > 0 && data.text.size() < 5000 &&
-             data.status in ["pending", "approved", "rejected"] &&
+      let isAI = data.userId == 'notevix-ai' && 
+                 data.userName == 'NoteVix AI 🤖' && 
+                 data.userPhoto == 'https://img.icons8.com/fluency/96/bot.png';
+      
+      return data.keys().hasAll(['userId', 'userName', 'userPhoto', 'content', 'upvotes', 'downvotes', 'upvotesCount', 'isBest', 'createdAt']) &&
+             (data.userId == request.auth.uid || isAI) &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 5000 &&
              isValidDateString(data.createdAt);
     }
 

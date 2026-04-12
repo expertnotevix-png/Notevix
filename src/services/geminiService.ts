@@ -136,5 +136,50 @@ export const geminiService = {
       console.error("Moderation Error:", error);
       return { approved: true };
     }
+  },
+
+  async isNotesRequest(text: string) {
+    try {
+      const ai = getAI();
+      const response = await ai.models.generateContent({
+        model: "gemini-flash-latest",
+        contents: `
+          Analyze if the following text is primarily asking for "notes", "PDFs", "study material", or "resources".
+          If the student is asking a conceptual question (e.g. "What is photosynthesis?"), respond "false".
+          If the student is asking for a file or notes (e.g. "Give me notes of Chapter 1"), respond "true".
+          
+          Text: "${text}"
+          
+          Respond ONLY with "true" or "false".
+        `,
+      });
+      return response.text.toLowerCase().includes('true');
+    } catch (error) {
+      return false;
+    }
+  },
+
+  async getCommunityAnswer(title: string, description: string) {
+    try {
+      const ai = getAI();
+      const response = await ai.models.generateContent({
+        model: "gemini-flash-latest",
+        contents: `
+          Question Title: ${title}
+          Question Description: ${description}
+          
+          Provide a helpful, concise, and accurate answer for this student. 
+          Use simple Hinglish (Hindi + English). 
+          Keep it under 100 words.
+        `,
+        config: {
+          systemInstruction: "You are NoteVix AI, a helpful study assistant. Provide accurate answers to student questions in simple Hinglish.",
+        },
+      });
+      return response.text;
+    } catch (error) {
+      console.error("Community Answer Error:", error);
+      return "I'm sorry, I couldn't generate an answer right now. Please wait for other students or teachers to reply!";
+    }
   }
 };

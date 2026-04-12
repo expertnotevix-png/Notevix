@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { X, Send, AlertCircle, Loader2 } from 'lucide-react';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, increment } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, increment, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { geminiService } from '../../services/geminiService';
 import { UserProfile } from '../../types';
@@ -38,7 +38,7 @@ export default function CreatePostModal({ isOpen, onClose, user }: CreatePostMod
       }
 
       // Create Post
-      await addDoc(collection(db, 'posts'), {
+      const postRef = await addDoc(collection(db, 'posts'), {
         userId: user.uid,
         userName: user.displayName,
         userPhoto: user.photoURL,
@@ -59,6 +59,42 @@ export default function CreatePostModal({ isOpen, onClose, user }: CreatePostMod
       await setDoc(doc(db, 'community_stats', 'global'), {
         totalQuestions: increment(1)
       }, { merge: true });
+
+      // AI Auto-Reply Logic
+      const isNotes = await geminiService.isNotesRequest(`${title} ${description}`);
+      if (!isNotes) {
+        // Add a small delay for realism
+        setTimeout(async () => {
+          try {
+            const aiAnswer = await geminiService.getCommunityAnswer(title, description);
+            
+            // Add AI Reply
+            await addDoc(collection(db, 'posts', postRef.id, 'replies'), {
+              userId: 'notevix-ai',
+              userName: 'NoteVix AI 🤖',
+              userPhoto: 'https://img.icons8.com/fluency/96/bot.png',
+              content: aiAnswer,
+              upvotes: [],
+              downvotes: [],
+              upvotesCount: 0,
+              isBest: false,
+              createdAt: new Date().toISOString()
+            });
+
+            // Update post reply count
+            await updateDoc(postRef, {
+              replyCount: increment(1)
+            });
+
+            // Update stats
+            await setDoc(doc(db, 'community_stats', 'global'), {
+              totalAnswers: increment(1)
+            }, { merge: true });
+          } catch (aiErr) {
+            console.error("AI Auto-reply failed:", aiErr);
+          }
+        }, 2000);
+      }
 
       onClose();
     } catch (err: any) {

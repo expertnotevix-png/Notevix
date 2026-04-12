@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, where, limit, doc, getDoc, updateDoc, increment, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where, limit, doc, getDoc, updateDoc, increment, addDoc, serverTimestamp, setDoc, getDocs } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -54,6 +54,15 @@ export default function Community({ user }: { user: UserProfile | null }) {
     const statsUnsub = onSnapshot(doc(db, 'community_stats', 'global'), (docSnap) => {
       if (docSnap.exists()) {
         setStats(docSnap.data() as CommunityStats);
+      } else {
+        // Initialize if missing
+        setDoc(doc(db, 'community_stats', 'global'), {
+          totalQuestions: 0,
+          totalAnswers: 0,
+          totalStudents: 1,
+          solvedToday: 0,
+          lastResetDate: new Date().toISOString().split('T')[0]
+        }, { merge: true });
       }
     });
 
@@ -76,9 +85,22 @@ export default function Community({ user }: { user: UserProfile | null }) {
     }
 
     const postsUnsub = onSnapshot(postsQuery, (snapshot) => {
-      const postsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const postsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
       setPosts(postsData);
       setLoading(false);
+
+      // Auto-fix stats if they are 0 but posts exist
+      if (stats.totalQuestions === 0 && postsData.length > 0) {
+        const fixStats = async () => {
+          const usersSnap = await getDocs(collection(db, 'users'));
+          setDoc(doc(db, 'community_stats', 'global'), {
+            totalQuestions: postsData.length,
+            totalAnswers: postsData.reduce((acc, p) => acc + (p.replyCount || 0), 0),
+            totalStudents: usersSnap.size
+          }, { merge: true });
+        };
+        fixStats();
+      }
     });
 
     return () => {

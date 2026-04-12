@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, onSnapshot, collection, query, orderBy, addDoc, updateDoc, increment, arrayUnion, arrayRemove, deleteDoc } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, orderBy, addDoc, updateDoc, increment, arrayUnion, arrayRemove, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -78,16 +78,14 @@ export default function PostDetail({ user }: { user: UserProfile | null }) {
       }
 
       const replyData = {
-        postId,
         userId: user.uid,
         userName: user.displayName,
         userPhoto: user.photoURL,
-        text: newReply.trim(),
+        content: newReply.trim(),
         upvotes: [],
         downvotes: [],
         upvotesCount: 0,
         isBest: false,
-        status: 'approved',
         createdAt: new Date().toISOString()
       };
 
@@ -285,7 +283,14 @@ export default function PostDetail({ user }: { user: UserProfile | null }) {
                   className="w-8 h-8 rounded-full border border-white/10"
                 />
                 <div>
-                  <div className="text-sm font-bold">{reply.userName}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm font-bold">{reply.userName}</div>
+                    {reply.userId === 'notevix-ai' && (
+                      <span className="text-[8px] font-bold uppercase tracking-widest bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/30">
+                        AI Assistant
+                      </span>
+                    )}
+                  </div>
                   <div className="text-[10px] text-gray-500">
                     {formatDistanceToNow(new Date(reply.createdAt))} ago
                   </div>
@@ -299,7 +304,7 @@ export default function PostDetail({ user }: { user: UserProfile | null }) {
               </div>
 
               <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap mb-6">
-                {reply.text}
+                {reply.content}
               </p>
 
               <div className="flex items-center justify-between pt-4 border-t border-white/5">

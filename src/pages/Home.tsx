@@ -52,10 +52,10 @@ export default function Home({ user }: HomeProps) {
       await setDoc(doc(db, 'community_stats', 'global'), {
         totalQuestions: 0,
         totalAnswers: 0,
-        totalStudents: 0,
+        totalStudents: 1,
         solvedToday: 0,
         lastResetDate: new Date().toISOString().split('T')[0]
-      });
+      }, { merge: true });
 
       // Subject Resources
       const subjectResources = [
