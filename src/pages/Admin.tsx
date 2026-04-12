@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Chapter, Message, Notification } from '../types';
-import { Plus, Trash2, Edit2, Save, X, ChevronLeft, Database, MessageSquare, Bell, Send, CheckCircle2, Clock, Shield } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, ChevronLeft, Database, MessageSquare, Bell, Send, CheckCircle2, Clock, Shield, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ModerationTab from '../components/community/ModerationTab';
 
@@ -198,31 +198,31 @@ export default function Admin() {
       },
       {
         class: '10', subject: 'science',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1oa2WBPNO4ChJrAp-aP7uyvVCn2SPI6w1/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1wNNhEXC06_qpsom2lzfAoOAjxZtfzc2f/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/1jUpfYzuNwiE6b6CTYTE--Gk8ttqZ5b26/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1nWLsptC9vEV7egT8rbapiRi_gBm7SeTW/view?usp=drivesdk'
+        onePageNotesUrl: 'https://drive.google.com/file/d/1vVRXXenGoaFzn1R2cEs_es5gDzzEzO9J/view?usp=drivesdk',
+        fullNotesUrl: 'https://drive.google.com/file/d/1Rer-yq5_lUAx79ziwtXDR0AXgaoB10Eh/view?usp=drivesdk',
+        importantQuestionsUrl: 'https://drive.google.com/file/d/17gHE4BBgTcFbq6Z1jUMEaooPuDhSxrFR/view?usp=drivesdk',
+        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1lGG-l-89veqwwbEIltxRtXql1Xhb1uVT/view?usp=drivesdk'
       },
       {
         class: '10', subject: 'sst',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1oa2WBPNO4ChJrAp-aP7uyvVCn2SPI6w1/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1wNNhEXC06_qpsom2lzfAoOAjxZtfzc2f/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/1jUpfYzuNwiE6b6CTYTE--Gk8ttqZ5b26/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1nWLsptC9vEV7egT8rbapiRi_gBm7SeTW/view?usp=drivesdk'
+        onePageNotesUrl: 'https://drive.google.com/file/d/1C5HNfr4u_8vQ9eArzdZRSUhE_Owy4h8c/view?usp=drivesdk',
+        fullNotesUrl: 'https://drive.google.com/file/d/1hUk1u-XnJb47lAFvU3qvWUK_kTMHwVc6/view?usp=drivesdk',
+        importantQuestionsUrl: 'https://drive.google.com/file/d/1B_s9nxd9df3uR2Zas-sna9S5sthtt-1w/view?usp=drivesdk',
+        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1Bo5ON7oLLp_uhra5dOx5vVk82x07WGCJ/view?usp=drivesdk'
       },
       {
         class: '10', subject: 'maths',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1oa2WBPNO4ChJrAp-aP7uyvVCn2SPI6w1/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1wNNhEXC06_qpsom2lzfAoOAjxZtfzc2f/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/1jUpfYzuNwiE6b6CTYTE--Gk8ttqZ5b26/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1nWLsptC9vEV7egT8rbapiRi_gBm7SeTW/view?usp=drivesdk'
+        onePageNotesUrl: 'https://drive.google.com/file/d/1KX_F1r4IHYCu91TrMUNMq8OTcdHrADY8/view?usp=drivesdk',
+        fullNotesUrl: 'https://drive.google.com/file/d/1K1N9t9aHeurE9FXt3sYuEYUPbL_PZgh4/view?usp=drivesdk',
+        importantQuestionsUrl: 'https://drive.google.com/file/d/1gQeKMBnrQ0ke4LoruKq_Mk4faEh2kcG_/view?usp=drivesdk',
+        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1apDQ1U9eUINJ5DWtJx3KqjqlRmM7iVV9/view?usp=drivesdk'
       },
       {
         class: '10', subject: 'english',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1oa2WBPNO4ChJrAp-aP7uyvVCn2SPI6w1/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1wNNhEXC06_qpsom2lzfAoOAjxZtfzc2f/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/1jUpfYzuNwiE6b6CTYTE--Gk8ttqZ5b26/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1nWLsptC9vEV7egT8rbapiRi_gBm7SeTW/view?usp=drivesdk'
+        onePageNotesUrl: 'https://drive.google.com/file/d/161HIkuYtIOD5esDsmjwnI5lq6PPltOZG/view?usp=drivesdk',
+        fullNotesUrl: 'https://drive.google.com/file/d/158isO5zrYWgdKafIiRdzOXLHJaYEeu35/view?usp=drivesdk',
+        importantQuestionsUrl: 'https://drive.google.com/file/d/1ELq7c3bOUDaVFAsu2OcDtuwYiOikTm74/view?usp=drivesdk',
+        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1DcvYECk1QfqhAu2isR3PHnolvcMtx4n5/view?usp=drivesdk'
       }
     ];
 
@@ -360,6 +360,40 @@ export default function Admin() {
             >
               <Database className="w-5 h-5" />
               Add Sample Data
+            </button>
+            <button
+              onClick={async () => {
+                const scienceRes = {
+                  class: '10', subject: 'science',
+                  onePageNotesUrl: 'https://drive.google.com/file/d/1vVRXXenGoaFzn1R2cEs_es5gDzzEzO9J/view?usp=drivesdk',
+                  fullNotesUrl: 'https://drive.google.com/file/d/1Rer-yq5_lUAx79ziwtXDR0AXgaoB10Eh/view?usp=drivesdk',
+                  importantQuestionsUrl: 'https://drive.google.com/file/d/17gHE4BBgTcFbq6Z1jUMEaooPuDhSxrFR/view?usp=drivesdk',
+                  examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1lGG-l-89veqwwbEIltxRtXql1Xhb1uVT/view?usp=drivesdk'
+                };
+                const q = query(collection(db, 'subject_resources'), where('class', '==', '10'), where('subject', '==', 'science'));
+                const snap = await getDocs(q);
+                if (snap.empty) {
+                  await addDoc(collection(db, 'subject_resources'), scienceRes);
+                } else {
+                  await updateDoc(doc(db, 'subject_resources', snap.docs[0].id), scienceRes);
+                }
+                // Fix misclassified chapters
+                const qChapters = query(collection(db, 'chapters'), where('class', '==', '10'), where('subject', '==', 'science'));
+                const chaptersSnap = await getDocs(qChapters);
+                for (const chapterDoc of chaptersSnap.docs) {
+                  const data = chapterDoc.data();
+                  // Heuristic: if title contains math terms, it might be misclassified
+                  const mathTerms = ['polynomial', 'quadratic', 'trigonometry', 'arithmetic', 'probability', 'statistics', 'triangle', 'circle'];
+                  if (mathTerms.some(term => data.title.toLowerCase().includes(term))) {
+                    await updateDoc(doc(db, 'chapters', chapterDoc.id), { subject: 'maths' });
+                  }
+                }
+                alert("Class 10 Science resources updated and misclassified chapters fixed!");
+              }}
+              className="flex-1 glass-card p-4 rounded-2xl flex items-center justify-center gap-2 text-green-400 font-bold"
+            >
+              <RefreshCw className="w-5 h-5" />
+              Fix Science Tab
             </button>
           </div>
 
