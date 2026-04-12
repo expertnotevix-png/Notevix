@@ -64,8 +64,9 @@ service cloud.firestore {
     }
 
     function isAdmin() {
+      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
       return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        ((exists(userPath) && get(userPath).data.role == 'admin') ||
          (request.auth.token.email == "expertraj8@gmail.com" && request.auth.token.email_verified == true));
     }
 
@@ -82,8 +83,11 @@ service cloud.firestore {
     }
 
     function isBanned() {
-      let modData = get(/databases/$(database)/documents/user_moderation/$(request.auth.uid)).data;
-      return modData.isPermanentlyBanned == true || (modData.banUntil != null && modData.banUntil > request.time.toIdString());
+      return exists(/databases/$(database)/documents/user_moderation/$(request.auth.uid)) && (
+        get(/databases/$(database)/documents/user_moderation/$(request.auth.uid)).data.isPermanentlyBanned == true || 
+        (get(/databases/$(database)/documents/user_moderation/$(request.auth.uid)).data.banUntil != null && 
+         request.time < timestamp(get(/databases/$(database)/documents/user_moderation/$(request.auth.uid)).data.banUntil))
+      );
     }
 
     // ===============================================================

@@ -56,14 +56,17 @@ export default function CreatePostModal({ isOpen, onClose, user }: CreatePostMod
       });
 
       // Update Stats
-      await updateDoc(doc(db, 'community_stats', 'global'), {
+      await setDoc(doc(db, 'community_stats', 'global'), {
         totalQuestions: increment(1)
-      });
+      }, { merge: true });
 
       onClose();
     } catch (err: any) {
       console.error("Create post error:", err);
-      setError("Failed to create post. Please try again.");
+      const errorMessage = err.message?.includes('permission-denied') 
+        ? "Permission denied. Please check if you are logged in or banned."
+        : "Failed to create post. Please try again.";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

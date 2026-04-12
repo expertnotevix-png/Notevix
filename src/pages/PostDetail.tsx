@@ -95,9 +95,9 @@ export default function PostDetail({ user }: { user: UserProfile | null }) {
       await updateDoc(doc(db, 'posts', postId!), {
         replyCount: increment(1)
       });
-      await updateDoc(doc(db, 'community_stats', 'global'), {
+      await setDoc(doc(db, 'community_stats', 'global'), {
         totalAnswers: increment(1)
-      });
+      }, { merge: true });
 
       // Add notification for post owner
       if (post.userId !== user.uid) {
@@ -141,9 +141,9 @@ export default function PostDetail({ user }: { user: UserProfile | null }) {
       });
 
       // Update stats
-      await updateDoc(doc(db, 'community_stats', 'global'), {
+      await setDoc(doc(db, 'community_stats', 'global'), {
         solvedToday: increment(1)
-      });
+      }, { merge: true });
 
       // Notify reply owner
       const reply = replies.find(r => r.id === replyId);
