@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { signInWithPopup, signInWithRedirect } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { auth, googleProvider, analytics } from '../lib/firebase';
 import { logEvent } from 'firebase/analytics';
 import { motion } from 'motion/react';
-import { LogIn, Loader2, Check } from 'lucide-react';
+import { LogIn, Loader2, Check, ExternalLink, Copy, Info } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { Link, useSearchParams } from 'react-router-dom';
 
@@ -11,13 +11,18 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [searchParams] = useSearchParams();
+
+  // Detect In-App Browsers (Instagram, FB, etc.)
+  const isInAppBrowser = /Instagram|FBAN|FBAV|Twitter|Telegram/i.test(navigator.userAgent);
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   useEffect(() => {
     if (loading) {
       const timer = setTimeout(() => {
         setLoading(false);
-        setError("Login is taking too long. Please try the 'Redirect Method' below or check your internet.");
+        setError("Login is taking too long. If you are on Instagram/Telegram, please use the 'Copy Link' button below to open in Chrome/Safari.");
       }, 15000);
       return () => clearTimeout(timer);
     }
@@ -34,27 +39,37 @@ export default function Login() {
     setLoading(true);
     setError(null);
     try {
-      if (useRedirect) {
+      // Ensure persistence is set
+      await setPersistence(auth, browserLocalPersistence);
+
+      // Force redirect for mobile/in-app browsers as popups are almost always blocked
+      if (useRedirect || isMobile || isInAppBrowser) {
         await signInWithRedirect(auth, googleProvider);
       } else {
         const result = await signInWithPopup(auth, googleProvider);
-        // Log login event
         analytics.then(a => {
           if (a) logEvent(a, 'login', { method: 'Google' });
         });
       }
     } catch (error: any) {
       setLoading(false);
-      if (error.code === 'auth/popup-closed-by-user') {
-        return;
-      }
+      if (error.code === 'auth/popup-closed-by-user') return;
+      
       if (error.code === 'auth/unauthorized-domain') {
-        setError(`This domain (${window.location.hostname}) is not authorized in Firebase. Please add it to "Authorized Domains" in Firebase Console.`);
+        setError(`Domain Not Authorized: Please add "${window.location.hostname}" to Authorized Domains in Firebase Console.`);
+      } else if (error.code === 'auth/internal-error' && isInAppBrowser) {
+        setError("In-App Browser detected. These browsers often block login. Please use the 'Copy Link' button below to open in Chrome.");
       } else {
         setError(error.message || "Login failed. Please try the Redirect Method.");
       }
       console.error("Login failed:", error);
     }
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -87,23 +102,41 @@ export default function Login() {
 
             <div className="space-y-4">
               {error && (
-                <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-xl text-red-400 text-[10px] text-left">
-                  <p className="font-bold mb-1">Login Error:</p>
+                <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl text-red-400 text-[11px] text-left space-y-2">
+                  <div className="flex items-center gap-2 font-bold">
+                    <Info size={14} />
+                    <span>Login Issue Detected</span>
+                  </div>
                   <p>{error}</p>
                 </div>
               )}
+
+              {isInAppBrowser && (
+                <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-2xl text-blue-400 text-[11px] text-left space-y-3">
+                  <p className="font-bold">Instagram/Telegram detected! 📱</p>
+                  <p>These apps often block login. For a smooth experience, please open NoteVix in your real browser (Chrome/Safari).</p>
+                  <button 
+                    onClick={copyLink}
+                    className="w-full bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 py-2 rounded-xl flex items-center justify-center gap-2 font-bold transition-all"
+                  >
+                    {copied ? <Check size={14} /> : <Copy size={14} />}
+                    {copied ? 'Link Copied!' : 'Copy Link to Open in Chrome'}
+                  </button>
+                </div>
+              )}
+
               <button
                 onClick={() => handleLogin(false)}
                 disabled={loading || !agreed}
                 className="w-full purple-gradient text-white font-bold py-4 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-purple-500/30 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
-                Continue with Google
+                {isMobile ? 'Continue with Google' : 'Continue with Google'}
               </button>
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10"></div></div>
-                <div className="relative flex justify-center text-[10px] uppercase tracking-widest text-gray-500"><span className="bg-black px-2">Having Trouble?</span></div>
+                <div className="relative flex justify-center text-[10px] uppercase tracking-widest text-gray-500"><span className="bg-black px-2">Alternative</span></div>
               </div>
 
               <button
@@ -113,7 +146,6 @@ export default function Login() {
               >
                 Try Redirect Method
               </button>
-              <p className="text-[10px] text-gray-500">Use this if the popup doesn't open on your browser.</p>
             </div>
         </div>
 
