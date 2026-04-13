@@ -91,6 +91,10 @@ service cloud.firestore {
       return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
     }
 
+    function isValidSimpleDate(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}$");
+    }
+
     function isBanned() {
       return exists(/databases/$(database)/documents/user_moderation/$(request.auth.uid)) && (
         get(/databases/$(database)/documents/user_moderation/$(request.auth.uid)).data.isPermanentlyBanned == true || 
@@ -104,13 +108,29 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidUser(data) {
-      return data.keys().hasAll(['uid', 'email', 'role', 'createdAt']) &&
+      let requiredFields = ['uid', 'email', 'role', 'createdAt', 'referralCode', 'referralCount', 'isPremium', 'totalPoints', 'totalFocusMinutes', 'streak', 'savedNotes', 'notificationsEnabled', 'studyModeEnabled'];
+      
+      return data.keys().hasAll(requiredFields) &&
              data.uid == request.auth.uid &&
              isValidEmail(data.email) &&
              data.role in ['student', 'admin'] &&
              isValidDateString(data.createdAt) &&
-             (!('photoURL' in data) || isValidUrl(data.photoURL)) &&
-             (!('class' in data) || data.class == "" || data.class in ['8', '9', '10']);
+             data.referralCode is string &&
+             data.referralCount is number &&
+             data.isPremium is bool &&
+             data.totalPoints is number &&
+             data.totalFocusMinutes is number &&
+             data.streak is map &&
+             data.streak.keys().hasAll(['currentCount', 'lastUpdateDate']) &&
+             data.streak.currentCount is number &&
+             isValidSimpleDate(data.streak.lastUpdateDate) &&
+             data.savedNotes is list &&
+             data.notificationsEnabled is bool &&
+             data.studyModeEnabled is bool &&
+             (!('photoURL' in data) || data.photoURL == null || isValidUrl(data.photoURL)) &&
+             (!('displayName' in data) || data.displayName == null || data.displayName is string) &&
+             (!('class' in data) || data.class == null || data.class == "" || data.class in ['8', '9', '10']) &&
+             (!('referredBy' in data) || data.referredBy == null || data.referredBy is string);
     }
 
     function isValidChapter(data) {

@@ -222,15 +222,27 @@ export default function App() {
               totalFocusMinutes: 0,
               totalPoints: 0,
               referralCode,
-              referredBy: referredBy || undefined,
               referralCount: 0,
               isPremium: false,
               createdAt: new Date().toISOString(),
+              ...(referredBy ? { referredBy } : {}),
             };
 
             try {
-              await setDoc(userRef, newUser);
-              console.log("New user document created successfully");
+              // Retry mechanism for initial creation
+              let success = false;
+              let attempts = 0;
+              while (!success && attempts < 3) {
+                try {
+                  await setDoc(userRef, newUser);
+                  success = true;
+                  console.log("New user document created successfully");
+                } catch (e) {
+                  attempts++;
+                  if (attempts === 3) throw e;
+                  await new Promise(r => setTimeout(r, 1000 * attempts));
+                }
+              }
               
               // Non-blocking stats update
               setDoc(doc(db, 'community_stats', 'global'), {
@@ -251,9 +263,14 @@ export default function App() {
                 }).catch(() => {});
                 localStorage.removeItem('referredBy');
               }
-            } catch (error) {
+            } catch (error: any) {
               console.error("Critical: Failed to create user document:", error);
-              setLoadingError("We couldn't set up your profile. Please check your internet and try again.");
+              const isPermissionError = error.message?.includes('permission-denied');
+              setLoadingError(
+                isPermissionError 
+                  ? "Account Setup Error: Please ensure you are using a valid Google account and try again."
+                  : "Connection Issue: We couldn't set up your profile. Please check your internet or try opening in Chrome/Safari."
+              );
             }
           }
 
