@@ -324,6 +324,8 @@ export default function App() {
           }
         }
       });
+    }, (error) => {
+      console.warn("App chat notification listener error:", error);
     });
 
     // Listen for new questions
@@ -355,6 +357,8 @@ export default function App() {
           }
         }
       });
+    }, (error) => {
+      console.warn("App posts notification listener error:", error);
     });
 
     return () => {

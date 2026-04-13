@@ -73,19 +73,24 @@ export default function Community({ user }: { user: UserProfile | null }) {
       }
     });
 
-    // Fetch Chat Messages
-    const chatQuery = query(
-      collection(db, 'community_chat'),
-      orderBy('timestamp', 'asc'),
-      limit(100)
-    );
-    const chatUnsub = onSnapshot(chatQuery, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ChatMessage[];
-      setMessages(msgs);
-      if (activeTab === 'chat') {
-        setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-      }
-    });
+    // Fetch Chat Messages - Only for authenticated users
+    let chatUnsub: () => void = () => {};
+    if (user) {
+      const chatQuery = query(
+        collection(db, 'community_chat'),
+        orderBy('timestamp', 'asc'),
+        limit(100)
+      );
+      chatUnsub = onSnapshot(chatQuery, (snapshot) => {
+        const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ChatMessage[];
+        setMessages(msgs);
+        if (activeTab === 'chat') {
+          setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+        }
+      }, (error) => {
+        console.warn("Chat listener error (likely permission related):", error);
+      });
+    }
 
     // Fetch Posts
     let postsQuery = query(collection(db, 'posts'), where('status', '==', 'approved'));
@@ -98,6 +103,9 @@ export default function Community({ user }: { user: UserProfile | null }) {
       const postsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
       setPosts(postsData);
       setLoading(false);
+    }, (error) => {
+      console.error("Posts listener error:", error);
+      setLoading(false);
     });
 
     return () => {
@@ -105,7 +113,7 @@ export default function Community({ user }: { user: UserProfile | null }) {
       chatUnsub();
       postsUnsub();
     };
-  }, [sortBy, filterSubject, filterClass, activeTab]);
+  }, [sortBy, filterSubject, filterClass, activeTab, user?.uid]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
