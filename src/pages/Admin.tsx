@@ -53,16 +53,18 @@ export default function Admin() {
   const [aiStatus, setAiStatus] = useState<{ status: 'checking' | 'ok' | 'error', message?: string }>({ status: 'checking' });
 
   useEffect(() => {
-    checkAI();
+    // Initial check: just verify key presence without calling API to save quota
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === 'undefined' || apiKey === '') {
+      setAiStatus({ status: 'error', message: 'API Key Missing' });
+    } else {
+      setAiStatus({ status: 'ok', message: 'Key Configured' });
+    }
   }, []);
 
-  const checkAI = async () => {
+  const testAI = async () => {
+    setAiStatus({ status: 'checking', message: 'Testing...' });
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey || apiKey === 'undefined' || apiKey === '') {
-        setAiStatus({ status: 'error', message: 'API Key Missing' });
-        return;
-      }
       // Test with a tiny prompt
       await geminiService.chatWithBot("hi", []);
       setAiStatus({ status: 'ok', message: 'AI Online' });
@@ -343,19 +345,32 @@ export default function Admin() {
           </button>
           <div>
             <h1 className="text-2xl font-bold">Admin Panel</h1>
-            <div className={`flex items-center gap-1.5 mt-0.5 ${
-              aiStatus.status === 'ok' ? 'text-green-400' :
-              aiStatus.status === 'error' ? 'text-red-400' :
-              'text-gray-500'
-            }`}>
-              <div className={`w-1.5 h-1.5 rounded-full ${
-                aiStatus.status === 'ok' ? 'bg-green-500 animate-pulse' :
-                aiStatus.status === 'error' ? 'bg-red-500' :
-                'bg-gray-500'
-              }`} />
-              <span className="text-[10px] font-bold uppercase tracking-widest">
-                {aiStatus.message || 'Checking AI...'}
-              </span>
+            <div className={`flex flex-col items-end gap-1 mt-0.5`}>
+              <div className={`flex items-center gap-1.5 ${
+                aiStatus.status === 'ok' ? 'text-green-400' :
+                aiStatus.status === 'error' ? 'text-red-400' :
+                'text-gray-500'
+              }`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${
+                  aiStatus.status === 'ok' ? 'bg-green-500 animate-pulse' :
+                  aiStatus.status === 'error' ? 'bg-red-500' :
+                  'bg-gray-500'
+                }`} />
+                <span className="text-[10px] font-bold uppercase tracking-widest">
+                  {aiStatus.message || 'Checking AI...'}
+                </span>
+                <button 
+                  onClick={testAI}
+                  disabled={aiStatus.status === 'checking'}
+                  className="ml-2 p-1 hover:bg-white/10 rounded-md transition-colors disabled:opacity-50"
+                  title="Test AI Connection"
+                >
+                  <RefreshCw className={`w-3 h-3 ${aiStatus.status === 'checking' ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+              <p className="text-[8px] text-gray-500 max-w-[200px] text-right leading-tight">
+                Note: Gemini Free Tier has a limit of 15 requests per minute.
+              </p>
             </div>
           </div>
         </div>

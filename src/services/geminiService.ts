@@ -27,7 +27,7 @@ function handleAIError(error: any): never {
   // Check for Rate Limit (429)
   const errorString = error?.message?.toLowerCase() || "";
   if (errorString.includes('429') || error?.status === 429 || errorString.includes('quota') || errorString.includes('exhausted')) {
-    throw new Error("AI Limit Reached: Too many students are using the AI right now. Please wait 1 minute and try again! ⏳");
+    throw new Error("AI Limit Reached: The Gemini Free Tier allows 15 requests per minute. Please wait 1 minute and try again! ⏳");
   }
   
   // Check for Safety Filters
