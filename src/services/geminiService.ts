@@ -21,6 +21,23 @@ function getAI() {
   return aiInstance;
 }
 
+function handleAIError(error: any): never {
+  console.error("Gemini API Error:", error);
+  
+  // Check for Rate Limit (429)
+  if (error?.message?.includes('429') || error?.status === 429 || error?.message?.includes('RESOURCE_EXHAUSTED')) {
+    throw new Error("AI Limit Reached: Too many students are using the AI right now. Please wait 1 minute and try again! ⏳");
+  }
+  
+  // Check for Safety Filters
+  if (error?.message?.includes('SAFETY')) {
+    throw new Error("I can't answer that. Please ask something related to your studies! 📚");
+  }
+
+  // Generic Error
+  throw new Error("AI is currently busy or sleepy. Please try again in a few seconds! 😴");
+}
+
 export const geminiService = {
   async solveDoubt(query: string) {
     try {
@@ -34,8 +51,7 @@ export const geminiService = {
       });
       return response.text;
     } catch (error) {
-      console.error("Doubt Solver Error:", error);
-      throw error;
+      return handleAIError(error);
     }
   },
 
@@ -67,8 +83,7 @@ export const geminiService = {
       });
       return JSON.parse(response.text);
     } catch (error) {
-      console.error("Quiz Generator Error:", error);
-      throw error;
+      return handleAIError(error);
     }
   },
 
@@ -84,8 +99,7 @@ export const geminiService = {
       });
       return response.text;
     } catch (error) {
-      console.error("Summarizer Error:", error);
-      throw error;
+      return handleAIError(error);
     }
   },
 
@@ -102,8 +116,7 @@ export const geminiService = {
       const response = await chat.sendMessage({ message });
       return response.text;
     } catch (error) {
-      console.error("Chatbot Error:", error);
-      throw error;
+      return handleAIError(error);
     }
   },
 
