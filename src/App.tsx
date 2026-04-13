@@ -37,7 +37,21 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingError, setLoadingError] = useState<string | null>(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    // Safety timeout for loading state
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn("App loading timed out after 12s");
+        setLoading(false);
+        setLoadingError("The app is taking longer than usual to load. Please check your connection or refresh.");
+      }
+    }, 12000);
+
+    return () => clearTimeout(timeout);
+  }, [loading]);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -59,170 +73,176 @@ export default function App() {
     let unsubscribeUser: (() => void) | undefined;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        // Initial fetch and setup
-        const userRef = doc(db, 'users', firebaseUser.uid);
-        let userDoc;
-        try {
-          userDoc = await getDoc(userRef);
-        } catch (error) {
-          handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
-          return;
-        }
-        
-        if (!userDoc.exists()) {
-          // Check for referral code in localStorage
-          const referredBy = localStorage.getItem('referredBy');
-          const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-
-          const newUser: UserProfile = {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email || '',
-            displayName: firebaseUser.displayName || 'Student',
-            photoURL: firebaseUser.photoURL || '',
-            role: firebaseUser.email === 'expertraj8@gmail.com' ? 'admin' : 'student',
-            savedNotes: [],
-            notificationsEnabled: true,
-            studyModeEnabled: false,
-            streak: {
-              currentCount: 1,
-              lastUpdateDate: new Date().toISOString().split('T')[0],
-            },
-            totalFocusMinutes: 0,
-            totalPoints: 0,
-            referralCode,
-            referredBy: referredBy || undefined,
-            referralCount: 0,
-            isPremium: false,
-            createdAt: new Date().toISOString(),
-          };
+      try {
+        if (firebaseUser) {
+          // Initial fetch and setup
+          const userRef = doc(db, 'users', firebaseUser.uid);
+          let userDoc;
           try {
-            await setDoc(userRef, newUser);
-            
-            // Update Community Stats
-            await setDoc(doc(db, 'community_stats', 'global'), {
-              totalStudents: increment(1)
-            }, { merge: true });
-
-            // If referred by someone, increment their count
-            if (referredBy) {
-              const qReferrer = query(collection(db, 'users'), where('referralCode', '==', referredBy));
-              const referrerSnap = await getDocs(qReferrer);
-              if (!referrerSnap.empty) {
-                const referrerDoc = referrerSnap.docs[0];
-                const newCount = (referrerDoc.data().referralCount || 0) + 1;
-                await updateDoc(doc(db, 'users', referrerDoc.id), {
-                  referralCount: newCount,
-                  isPremium: newCount >= 3
-                });
-              }
-              localStorage.removeItem('referredBy');
-            }
+            userDoc = await getDoc(userRef);
           } catch (error) {
-            handleFirestoreError(error, OperationType.CREATE, `users/${firebaseUser.uid}`);
+            console.error("Error fetching user doc:", error);
+            // Don't throw here, just try to continue or handle gracefully
+            // handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
           }
-        }
+          
+          if (!userDoc?.exists()) {
+            // Check for referral code in localStorage
+            const referredBy = localStorage.getItem('referredBy');
+            const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
-        // Listen for real-time updates
-        unsubscribeUser = onSnapshot(userRef, (docSnap) => {
-          if (docSnap.exists()) {
-            const userData = docSnap.data() as UserProfile;
-            
-            // Initialize Community Stats if missing
-            const statsRef = doc(db, 'community_stats', 'global');
-            getDoc(statsRef).then(sSnap => {
-              if (!sSnap.exists()) {
-                setDoc(statsRef, {
-                  totalQuestions: 0,
-                  totalAnswers: 0,
-                  totalStudents: 1,
-                  solvedToday: 0,
-                  lastResetDate: new Date().toISOString().split('T')[0]
-                });
-              }
-            });
-
-            // Streak Logic
-            const today = new Date().toISOString().split('T')[0];
-            const lastUpdate = userData.streak?.lastUpdateDate;
-            
-            if (lastUpdate !== today) {
-              const yesterday = new Date();
-              yesterday.setDate(yesterday.getDate() - 1);
-              const yesterdayStr = yesterday.toISOString().split('T')[0];
+            const newUser: UserProfile = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              displayName: firebaseUser.displayName || 'Student',
+              photoURL: firebaseUser.photoURL || '',
+              role: firebaseUser.email === 'expertraj8@gmail.com' ? 'admin' : 'student',
+              savedNotes: [],
+              notificationsEnabled: true,
+              studyModeEnabled: false,
+              streak: {
+                currentCount: 1,
+                lastUpdateDate: new Date().toISOString().split('T')[0],
+              },
+              totalFocusMinutes: 0,
+              totalPoints: 0,
+              referralCode,
+              referredBy: referredBy || undefined,
+              referralCount: 0,
+              isPremium: false,
+              createdAt: new Date().toISOString(),
+            };
+            try {
+              await setDoc(userRef, newUser);
               
-              let newCount = userData.streak?.currentCount || 0;
-              if (lastUpdate === yesterdayStr) {
-                newCount += 1;
-              } else {
-                newCount = 1;
+              // Update Community Stats
+              await setDoc(doc(db, 'community_stats', 'global'), {
+                totalStudents: increment(1)
+              }, { merge: true });
+
+              // If referred by someone, increment their count
+              if (referredBy) {
+                const qReferrer = query(collection(db, 'users'), where('referralCode', '==', referredBy));
+                const referrerSnap = await getDocs(qReferrer);
+                if (!referrerSnap.empty) {
+                  const referrerDoc = referrerSnap.docs[0];
+                  const newCount = (referrerDoc.data().referralCount || 0) + 1;
+                  await updateDoc(doc(db, 'users', referrerDoc.id), {
+                    referralCount: newCount,
+                    isPremium: newCount >= 3
+                  });
+                }
+                localStorage.removeItem('referredBy');
               }
+            } catch (error) {
+              console.error("Error creating user doc:", error);
+            }
+          }
+
+          // Listen for real-time updates
+          unsubscribeUser = onSnapshot(userRef, (docSnap) => {
+            if (docSnap.exists()) {
+              const userData = docSnap.data() as UserProfile;
               
-              updateDoc(userRef, {
-                'streak.currentCount': newCount,
-                'streak.lastUpdateDate': today
-              }).catch(err => console.error("Streak update failed:", err));
-            }
+              // Initialize Community Stats if missing
+              const statsRef = doc(db, 'community_stats', 'global');
+              getDoc(statsRef).then(sSnap => {
+                if (!sSnap.exists()) {
+                  setDoc(statsRef, {
+                    totalQuestions: 0,
+                    totalAnswers: 0,
+                    totalStudents: 1,
+                    solvedToday: 0,
+                    lastResetDate: new Date().toISOString().split('T')[0]
+                  });
+                }
+              }).catch(err => console.warn("Stats init check failed:", err));
 
-            // Auto-promote admin if needed
-            if (firebaseUser.email === 'expertraj8@gmail.com' && userData.role !== 'admin') {
-              updateDoc(userRef, { role: 'admin' }).catch(err => 
-                handleFirestoreError(err, OperationType.UPDATE, `users/${firebaseUser.uid}`)
-              );
-            }
-            setUser(userData);
+              // Streak Logic
+              const today = new Date().toISOString().split('T')[0];
+              const lastUpdate = userData.streak?.lastUpdateDate;
+              
+              if (lastUpdate !== today) {
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                const yesterdayStr = yesterday.toISOString().split('T')[0];
+                
+                let newCount = userData.streak?.currentCount || 0;
+                if (lastUpdate === yesterdayStr) {
+                  newCount += 1;
+                } else {
+                  newCount = 1;
+                }
+                
+                updateDoc(userRef, {
+                  'streak.currentCount': newCount,
+                  'streak.lastUpdateDate': today
+                }).catch(err => console.error("Streak update failed:", err));
+              }
 
-            // Client-side notification trigger (Demo/Prototype)
-            const lastNotifDate = localStorage.getItem('last_daily_notif');
-            if (lastNotifDate !== today) {
-              const checkDailyNotifs = async () => {
-                // Streak notification
-                if (userData.streak?.currentCount > 0) {
+              // Auto-promote admin if needed
+              if (firebaseUser.email === 'expertraj8@gmail.com' && userData.role !== 'admin') {
+                updateDoc(userRef, { role: 'admin' }).catch(err => 
+                  console.error("Admin promotion failed:", err)
+                );
+              }
+              setUser(userData);
+
+              // Client-side notification trigger (Demo/Prototype)
+              const lastNotifDate = localStorage.getItem('last_daily_notif');
+              if (lastNotifDate !== today) {
+                const checkDailyNotifs = async () => {
+                  // Streak notification
+                  if (userData.streak?.currentCount > 0) {
+                    await addDoc(collection(db, 'notifications'), {
+                      userId: userData.uid,
+                      title: 'Daily Streak Update',
+                      message: `You are on a ${userData.streak.currentCount} day streak! Keep it up!`,
+                      type: 'streak',
+                      read: false,
+                      timestamp: new Date().toISOString()
+                    });
+                  }
+                  
+                  // Rank notification (simplified)
                   await addDoc(collection(db, 'notifications'), {
                     userId: userData.uid,
-                    title: 'Daily Streak Update',
-                    message: `You are on a ${userData.streak.currentCount} day streak! Keep it up!`,
-                    type: 'streak',
+                    title: 'Rank Maintenance',
+                    message: 'Check the leaderboard to see your current rank and keep studying to stay on top!',
+                    type: 'rank',
                     read: false,
                     timestamp: new Date().toISOString()
                   });
-                }
-                
-                // Rank notification (simplified)
-                await addDoc(collection(db, 'notifications'), {
-                  userId: userData.uid,
-                  title: 'Rank Maintenance',
-                  message: 'Check the leaderboard to see your current rank and keep studying to stay on top!',
-                  type: 'rank',
-                  read: false,
-                  timestamp: new Date().toISOString()
-                });
-                
-                localStorage.setItem('last_daily_notif', today);
-              };
-              checkDailyNotifs().catch(err => console.error("Daily notif trigger failed:", err));
+                  
+                  localStorage.setItem('last_daily_notif', today);
+                };
+                checkDailyNotifs().catch(err => console.error("Daily notif trigger failed:", err));
+              }
+
+              // Sync to leaderboard (public data)
+              const leaderboardRef = doc(db, 'leaderboard', userData.uid);
+              setDoc(leaderboardRef, {
+                uid: userData.uid,
+                displayName: userData.displayName,
+                photoURL: userData.photoURL,
+                totalFocusMinutes: userData.totalFocusMinutes || 0,
+                totalPoints: userData.totalPoints || 0,
+                class: userData.class || '?'
+              }, { merge: true }).catch(err => console.error("Leaderboard sync failed:", err));
             }
+          }, (error) => {
+            console.error("User snapshot error:", error);
+          });
 
-            // Sync to leaderboard (public data)
-            const leaderboardRef = doc(db, 'leaderboard', userData.uid);
-            setDoc(leaderboardRef, {
-              uid: userData.uid,
-              displayName: userData.displayName,
-              photoURL: userData.photoURL,
-              totalFocusMinutes: userData.totalFocusMinutes || 0,
-              totalPoints: userData.totalPoints || 0,
-              class: userData.class || '?'
-            }, { merge: true }).catch(err => console.error("Leaderboard sync failed:", err));
-          }
-        }, (error) => {
-          handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
-        });
-
-      } else {
-        setUser(null);
-        if (unsubscribeUser) unsubscribeUser();
+        } else {
+          setUser(null);
+          if (unsubscribeUser) unsubscribeUser();
+        }
+      } catch (err) {
+        console.error("Auth state change error:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => {
@@ -248,12 +268,32 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full"
+          className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full mb-6"
         />
+        <h2 className="text-lg font-bold text-white/90">Loading NoteVix...</h2>
+        <p className="text-gray-500 text-sm mt-2 max-w-xs">Preparing your study session</p>
+      </div>
+    );
+  }
+
+  if (loadingError) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
+          <span className="text-2xl">⚠️</span>
+        </div>
+        <h2 className="text-xl font-bold text-white">Connection Issue</h2>
+        <p className="text-gray-400 text-sm mt-2 mb-8 max-w-xs">{loadingError}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="px-8 py-3 purple-gradient rounded-xl font-bold active:scale-95 transition-transform"
+        >
+          Retry Loading
+        </button>
       </div>
     );
   }

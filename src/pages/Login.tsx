@@ -69,24 +69,30 @@ export default function Login() {
             </p>
           </div>
 
-          <div className="space-y-4">
-            <button
-              onClick={() => handleLogin(false)}
-              disabled={loading || !agreed}
-              className="w-full purple-gradient text-white font-semibold py-4 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-purple-500/30 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
-              Continue with Google
-            </button>
+            <div className="space-y-4">
+              <button
+                onClick={() => handleLogin(false)}
+                disabled={loading || !agreed}
+                className="w-full purple-gradient text-white font-bold py-4 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-purple-500/30 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
+                Continue with Google
+              </button>
 
-            <button
-              onClick={() => handleLogin(true)}
-              disabled={loading || !agreed}
-              className="w-full bg-white/5 text-gray-300 font-medium py-3 px-6 rounded-2xl flex items-center justify-center gap-3 border border-white/10 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Trouble? Use Redirect Method
-            </button>
-          </div>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10"></div></div>
+                <div className="relative flex justify-center text-[10px] uppercase tracking-widest text-gray-500"><span className="bg-black px-2">Having Trouble?</span></div>
+              </div>
+
+              <button
+                onClick={() => handleLogin(true)}
+                disabled={loading || !agreed}
+                className="w-full bg-white/5 text-gray-400 font-medium py-3 px-6 rounded-2xl flex items-center justify-center gap-3 border border-white/10 active:scale-95 transition-transform hover:bg-white/10 disabled:opacity-50"
+              >
+                Try Redirect Method
+              </button>
+              <p className="text-[10px] text-gray-500">Use this if the popup doesn't open on your browser.</p>
+            </div>
         </div>
 
         <div className="grid grid-cols-3 gap-4 pt-8">

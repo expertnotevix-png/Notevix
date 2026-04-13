@@ -20,9 +20,14 @@ export const analytics = isSupported().then(yes => {
 
 // Use robust Firestore settings
 console.log("Initializing Firestore with database:", firebaseConfig.firestoreDatabaseId || '(default)');
+if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('TODO')) {
+  console.warn("Firebase API Key is missing or invalid! This will cause loading issues.");
+}
+
 export const db = initializeFirestore(app, {
+  // Use standard settings first, but allow long polling as fallback if needed
+  // In some environments, long polling is more reliable
   experimentalForceLongPolling: true,
-  experimentalAutoDetectLongPolling: false,
 }, firebaseConfig.firestoreDatabaseId || '(default)');
 
 export const auth = getAuth(app);
