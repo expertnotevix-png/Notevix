@@ -233,13 +233,14 @@ export default function Admin() {
       if (snap.empty) {
         await addDoc(collection(db, 'subject_resources'), res);
       } else {
-        // Update existing
-        await updateDoc(doc(db, 'subject_resources', snap.docs[0].id), res);
+        // Update ALL matching records to ensure no duplicates with old links remain
+        const updates = snap.docs.map(d => updateDoc(doc(db, 'subject_resources', d.id), res));
+        await Promise.all(updates);
       }
     }
 
     fetchChapters();
-    alert("Sample data and subject resources added!");
+    alert("All resources synced successfully with new links!");
   };
 
   const fetchMessages = async () => {
@@ -353,16 +354,17 @@ export default function Admin() {
 
       {activeTab === 'chapters' && (
         <div className="space-y-8">
-          <div className="flex gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <button
               onClick={addSampleData}
-              className="flex-1 glass-card p-4 rounded-2xl flex items-center justify-center gap-2 text-purple-400 font-bold"
+              className="glass-card p-4 rounded-2xl flex items-center justify-center gap-2 text-purple-400 font-bold"
             >
               <Database className="w-5 h-5" />
-              Add Sample Data
+              Sync All Resources
             </button>
             <button
               onClick={async () => {
+                if (!window.confirm("This will overwrite all Class 10 Science resources. Continue?")) return;
                 const scienceRes = {
                   class: '10', subject: 'science',
                   onePageNotesUrl: 'https://drive.google.com/file/d/1oa2WBPNO4ChJrAp-aP7uyvVCn2SPI6w1/view?usp=drivesdk',
@@ -375,25 +377,16 @@ export default function Admin() {
                 if (snap.empty) {
                   await addDoc(collection(db, 'subject_resources'), scienceRes);
                 } else {
-                  await updateDoc(doc(db, 'subject_resources', snap.docs[0].id), scienceRes);
-                }
-                // Fix misclassified chapters
-                const qChapters = query(collection(db, 'chapters'), where('class', '==', '10'), where('subject', '==', 'science'));
-                const chaptersSnap = await getDocs(qChapters);
-                for (const chapterDoc of chaptersSnap.docs) {
-                  const data = chapterDoc.data();
-                  // Heuristic: if title contains math terms, it might be misclassified
-                  const mathTerms = ['polynomial', 'quadratic', 'trigonometry', 'arithmetic', 'probability', 'statistics', 'triangle', 'circle'];
-                  if (mathTerms.some(term => data.title.toLowerCase().includes(term))) {
-                    await updateDoc(doc(db, 'chapters', chapterDoc.id), { subject: 'maths' });
+                  for (const d of snap.docs) {
+                    await updateDoc(doc(db, 'subject_resources', d.id), scienceRes);
                   }
                 }
-                alert("Class 10 Science resources updated and misclassified chapters fixed!");
+                alert("Class 10 Science resources updated!");
               }}
-              className="flex-1 glass-card p-4 rounded-2xl flex items-center justify-center gap-2 text-green-400 font-bold"
+              className="glass-card p-4 rounded-2xl flex items-center justify-center gap-2 text-green-400 font-bold"
             >
               <RefreshCw className="w-5 h-5" />
-              Fix Science Tab
+              Fix Class 10 Science
             </button>
           </div>
 
