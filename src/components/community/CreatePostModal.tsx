@@ -28,11 +28,11 @@ export default function CreatePostModal({ isOpen, onClose, user }: CreatePostMod
     setError(null);
 
     try {
-      // AI Moderation
-      const moderationResult = await geminiService.moderateContent(`${title} ${description}`);
+      // AI Moderation & Auto-Reply in ONE call to save quota
+      const result = await geminiService.processCommunityPost(title, description);
       
-      if (!moderationResult.approved) {
-        setError(`Post rejected: ${moderationResult.reason || 'Inappropriate content detected.'}`);
+      if (!result.approved) {
+        setError(`Post rejected: ${result.reason || 'Inappropriate content detected.'}`);
         setLoading(false);
         return;
       }
@@ -49,7 +49,7 @@ export default function CreatePostModal({ isOpen, onClose, user }: CreatePostMod
         upvotes: [],
         downvotes: [],
         upvotesCount: 0,
-        replyCount: 0,
+        replyCount: result.aiAnswer ? 1 : 0,
         isSolved: false,
         status: 'approved',
         createdAt: new Date().toISOString()
@@ -60,40 +60,24 @@ export default function CreatePostModal({ isOpen, onClose, user }: CreatePostMod
         totalQuestions: increment(1)
       }, { merge: true });
 
-      // AI Auto-Reply Logic
-      const isNotes = await geminiService.isNotesRequest(`${title} ${description}`);
-      if (!isNotes) {
-        // Add a small delay for realism
-        setTimeout(async () => {
-          try {
-            const aiAnswer = await geminiService.getCommunityAnswer(title, description);
-            
-            // Add AI Reply
-            await addDoc(collection(db, 'posts', postRef.id, 'replies'), {
-              userId: 'notevix-ai',
-              userName: 'NoteVix AI 🤖',
-              userPhoto: 'https://img.icons8.com/fluency/96/bot.png',
-              content: aiAnswer,
-              upvotes: [],
-              downvotes: [],
-              upvotesCount: 0,
-              isBest: false,
-              createdAt: new Date().toISOString()
-            });
+      // Add AI Reply if generated
+      if (result.aiAnswer && !result.isNotes) {
+        await addDoc(collection(db, 'posts', postRef.id, 'replies'), {
+          userId: 'notevix-ai',
+          userName: 'NoteVix AI 🤖',
+          userPhoto: 'https://img.icons8.com/fluency/96/bot.png',
+          content: result.aiAnswer,
+          upvotes: [],
+          downvotes: [],
+          upvotesCount: 0,
+          isBest: false,
+          createdAt: new Date().toISOString()
+        });
 
-            // Update post reply count
-            await updateDoc(postRef, {
-              replyCount: increment(1)
-            });
-
-            // Update stats
-            await setDoc(doc(db, 'community_stats', 'global'), {
-              totalAnswers: increment(1)
-            }, { merge: true });
-          } catch (aiErr) {
-            console.error("AI Auto-reply failed:", aiErr);
-          }
-        }, 2000);
+        // Update stats
+        await setDoc(doc(db, 'community_stats', 'global'), {
+          totalAnswers: increment(1)
+        }, { merge: true });
       }
 
       onClose();

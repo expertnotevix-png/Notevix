@@ -25,13 +25,19 @@ function handleAIError(error: any): never {
   console.error("Gemini API Error:", error);
   
   // Check for Rate Limit (429)
-  if (error?.message?.includes('429') || error?.status === 429 || error?.message?.includes('RESOURCE_EXHAUSTED')) {
+  const errorString = error?.message?.toLowerCase() || "";
+  if (errorString.includes('429') || error?.status === 429 || errorString.includes('quota') || errorString.includes('exhausted')) {
     throw new Error("AI Limit Reached: Too many students are using the AI right now. Please wait 1 minute and try again! ⏳");
   }
   
   // Check for Safety Filters
-  if (error?.message?.includes('SAFETY')) {
+  if (errorString.includes('safety') || errorString.includes('blocked')) {
     throw new Error("I can't answer that. Please ask something related to your studies! 📚");
+  }
+
+  // API Key issues
+  if (errorString.includes('api key') || errorString.includes('invalid')) {
+    throw new Error("AI Configuration Error: The API key is invalid or missing. Please contact the admin.");
   }
 
   // Generic Error
@@ -43,7 +49,7 @@ export const geminiService = {
     try {
       const ai = getAI();
       const response = await ai.models.generateContent({
-        model: "gemini-flash-latest",
+        model: "gemini-3-flash-preview",
         contents: query,
         config: {
           systemInstruction: "You are an expert CBSE Class 8-10 tutor. Answer the student's doubt in simple Hinglish (Hindi + English). Keep answers short, clear, and student-friendly. Use bullet points if necessary.",
@@ -59,7 +65,7 @@ export const geminiService = {
     try {
       const ai = getAI();
       const response = await ai.models.generateContent({
-        model: "gemini-flash-latest",
+        model: "gemini-3-flash-preview",
         contents: `Generate 5 MCQ questions for CBSE Class ${className} ${subject}.`,
         config: {
           responseMimeType: "application/json",
@@ -91,7 +97,7 @@ export const geminiService = {
     try {
       const ai = getAI();
       const response = await ai.models.generateContent({
-        model: "gemini-flash-latest",
+        model: "gemini-3-flash-preview",
         contents: `Summarize the following chapter text in 5 bullet points in simple Hinglish:\n\n${text}`,
         config: {
           systemInstruction: "You are a helpful study assistant. Summarize the provided text into exactly 5 clear bullet points using simple Hinglish.",
@@ -107,7 +113,7 @@ export const geminiService = {
     try {
       const ai = getAI();
       const chat = ai.chats.create({
-        model: "gemini-flash-latest",
+        model: "gemini-3-flash-preview",
         config: {
           systemInstruction: "You are NoteVix AI, a friendly study assistant for CBSE students. Answer anything related to the CBSE syllabus. Keep responses concise and helpful.",
         },
@@ -120,79 +126,70 @@ export const geminiService = {
     }
   },
 
-  async moderateContent(text: string) {
+  async moderateContent(text: string): Promise<{ approved: boolean, reason?: string }> {
     try {
       const ai = getAI();
       const response = await ai.models.generateContent({
-        model: "gemini-flash-latest",
-        contents: `
-          Analyze the following text for a student community forum:
-          1. Abusive language/bad words.
-          2. Spam/promotional content.
-          3. Off-topic content.
-          4. Personal info.
-          
-          Text: "${text}"
-          
-          Respond ONLY with a JSON object:
-          {
-            "approved": boolean,
-            "reason": "Brief reason if rejected, otherwise null"
-          }
-        `,
+        model: "gemini-3-flash-preview",
+        contents: `Analyze if this content is appropriate for a school study community. 
+        Content: "${text}"
+        Return JSON: { "approved": boolean, "reason": "string if rejected" }`,
         config: {
-          responseMimeType: "application/json",
-        },
+          responseMimeType: "application/json"
+        }
       });
-      return JSON.parse(response.text);
+      return JSON.parse(response.text || '{"approved":true}');
     } catch (error) {
-      console.error("Moderation Error:", error);
+      console.warn("Moderation failed, allowing content:", error);
       return { approved: true };
     }
   },
 
-  async isNotesRequest(text: string) {
+  async processCommunityPost(title: string, description: string): Promise<{ approved: boolean, reason?: string, isNotes: boolean, aiAnswer?: string }> {
     try {
       const ai = getAI();
       const response = await ai.models.generateContent({
-        model: "gemini-flash-latest",
-        contents: `
-          Analyze if the following text is primarily asking for "notes", "PDFs", "study material", or "resources".
-          If the student is asking a conceptual question (e.g. "What is photosynthesis?"), respond "false".
-          If the student is asking for a file or notes (e.g. "Give me notes of Chapter 1"), respond "true".
-          
-          Text: "${text}"
-          
-          Respond ONLY with "true" or "false".
-        `,
+        model: "gemini-3-flash-preview",
+        contents: `Analyze this student's question for a community forum:
+        Title: ${title}
+        Description: ${description}
+        
+        Tasks:
+        1. Moderate: Is it appropriate? (No abuse, spam, or non-educational content)
+        2. Notes Check: Is the user primarily asking for notes/PDFs/study material?
+        3. Expert Answer: If approved and NOT a notes request, provide a helpful, concise answer in simple Hinglish (under 100 words).
+        
+        Return ONLY a JSON object:
+        {
+          "approved": boolean,
+          "reason": "reason if rejected",
+          "isNotes": boolean,
+          "aiAnswer": "your expert answer here"
+        }`,
+        config: {
+          responseMimeType: "application/json"
+        }
       });
-      return response.text.toLowerCase().includes('true');
+      return JSON.parse(response.text || '{"approved":true, "isNotes":false}');
     } catch (error) {
-      return false;
+      console.error("Process Post Error:", error);
+      // Fallback: allow post but no AI answer
+      return { approved: true, isNotes: false };
     }
   },
 
-  async getCommunityAnswer(title: string, description: string) {
+  async getCommunityAnswer(title: string, description: string): Promise<string> {
     try {
       const ai = getAI();
       const response = await ai.models.generateContent({
-        model: "gemini-flash-latest",
-        contents: `
-          Question Title: ${title}
-          Question Description: ${description}
-          
-          Provide a helpful, concise, and accurate answer for this student. 
-          Use simple Hinglish (Hindi + English). 
-          Keep it under 100 words.
-        `,
-        config: {
-          systemInstruction: "You are NoteVix AI, a helpful study assistant. Provide accurate answers to student questions in simple Hinglish.",
-        },
+        model: "gemini-3-flash-preview",
+        contents: `Provide a helpful, expert answer to this student's question for the community forum.
+        Title: ${title}
+        Description: ${description}`,
       });
-      return response.text;
+      return response.text || "That's a great question! I'm looking into it.";
     } catch (error) {
-      console.error("Community Answer Error:", error);
-      return "I'm sorry, I couldn't generate an answer right now. Please wait for other students or teachers to reply!";
+      return handleAIError(error);
     }
   }
 };

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { geminiService } from '../services/geminiService';
 import { Chapter, Message, Notification } from '../types';
 import { Plus, Trash2, Edit2, Save, X, ChevronLeft, Database, MessageSquare, Bell, Send, CheckCircle2, Clock, Shield, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -46,6 +47,27 @@ export default function Admin() {
     if (snap.empty) {
       console.log("Auto-seeding subject resources...");
       await addSampleData();
+    }
+  };
+
+  const [aiStatus, setAiStatus] = useState<{ status: 'checking' | 'ok' | 'error', message?: string }>({ status: 'checking' });
+
+  useEffect(() => {
+    checkAI();
+  }, []);
+
+  const checkAI = async () => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey === 'undefined' || apiKey === '') {
+        setAiStatus({ status: 'error', message: 'API Key Missing' });
+        return;
+      }
+      // Test with a tiny prompt
+      await geminiService.chatWithBot("hi", []);
+      setAiStatus({ status: 'ok', message: 'AI Online' });
+    } catch (err: any) {
+      setAiStatus({ status: 'error', message: err.message || 'AI Offline' });
     }
   };
 
@@ -319,7 +341,23 @@ export default function Admin() {
           <button onClick={() => navigate(-1)} className="p-2 glass-card rounded-xl">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <h1 className="text-2xl font-bold">Admin Panel</h1>
+          <div>
+            <h1 className="text-2xl font-bold">Admin Panel</h1>
+            <div className={`flex items-center gap-1.5 mt-0.5 ${
+              aiStatus.status === 'ok' ? 'text-green-400' :
+              aiStatus.status === 'error' ? 'text-red-400' :
+              'text-gray-500'
+            }`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${
+                aiStatus.status === 'ok' ? 'bg-green-500 animate-pulse' :
+                aiStatus.status === 'error' ? 'bg-red-500' :
+                'bg-gray-500'
+              }`} />
+              <span className="text-[10px] font-bold uppercase tracking-widest">
+                {aiStatus.message || 'Checking AI...'}
+              </span>
+            </div>
+          </div>
         </div>
         {activeTab === 'chapters' && (
           <button
