@@ -50,11 +50,27 @@ export default function Admin() {
     }
   };
 
+  const [activeUsers, setActiveUsers] = useState(0);
   const [aiStatus, setAiStatus] = useState<{ status: 'checking' | 'ok' | 'error', message?: string }>({ status: 'checking' });
 
   useEffect(() => {
+    // Real-time Active Users (Active in last 5 minutes)
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const q = query(
+      collection(db, 'users'),
+      where('lastActive', '>=', fiveMinutesAgo)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setActiveUsers(snapshot.size);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
     // Initial check: just verify key presence without calling API to save quota
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY;
     if (!apiKey || apiKey === 'undefined' || apiKey === '') {
       setAiStatus({ status: 'error', message: 'API Key Missing' });
     } else {
@@ -345,7 +361,17 @@ export default function Admin() {
           </button>
           <div>
             <h1 className="text-2xl font-bold">Admin Panel</h1>
-            <div className={`flex flex-col items-end gap-1 mt-0.5`}>
+          </div>
+          <div className="flex items-center gap-6">
+            <div className="flex flex-col items-center">
+              <div className="flex items-center gap-2 text-green-400">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                <span className="text-2xl font-black tracking-tighter">{activeUsers}</span>
+              </div>
+              <span className="text-[8px] text-gray-500 uppercase font-bold tracking-widest">Active Now</span>
+            </div>
+            <div className="w-px h-8 bg-white/10" />
+            <div className="flex flex-col items-end gap-1 mt-0.5">
               <div className={`flex items-center gap-1.5 ${
                 aiStatus.status === 'ok' ? 'text-green-400' :
                 aiStatus.status === 'error' ? 'text-red-400' :

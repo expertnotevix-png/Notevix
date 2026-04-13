@@ -200,7 +200,7 @@ export default function Leaderboard({ user }: LeaderboardProps) {
               <h4 className="font-bold text-sm">{u.displayName}</h4>
               <div className="flex items-center gap-2">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider">Class {u.class || '?'}</p>
-                <span className="text-[10px] text-purple-400 font-bold">• {u.streak?.currentCount || 0}/7 Days</span>
+                <span className="text-[10px] text-purple-400 font-bold">• {u.streakCount || 0}/7 Days</span>
               </div>
             </div>
             <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl">

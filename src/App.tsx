@@ -185,6 +185,7 @@ export default function App() {
                   photoURL: userData.photoURL,
                   totalFocusMinutes: userData.totalFocusMinutes || 0,
                   totalPoints: userData.totalPoints || 0,
+                  streakCount: userData.streak?.currentCount || 0,
                   class: userData.class || '?'
                 }, { merge: true }).catch(() => {});
 
@@ -367,16 +368,32 @@ export default function App() {
     };
   }, [user?.uid, user?.notificationsEnabled]);
 
-  // Global Time Tracking (1 min = 10 points)
+  // Global Time Tracking (1 min = 10 points) + Activity Tracking
   useEffect(() => {
-    if (!user || user.role === 'admin') return;
+    if (!user) return;
+
+    const updateActivity = () => {
+      const userRef = doc(db, 'users', user.uid);
+      updateDoc(userRef, {
+        lastActive: new Date().toISOString()
+      }).catch(() => {});
+    };
+
+    // Initial update
+    updateActivity();
 
     const interval = setInterval(() => {
       const userRef = doc(db, 'users', user.uid);
-      updateDoc(userRef, {
-        totalFocusMinutes: increment(1),
-        totalPoints: increment(10)
-      }).catch(err => console.error("Global time tracking failed:", err));
+      const updates: any = {
+        lastActive: new Date().toISOString()
+      };
+
+      if (user.role !== 'admin') {
+        updates.totalFocusMinutes = increment(1);
+        updates.totalPoints = increment(10);
+      }
+
+      updateDoc(userRef, updates).catch(err => console.error("Global tracking failed:", err));
     }, 60000); // Every minute
 
     return () => clearInterval(interval);

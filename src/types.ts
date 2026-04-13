@@ -14,6 +14,8 @@ export interface UserProfile {
   };
   totalFocusMinutes: number;
   totalPoints: number;
+  streakCount?: number;
+  lastActive?: string;
   referralCode: string;
   referredBy?: string;
   referralCount: number;
