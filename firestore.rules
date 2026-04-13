@@ -45,6 +45,15 @@
 //   - importantQuestionsUrl: string (optional, url format)
 //   - examOrientedQuestionsUrl: string (optional, url format)
 //
+// Collection: community_chat
+// Document ID: {messageId}
+// Fields:
+//   - userId: string (required) - Sender's UID
+//   - userName: string (required) - Sender's display name
+//   - userPhoto: string (optional, url format) - Sender's photo
+//   - content: string (required) - Message text
+//   - timestamp: string (required, iso8601) - Message timestamp
+//
 // ===============================================================
 
 rules_version = '2';
@@ -244,6 +253,16 @@ service cloud.firestore {
     match /user_moderation/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow write: if isAdmin();
+    }
+
+    match /community_chat/{messageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && !isBanned() && 
+                    request.resource.data.userId == request.auth.uid &&
+                    request.resource.data.content is string && 
+                    request.resource.data.content.size() > 0 && 
+                    request.resource.data.content.size() < 1000;
+      allow update, delete: if isAdmin();
     }
 
     // Default deny

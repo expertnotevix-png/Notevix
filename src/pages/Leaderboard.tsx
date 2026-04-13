@@ -23,7 +23,10 @@ export default function Leaderboard({ user }: LeaderboardProps) {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const users = snapshot.docs.map(doc => doc.data() as any);
+      // Filter out admin and map data
+      const users = snapshot.docs
+        .map(doc => doc.data() as any)
+        .filter(u => u.email !== 'expertraj8@gmail.com');
       setTopUsers(users);
       setLoading(false);
     }, (error) => {
@@ -74,7 +77,7 @@ export default function Leaderboard({ user }: LeaderboardProps) {
             <span className="text-xs font-bold uppercase tracking-wider">Weekly Rewards</span>
           </div>
           <p className="text-sm text-gray-300">
-            The <span className="text-yellow-400 font-bold">Top 3 students</span> of the week will be tagged on our Instagram accounts!
+            The <span className="text-yellow-400 font-bold">Top 3 students</span> of the week will be tagged on our Instagram accounts every <span className="text-purple-400 font-bold">Sunday</span>!
           </p>
           <div className="flex flex-wrap gap-3 pt-1">
             <a 
@@ -195,7 +198,10 @@ export default function Leaderboard({ user }: LeaderboardProps) {
             </div>
             <div className="flex-1">
               <h4 className="font-bold text-sm">{u.displayName}</h4>
-              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Class {u.class || '?'}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Class {u.class || '?'}</p>
+                <span className="text-[10px] text-purple-400 font-bold">• {u.streak?.currentCount || 0}/7 Days</span>
+              </div>
             </div>
             <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl">
               <Trophy className="w-3.5 h-3.5 text-purple-400" />

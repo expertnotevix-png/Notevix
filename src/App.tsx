@@ -253,7 +253,7 @@ export default function App() {
 
   // Global Time Tracking (1 min = 10 points)
   useEffect(() => {
-    if (!user) return;
+    if (!user || user.role === 'admin') return;
 
     const interval = setInterval(() => {
       const userRef = doc(db, 'users', user.uid);
