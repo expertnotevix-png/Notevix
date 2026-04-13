@@ -69,6 +69,9 @@ export default function App() {
     // Handle redirect result (for mobile/fallback)
     getRedirectResult(auth).catch((error) => {
       console.error("Redirect login failed:", error);
+      if (error.code === 'auth/unauthorized-domain') {
+        setLoadingError(`This domain (${window.location.hostname}) is not authorized in Firebase. Please add it to "Authorized Domains" in Firebase Console.`);
+      }
     });
 
     let unsubscribeUser: (() => void) | undefined;

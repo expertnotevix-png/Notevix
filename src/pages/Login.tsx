@@ -9,8 +9,19 @@ import { Link, useSearchParams } from 'react-router-dom';
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (loading) {
+      const timer = setTimeout(() => {
+        setLoading(false);
+        setError("Login is taking too long. Please try the 'Redirect Method' below or check your internet.");
+      }, 15000);
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
 
   useEffect(() => {
     const ref = searchParams.get('ref');
@@ -21,6 +32,7 @@ export default function Login() {
 
   const handleLogin = async (useRedirect = false) => {
     setLoading(true);
+    setError(null);
     try {
       if (useRedirect) {
         await signInWithRedirect(auth, googleProvider);
@@ -34,8 +46,12 @@ export default function Login() {
     } catch (error: any) {
       setLoading(false);
       if (error.code === 'auth/popup-closed-by-user') {
-        // User closed the popup, just stop loading without error
         return;
+      }
+      if (error.code === 'auth/unauthorized-domain') {
+        setError(`This domain (${window.location.hostname}) is not authorized in Firebase. Please add it to "Authorized Domains" in Firebase Console.`);
+      } else {
+        setError(error.message || "Login failed. Please try the Redirect Method.");
       }
       console.error("Login failed:", error);
     }
@@ -70,6 +86,12 @@ export default function Login() {
           </div>
 
             <div className="space-y-4">
+              {error && (
+                <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-xl text-red-400 text-[10px] text-left">
+                  <p className="font-bold mb-1">Login Error:</p>
+                  <p>{error}</p>
+                </div>
+              )}
               <button
                 onClick={() => handleLogin(false)}
                 disabled={loading || !agreed}
@@ -114,6 +136,12 @@ export default function Login() {
           <Link to="/privacy" className="hover:text-purple-400 transition-colors">Privacy</Link>
           <Link to="/terms" className="hover:text-purple-400 transition-colors">Terms</Link>
         </div>
+
+        {window.location.hostname !== 'localhost' && !window.location.hostname.endsWith('.run.app') && (
+          <div className="pt-4 text-[8px] text-gray-600 max-w-[200px] mx-auto">
+            Using a custom domain? Ensure <b>{window.location.hostname}</b> is added to "Authorized Domains" in your Firebase Console.
+          </div>
+        )}
       </motion.div>
     </div>
   );
