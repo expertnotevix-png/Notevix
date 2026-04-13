@@ -80,11 +80,11 @@ service cloud.firestore {
     }
 
     function isValidEmail(email) {
-      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+      return email is string && email.size() > 0 && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
 
     function isValidUrl(url) {
-      return url is string && (url.matches("^https://.*") || url.matches("^http://.*"));
+      return url is string && (url == "" || url.matches("^https://.*") || url.matches("^http://.*"));
     }
 
     function isValidDateString(dateStr) {
@@ -110,7 +110,7 @@ service cloud.firestore {
              data.role in ['student', 'admin'] &&
              isValidDateString(data.createdAt) &&
              (!('photoURL' in data) || isValidUrl(data.photoURL)) &&
-             (!('class' in data) || data.class in ['8', '9', '10']);
+             (!('class' in data) || data.class == "" || data.class in ['8', '9', '10']);
     }
 
     function isValidChapter(data) {

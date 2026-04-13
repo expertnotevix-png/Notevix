@@ -70,6 +70,10 @@ export default function App() {
     // Root Fix: Handle redirect result immediately on mount
     const handleRedirect = async () => {
       try {
+        if (!auth) {
+          console.warn("Auth not yet initialized for redirect check");
+          return;
+        }
         console.log("Checking for redirect result...");
         const result = await getRedirectResult(auth);
         if (result?.user) {
@@ -102,19 +106,103 @@ export default function App() {
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         if (firebaseUser) {
-          // Initial fetch and setup
+          console.log("Auth state: User logged in", firebaseUser.email);
           const userRef = doc(db, 'users', firebaseUser.uid);
-          let userDoc;
-          try {
-            userDoc = await getDoc(userRef);
-          } catch (error) {
-            console.error("Error fetching user doc:", error);
-            // Don't throw here, just try to continue or handle gracefully
-            // handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
-          }
           
-          if (!userDoc?.exists()) {
-            // Check for referral code in localStorage
+          // Use a promise to wait for the first valid snapshot
+          const waitForUser = new Promise<void>((resolve) => {
+            unsubscribeUser = onSnapshot(userRef, async (docSnap) => {
+              if (docSnap.exists()) {
+                const userData = docSnap.data() as UserProfile;
+                
+                // Streak Logic
+                const today = new Date().toISOString().split('T')[0];
+                const lastUpdate = userData.streak?.lastUpdateDate;
+                
+                if (lastUpdate !== today) {
+                  const yesterday = new Date();
+                  yesterday.setDate(yesterday.getDate() - 1);
+                  const yesterdayStr = yesterday.toISOString().split('T')[0];
+                  
+                  let newCount = userData.streak?.currentCount || 0;
+                  if (lastUpdate === yesterdayStr) {
+                    newCount += 1;
+                  } else {
+                    newCount = 1;
+                  }
+                  
+                  updateDoc(userRef, {
+                    'streak.currentCount': newCount,
+                    'streak.lastUpdateDate': today
+                  }).catch(err => console.warn("Streak update failed:", err));
+                }
+
+                // Admin promotion
+                if (firebaseUser.email === 'expertraj8@gmail.com' && userData.role !== 'admin') {
+                  updateDoc(userRef, { role: 'admin' }).catch(() => {});
+                }
+
+                setUser(userData);
+
+                // Initialize Community Stats if missing
+                const statsRef = doc(db, 'community_stats', 'global');
+                getDoc(statsRef).then(sSnap => {
+                  if (!sSnap.exists()) {
+                    setDoc(statsRef, {
+                      totalQuestions: 0,
+                      totalAnswers: 0,
+                      totalStudents: 1,
+                      solvedToday: 0,
+                      lastResetDate: new Date().toISOString().split('T')[0]
+                    });
+                  }
+                }).catch(() => {});
+
+                // Client-side notification trigger
+                const lastNotifDate = localStorage.getItem('last_daily_notif');
+                if (lastNotifDate !== today) {
+                  const checkDailyNotifs = async () => {
+                    if (userData.streak?.currentCount > 0) {
+                      await addDoc(collection(db, 'notifications'), {
+                        userId: userData.uid,
+                        title: 'Daily Streak Update',
+                        message: `You are on a ${userData.streak.currentCount} day streak! Keep it up!`,
+                        type: 'streak',
+                        read: false,
+                        timestamp: new Date().toISOString()
+                      });
+                    }
+                    localStorage.setItem('last_daily_notif', today);
+                  };
+                  checkDailyNotifs().catch(() => {});
+                }
+
+                // Sync to leaderboard
+                const leaderboardRef = doc(db, 'leaderboard', userData.uid);
+                setDoc(leaderboardRef, {
+                  uid: userData.uid,
+                  displayName: userData.displayName,
+                  photoURL: userData.photoURL,
+                  totalFocusMinutes: userData.totalFocusMinutes || 0,
+                  totalPoints: userData.totalPoints || 0,
+                  class: userData.class || '?'
+                }, { merge: true }).catch(() => {});
+
+                resolve();
+              } else {
+                // Document doesn't exist yet, we'll handle creation below
+                console.log("User document does not exist, creating...");
+                resolve(); 
+              }
+            }, (error) => {
+              console.error("User snapshot error:", error);
+              resolve();
+            });
+          });
+
+          // Check if we need to create the user
+          const userDoc = await getDoc(userRef);
+          if (!userDoc.exists()) {
             const referredBy = localStorage.getItem('referredBy');
             const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
@@ -139,128 +227,37 @@ export default function App() {
               isPremium: false,
               createdAt: new Date().toISOString(),
             };
+
             try {
               await setDoc(userRef, newUser);
+              console.log("New user document created successfully");
               
-              // Update Community Stats
-              await setDoc(doc(db, 'community_stats', 'global'), {
+              // Non-blocking stats update
+              setDoc(doc(db, 'community_stats', 'global'), {
                 totalStudents: increment(1)
-              }, { merge: true });
+              }, { merge: true }).catch(() => {});
 
-              // If referred by someone, increment their count
               if (referredBy) {
                 const qReferrer = query(collection(db, 'users'), where('referralCode', '==', referredBy));
-                const referrerSnap = await getDocs(qReferrer);
-                if (!referrerSnap.empty) {
-                  const referrerDoc = referrerSnap.docs[0];
-                  const newCount = (referrerDoc.data().referralCount || 0) + 1;
-                  await updateDoc(doc(db, 'users', referrerDoc.id), {
-                    referralCount: newCount,
-                    isPremium: newCount >= 3
-                  });
-                }
+                getDocs(qReferrer).then(snap => {
+                  if (!snap.empty) {
+                    const refDoc = snap.docs[0];
+                    const newCount = (refDoc.data().referralCount || 0) + 1;
+                    updateDoc(doc(db, 'users', refDoc.id), {
+                      referralCount: newCount,
+                      isPremium: newCount >= 3
+                    }).catch(() => {});
+                  }
+                }).catch(() => {});
                 localStorage.removeItem('referredBy');
               }
             } catch (error) {
-              console.error("Error creating user doc:", error);
+              console.error("Critical: Failed to create user document:", error);
+              setLoadingError("We couldn't set up your profile. Please check your internet and try again.");
             }
           }
 
-          // Listen for real-time updates
-          unsubscribeUser = onSnapshot(userRef, (docSnap) => {
-            if (docSnap.exists()) {
-              const userData = docSnap.data() as UserProfile;
-              
-              // Initialize Community Stats if missing
-              const statsRef = doc(db, 'community_stats', 'global');
-              getDoc(statsRef).then(sSnap => {
-                if (!sSnap.exists()) {
-                  setDoc(statsRef, {
-                    totalQuestions: 0,
-                    totalAnswers: 0,
-                    totalStudents: 1,
-                    solvedToday: 0,
-                    lastResetDate: new Date().toISOString().split('T')[0]
-                  });
-                }
-              }).catch(err => console.warn("Stats init check failed:", err));
-
-              // Streak Logic
-              const today = new Date().toISOString().split('T')[0];
-              const lastUpdate = userData.streak?.lastUpdateDate;
-              
-              if (lastUpdate !== today) {
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
-                const yesterdayStr = yesterday.toISOString().split('T')[0];
-                
-                let newCount = userData.streak?.currentCount || 0;
-                if (lastUpdate === yesterdayStr) {
-                  newCount += 1;
-                } else {
-                  newCount = 1;
-                }
-                
-                updateDoc(userRef, {
-                  'streak.currentCount': newCount,
-                  'streak.lastUpdateDate': today
-                }).catch(err => console.error("Streak update failed:", err));
-              }
-
-              // Auto-promote admin if needed
-              if (firebaseUser.email === 'expertraj8@gmail.com' && userData.role !== 'admin') {
-                updateDoc(userRef, { role: 'admin' }).catch(err => 
-                  console.error("Admin promotion failed:", err)
-                );
-              }
-              setUser(userData);
-
-              // Client-side notification trigger (Demo/Prototype)
-              const lastNotifDate = localStorage.getItem('last_daily_notif');
-              if (lastNotifDate !== today) {
-                const checkDailyNotifs = async () => {
-                  // Streak notification
-                  if (userData.streak?.currentCount > 0) {
-                    await addDoc(collection(db, 'notifications'), {
-                      userId: userData.uid,
-                      title: 'Daily Streak Update',
-                      message: `You are on a ${userData.streak.currentCount} day streak! Keep it up!`,
-                      type: 'streak',
-                      read: false,
-                      timestamp: new Date().toISOString()
-                    });
-                  }
-                  
-                  // Rank notification (simplified)
-                  await addDoc(collection(db, 'notifications'), {
-                    userId: userData.uid,
-                    title: 'Rank Maintenance',
-                    message: 'Check the leaderboard to see your current rank and keep studying to stay on top!',
-                    type: 'rank',
-                    read: false,
-                    timestamp: new Date().toISOString()
-                  });
-                  
-                  localStorage.setItem('last_daily_notif', today);
-                };
-                checkDailyNotifs().catch(err => console.error("Daily notif trigger failed:", err));
-              }
-
-              // Sync to leaderboard (public data)
-              const leaderboardRef = doc(db, 'leaderboard', userData.uid);
-              setDoc(leaderboardRef, {
-                uid: userData.uid,
-                displayName: userData.displayName,
-                photoURL: userData.photoURL,
-                totalFocusMinutes: userData.totalFocusMinutes || 0,
-                totalPoints: userData.totalPoints || 0,
-                class: userData.class || '?'
-              }, { merge: true }).catch(err => console.error("Leaderboard sync failed:", err));
-            }
-          }, (error) => {
-            console.error("User snapshot error:", error);
-          });
-
+          await waitForUser;
         } else {
           setUser(null);
           if (unsubscribeUser) unsubscribeUser();
