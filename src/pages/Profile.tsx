@@ -8,6 +8,7 @@ import { Logo } from '../components/Logo';
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { QRCodeCanvas } from 'qrcode.react';
+import { toast } from 'sonner';
 
 interface ProfileProps {
   user: UserProfile;
@@ -33,12 +34,16 @@ export default function Profile({ user }: ProfileProps) {
 
   const toggleNotifications = async () => {
     const userRef = doc(db, 'users', user.uid);
-    await updateDoc(userRef, { notificationsEnabled: !user.notificationsEnabled });
+    const newState = !user.notificationsEnabled;
+    await updateDoc(userRef, { notificationsEnabled: newState });
+    toast.success(newState ? 'Notifications Enabled' : 'Notifications Disabled');
   };
 
   const toggleStudyMode = async () => {
     const userRef = doc(db, 'users', user.uid);
-    await updateDoc(userRef, { studyModeEnabled: !user.studyModeEnabled });
+    const newState = !user.studyModeEnabled;
+    await updateDoc(userRef, { studyModeEnabled: newState });
+    toast.success(newState ? 'Study Mode On' : 'Study Mode Off');
   };
 
   const updateClass = async (cls: string) => {

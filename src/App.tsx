@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, getRedirectResult } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, onSnapshot, query, collection, where, getDocs, addDoc, increment } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, query, collection, where, getDocs, addDoc, increment, orderBy, limit } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
 import { UserProfile } from './types';
 
@@ -33,6 +33,7 @@ import PostDetail from './pages/PostDetail';
 import BottomNav from './components/BottomNav';
 import { FloatingChatbot } from './components/FloatingChatbot';
 import { motion, AnimatePresence } from 'motion/react';
+import { Toaster, toast } from 'sonner';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -251,6 +252,77 @@ export default function App() {
     };
   }, []);
 
+  // Real-time Community Notifications
+  useEffect(() => {
+    if (!user || user.notificationsEnabled === false) return;
+
+    // Listen for new chat messages
+    const chatQuery = query(
+      collection(db, 'community_chat'),
+      orderBy('timestamp', 'desc'),
+      limit(1)
+    );
+
+    let initialChatLoad = true;
+    const unsubscribeChat = onSnapshot(chatQuery, (snapshot) => {
+      if (initialChatLoad) {
+        initialChatLoad = false;
+        return;
+      }
+      
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const msg = change.doc.data();
+          if (msg.userId !== user.uid) {
+            toast.message('New Group Message', {
+              description: `${msg.userName}: ${msg.content.substring(0, 50)}${msg.content.length > 50 ? '...' : ''}`,
+              action: {
+                label: 'View',
+                onClick: () => window.location.href = '/community'
+              },
+            });
+          }
+        }
+      });
+    });
+
+    // Listen for new questions
+    const postsQuery = query(
+      collection(db, 'posts'),
+      where('status', '==', 'approved'),
+      orderBy('createdAt', 'desc'),
+      limit(1)
+    );
+
+    let initialPostsLoad = true;
+    const unsubscribePosts = onSnapshot(postsQuery, (snapshot) => {
+      if (initialPostsLoad) {
+        initialPostsLoad = false;
+        return;
+      }
+
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const post = change.doc.data();
+          if (post.userId !== user.uid) {
+            toast.message('New Question Asked', {
+              description: `${post.title}`,
+              action: {
+                label: 'Help',
+                onClick: () => window.location.href = `/community/post/${change.doc.id}`
+              },
+            });
+          }
+        }
+      });
+    });
+
+    return () => {
+      unsubscribeChat();
+      unsubscribePosts();
+    };
+  }, [user?.uid, user?.notificationsEnabled]);
+
   // Global Time Tracking (1 min = 10 points)
   useEffect(() => {
     if (!user || user.role === 'admin') return;
@@ -344,6 +416,7 @@ export default function App() {
         
         <BottomNav user={user} />
         <FloatingChatbot />
+        <Toaster position="top-center" expand={true} richColors theme="dark" />
       </div>
     </Router>
   );
