@@ -70,7 +70,8 @@ export default function Admin() {
 
   useEffect(() => {
     // Initial check: just verify key presence without calling API to save quota
-    const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY;
+    const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || 
+                   (import.meta as any).env?.VITE_GEMINI_API_KEY;
     if (!apiKey || apiKey === 'undefined' || apiKey === '') {
       setAiStatus({ status: 'error', message: 'API Key Missing' });
     } else {

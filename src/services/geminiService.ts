@@ -5,13 +5,16 @@ let aiInstance: GoogleGenAI | null = null;
 function getAI() {
   if (!aiInstance) {
     // Support both AI Studio (process.env) and external Vite deployments (VITE_ prefix)
-    const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY;
+    // Note: In Cloudflare Pages, use a regular "Environment Variable", NOT a "Secret" 
+    // because Secrets are not available during the 'npm run build' process.
+    const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || 
+                   (import.meta as any).env?.VITE_GEMINI_API_KEY;
     
     if (!apiKey || apiKey === 'undefined' || apiKey === '') {
       const isLocal = window.location.hostname === 'localhost' || window.location.hostname.includes('ais-dev');
       const message = isLocal 
         ? "Gemini API Key is missing in AI Studio. Please add it to 'Settings > Secrets' and click 'Apply Changes'."
-        : "Gemini API Key is missing. If you are using Cloudflare/Vercel, add 'VITE_GEMINI_API_KEY' to your Environment Variables and REDEPLOY your site.";
+        : "Gemini API Key is missing. IMPORTANT: In Cloudflare Pages, you must add 'VITE_GEMINI_API_KEY' as a regular 'Environment Variable', NOT a 'Secret', then REDEPLOY your site.";
       
       console.error("GEMINI_API_KEY Error:", message);
       throw new Error(message);

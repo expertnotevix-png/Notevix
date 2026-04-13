@@ -108,29 +108,25 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidUser(data) {
-      let requiredFields = ['uid', 'email', 'role', 'createdAt', 'referralCode', 'referralCount', 'isPremium', 'totalPoints', 'totalFocusMinutes', 'streak', 'savedNotes', 'notificationsEnabled', 'studyModeEnabled'];
-      
-      return data.keys().hasAll(requiredFields) &&
-             data.uid == request.auth.uid &&
+      return data.uid == request.auth.uid &&
              isValidEmail(data.email) &&
              data.role in ['student', 'admin'] &&
-             isValidDateString(data.createdAt) &&
-             data.referralCode is string &&
-             data.referralCount is number &&
-             data.isPremium is bool &&
-             data.totalPoints is number &&
-             data.totalFocusMinutes is number &&
-             data.streak is map &&
-             data.streak.keys().hasAll(['currentCount', 'lastUpdateDate']) &&
-             data.streak.currentCount is number &&
-             isValidSimpleDate(data.streak.lastUpdateDate) &&
-             data.savedNotes is list &&
-             data.notificationsEnabled is bool &&
-             data.studyModeEnabled is bool &&
+             (!('createdAt' in data) || isValidDateString(data.createdAt)) &&
+             (!('referralCode' in data) || data.referralCode is string) &&
+             (!('referralCount' in data) || data.referralCount is number) &&
+             (!('isPremium' in data) || data.isPremium is bool) &&
+             (!('totalPoints' in data) || data.totalPoints is number) &&
+             (!('totalFocusMinutes' in data) || data.totalFocusMinutes is number) &&
+             (!('streak' in data) || (data.streak is map && data.streak.keys().hasAll(['currentCount', 'lastUpdateDate']))) &&
+             (!('savedNotes' in data) || data.savedNotes is list) &&
+             (!('notificationsEnabled' in data) || data.notificationsEnabled is bool) &&
+             (!('studyModeEnabled' in data) || data.studyModeEnabled is bool) &&
              (!('photoURL' in data) || data.photoURL == null || isValidUrl(data.photoURL)) &&
              (!('displayName' in data) || data.displayName == null || data.displayName is string) &&
              (!('class' in data) || data.class == null || data.class == "" || data.class in ['8', '9', '10']) &&
-             (!('referredBy' in data) || data.referredBy == null || data.referredBy is string);
+             (!('referredBy' in data) || data.referredBy == null || data.referredBy is string) &&
+             (!('lastActive' in data) || isValidDateString(data.lastActive)) &&
+             (!('streakCount' in data) || data.streakCount is number);
     }
 
     function isValidChapter(data) {
@@ -156,7 +152,8 @@ service cloud.firestore {
              data.totalFocusMinutes is number &&
              data.totalPoints is number &&
              (!('photoURL' in data) || isValidUrl(data.photoURL)) &&
-             (!('class' in data) || data.class is string);
+             (!('class' in data) || data.class is string) &&
+             (!('streakCount' in data) || data.streakCount is number);
     }
 
     function isValidMessage(data) {
