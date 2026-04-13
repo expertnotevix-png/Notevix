@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, getRedirectResult } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, query, collection, where, getDocs, addDoc, increment, orderBy, limit } from 'firebase/firestore';
-import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
+import { logEvent } from 'firebase/analytics';
+import { auth, db, handleFirestoreError, OperationType, analytics } from './lib/firebase';
 import { UserProfile } from './types';
 
 // Pages
@@ -66,13 +67,35 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Handle redirect result (for mobile/fallback)
-    getRedirectResult(auth).catch((error) => {
-      console.error("Redirect login failed:", error);
-      if (error.code === 'auth/unauthorized-domain') {
-        setLoadingError(`This domain (${window.location.hostname}) is not authorized in Firebase. Please add it to "Authorized Domains" in Firebase Console.`);
+    // Root Fix: Handle redirect result immediately on mount
+    const handleRedirect = async () => {
+      try {
+        console.log("Checking for redirect result...");
+        const result = await getRedirectResult(auth);
+        if (result?.user) {
+          console.log("Redirect login successful for:", result.user.email);
+          // Analytics is non-blocking
+          analytics.then(a => {
+            if (a) logEvent(a, 'login', { method: 'Google_Redirect' });
+          }).catch(() => {});
+        }
+      } catch (error: any) {
+        console.error("Redirect login failed:", error);
+        if (error.code === 'auth/unauthorized-domain') {
+          setLoadingError(`Domain Not Authorized: Please add "${window.location.hostname}" to Authorized Domains in Firebase Console.`);
+        } else if (error.code !== 'auth/popup-closed-by-user') {
+          // Don't show error for user cancellation, but log others
+          console.warn("Auth redirect error handled:", error.message);
+        }
+      } finally {
+        // Always ensure loading is cleared if we were waiting for a redirect
+        if (window.location.hash.includes('access_token') || window.location.search.includes('code=')) {
+          setLoading(false);
+        }
       }
-    });
+    };
+
+    handleRedirect();
 
     let unsubscribeUser: (() => void) | undefined;
 

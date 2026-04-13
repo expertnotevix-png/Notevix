@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, indexedDBLocalPersistence, browserLocalPersistence, initializeAuth } from 'firebase/auth';
 import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -8,30 +8,38 @@ import firebaseConfig from '../../firebase-applet-config.json';
 console.log("Initializing Firebase with project:", firebaseConfig.projectId);
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Analytics lazily
+// Initialize Analytics lazily with error safety
 export const analytics = isSupported().then(yes => {
   if (yes) {
-    const instance = getAnalytics(app);
-    console.log("Firebase Analytics initialized with ID:", firebaseConfig.measurementId);
-    return instance;
+    try {
+      const instance = getAnalytics(app);
+      console.log("Firebase Analytics initialized");
+      return instance;
+    } catch (e) {
+      console.warn("Analytics initialization failed:", e);
+      return null;
+    }
   }
   return null;
-});
+}).catch(() => null);
 
 // Use robust Firestore settings
 console.log("Initializing Firestore with database:", firebaseConfig.firestoreDatabaseId || '(default)');
 if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('TODO')) {
-  console.warn("Firebase API Key is missing or invalid! This will cause loading issues.");
+  console.warn("Firebase API Key is missing or invalid!");
 }
 
 export const db = initializeFirestore(app, {
-  // Use standard settings first, but allow long polling as fallback if needed
-  // In some environments, long polling is more reliable
   experimentalForceLongPolling: true,
 }, firebaseConfig.firestoreDatabaseId || '(default)');
 
-export const auth = getAuth(app);
+// Root Fix: Initialize Auth with multiple persistence layers for maximum mobile compatibility
+export const auth = initializeAuth(app, {
+  persistence: [indexedDBLocalPersistence, browserLocalPersistence]
+});
+
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 export enum OperationType {
   CREATE = 'create',

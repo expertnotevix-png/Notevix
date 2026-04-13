@@ -10,9 +10,13 @@ import { Link, useSearchParams } from 'react-router-dom';
 export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [agreed, setAgreed] = useState(false);
+  const [agreed, setAgreed] = useState(() => localStorage.getItem('login_agreed') === 'true');
   const [copied, setCopied] = useState(false);
   const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    localStorage.setItem('login_agreed', agreed.toString());
+  }, [agreed]);
 
   // Detect In-App Browsers (Instagram, FB, etc.)
   const isInAppBrowser = /Instagram|FBAN|FBAV|Twitter|Telegram/i.test(navigator.userAgent);
@@ -36,33 +40,39 @@ export default function Login() {
   }, [searchParams]);
 
   const handleLogin = async (useRedirect = false) => {
+    if (!agreed) return;
     setLoading(true);
     setError(null);
     try {
-      // Ensure persistence is set
+      // Root Fix: Ensure persistence is set before any auth action
       await setPersistence(auth, browserLocalPersistence);
 
-      // Force redirect for mobile/in-app browsers as popups are almost always blocked
+      // Root Fix: Mobile browsers (especially in-app) are extremely aggressive with popup blocking.
+      // We force Redirect for all mobile/in-app browsers to ensure the flow isn't killed by the browser.
       if (useRedirect || isMobile || isInAppBrowser) {
+        console.log("Triggering Redirect Login for mobile/in-app browser...");
         await signInWithRedirect(auth, googleProvider);
       } else {
-        const result = await signInWithPopup(auth, googleProvider);
+        console.log("Triggering Popup Login...");
+        await signInWithPopup(auth, googleProvider);
+        // Analytics is non-blocking
         analytics.then(a => {
-          if (a) logEvent(a, 'login', { method: 'Google' });
-        });
+          if (a) logEvent(a, 'login', { method: 'Google_Popup' });
+        }).catch(() => {});
       }
     } catch (error: any) {
       setLoading(false);
+      console.error("Login execution error:", error);
+      
       if (error.code === 'auth/popup-closed-by-user') return;
       
       if (error.code === 'auth/unauthorized-domain') {
         setError(`Domain Not Authorized: Please add "${window.location.hostname}" to Authorized Domains in Firebase Console.`);
-      } else if (error.code === 'auth/internal-error' && isInAppBrowser) {
-        setError("In-App Browser detected. These browsers often block login. Please use the 'Copy Link' button below to open in Chrome.");
+      } else if (error.code === 'auth/internal-error') {
+        setError("Connection Error: Your browser or network blocked the login. Try the 'Redirect Method' or use Chrome/Safari.");
       } else {
         setError(error.message || "Login failed. Please try the Redirect Method.");
       }
-      console.error("Login failed:", error);
     }
   };
 
