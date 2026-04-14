@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { UserProfile } from '../types';
-import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Trophy, Bell, Calendar, Sparkles, MessageSquare, BrainCircuit, FileText, Users } from 'lucide-react';
+import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Trophy, Bell, Calendar, Sparkles, MessageSquare, BrainCircuit, FileText, Users, Instagram } from 'lucide-react';
 import { collection, query, where, getDocs, limit, addDoc, updateDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -393,6 +393,10 @@ export default function Home({ user }: HomeProps) {
           <div>
             <h4 className="font-bold text-sm">Ranks</h4>
             <p className="text-[10px] text-gray-500">Global Leaderboard</p>
+            <div className="mt-1 flex items-center gap-1">
+              <Instagram className="w-2.5 h-2.5 text-pink-500" />
+              <span className="text-[8px] text-purple-400 font-bold">Top 3 get tagged!</span>
+            </div>
           </div>
         </motion.div>
 

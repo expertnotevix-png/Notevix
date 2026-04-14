@@ -73,13 +73,20 @@ export default function Leaderboard({ user }: LeaderboardProps) {
 
         {/* Sunday Announcement / Podium Toggle Notice */}
         {!isSunday ? (
-          <div className="glass-card p-4 rounded-2xl border-yellow-500/30 bg-yellow-500/5 flex items-center gap-4">
-            <div className="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center shrink-0">
-              <Crown className="w-6 h-6 text-yellow-500" />
+          <div className="glass-card p-4 rounded-2xl border-yellow-500/30 bg-yellow-500/5 space-y-3">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center shrink-0">
+                <Crown className="w-6 h-6 text-yellow-500" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-yellow-500">Sunday Winner Announcement</h3>
+                <p className="text-xs text-gray-400">The Top 3 Podium is revealed every Sunday! Keep studying to claim your spot.</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-sm font-bold text-yellow-500">Sunday Winner Announcement</h3>
-              <p className="text-xs text-gray-400">The Top 3 Podium is revealed every Sunday! Keep studying to claim your spot.</p>
+            <div className="pt-2 border-t border-white/5">
+              <p className="text-[10px] text-gray-400 leading-relaxed">
+                🎁 <span className="text-purple-400 font-bold">Weekly Reward:</span> Top 3 students will be tagged on our Instagram accounts <span className="text-white/80 font-medium">@studyhacks100</span> and <span className="text-white/80 font-medium">@studysparks100</span> every Sunday!
+              </p>
             </div>
           </div>
         ) : (
