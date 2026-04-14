@@ -68,99 +68,97 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Root Fix: Ensure persistence is set globally
-    setPersistence(auth, browserLocalPersistence).catch(err => console.error("Persistence error:", err));
+    let isMounted = true;
+    let unsubscribeUser: (() => void) | undefined;
 
-    // Root Fix: Handle redirect result immediately on mount
-    const handleRedirect = async () => {
+    const initAuth = async () => {
       try {
-        if (!auth) return;
+        // 1. Ensure persistence is set first
+        await setPersistence(auth, browserLocalPersistence);
+        console.log("App: Persistence active");
+
+        // 2. Handle redirect result
         console.log("App: Checking redirect result...");
         const result = await getRedirectResult(auth);
         if (result?.user) {
           console.log("App: Redirect login success:", result.user.email);
         }
       } catch (error: any) {
-        console.error("App: Redirect error:", error);
+        console.error("App: Auth init error:", error);
         if (error.code === 'auth/unauthorized-domain') {
           setLoadingError(`Domain Not Authorized: Please add "${window.location.hostname}" to Firebase.`);
         }
       }
+
+      // 3. Listen for auth state
+      const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (!isMounted) return;
+        console.log("App: Auth state changed:", firebaseUser ? "User present" : "No user");
+        
+        try {
+          if (firebaseUser) {
+            const userRef = doc(db, 'users', firebaseUser.uid);
+            const userDoc = await getDoc(userRef);
+            
+            if (userDoc.exists()) {
+              const userData = userDoc.data() as UserProfile;
+              setUser(userData);
+              console.log("App: User profile loaded");
+            } else {
+              console.log("App: Creating new user document...");
+              const referredBy = localStorage.getItem('referredBy');
+              const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+              const newUser: UserProfile = {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email || '',
+                displayName: firebaseUser.displayName || 'Student',
+                photoURL: firebaseUser.photoURL || '',
+                role: firebaseUser.email === 'expertraj8@gmail.com' ? 'admin' : 'student',
+                savedNotes: [],
+                notificationsEnabled: true,
+                studyModeEnabled: false,
+                streak: { currentCount: 1, lastUpdateDate: new Date().toISOString().split('T')[0] },
+                totalFocusMinutes: 0,
+                totalPoints: 0,
+                referralCode,
+                referralCount: 0,
+                isPremium: false,
+                createdAt: new Date().toISOString(),
+                ...(referredBy ? { referredBy } : {}),
+              };
+
+              await setDoc(userRef, newUser);
+              setUser(newUser);
+            }
+
+            if (unsubscribeUser) unsubscribeUser();
+            unsubscribeUser = onSnapshot(userRef, (docSnap) => {
+              if (docSnap.exists()) {
+                setUser(docSnap.data() as UserProfile);
+              }
+            });
+
+          } else {
+            setUser(null);
+            if (unsubscribeUser) unsubscribeUser();
+          }
+        } catch (err: any) {
+          console.error("App: Auth processing error:", err);
+        } finally {
+          setIsAuthReady(true);
+          setLoading(false);
+        }
+      });
+
+      return unsubscribeAuth;
     };
 
-    handleRedirect();
-
-    let unsubscribeUser: (() => void) | undefined;
-
-    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
-      console.log("App: Auth state changed:", firebaseUser ? "User present" : "No user");
-      
-      try {
-        if (firebaseUser) {
-          const userRef = doc(db, 'users', firebaseUser.uid);
-          
-          // 1. Try to get existing user
-          const userDoc = await getDoc(userRef);
-          
-          if (userDoc.exists()) {
-            const userData = userDoc.data() as UserProfile;
-            setUser(userData);
-            console.log("App: Existing user loaded");
-          } else {
-            // 2. Create new user if doesn't exist
-            console.log("App: Creating new user document...");
-            const referredBy = localStorage.getItem('referredBy');
-            const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-
-            const newUser: UserProfile = {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              displayName: firebaseUser.displayName || 'Student',
-              photoURL: firebaseUser.photoURL || '',
-              role: firebaseUser.email === 'expertraj8@gmail.com' ? 'admin' : 'student',
-              savedNotes: [],
-              notificationsEnabled: true,
-              studyModeEnabled: false,
-              streak: { currentCount: 1, lastUpdateDate: new Date().toISOString().split('T')[0] },
-              totalFocusMinutes: 0,
-              totalPoints: 0,
-              referralCode,
-              referralCount: 0,
-              isPremium: false,
-              createdAt: new Date().toISOString(),
-              ...(referredBy ? { referredBy } : {}),
-            };
-
-            await setDoc(userRef, newUser);
-            setUser(newUser);
-            console.log("App: New user created and set");
-          }
-
-          // 3. Set up real-time listener for updates
-          if (unsubscribeUser) unsubscribeUser();
-          unsubscribeUser = onSnapshot(userRef, (docSnap) => {
-            if (docSnap.exists()) {
-              setUser(docSnap.data() as UserProfile);
-            }
-          });
-
-        } else {
-          setUser(null);
-          if (unsubscribeUser) unsubscribeUser();
-        }
-      } catch (err: any) {
-        console.error("App: Auth processing error:", err);
-        if (err.code === 'permission-denied') {
-          setLoadingError("Database access denied. Please try logging out and back in.");
-        }
-      } finally {
-        setIsAuthReady(true);
-        setLoading(false);
-      }
-    });
+    const authPromise = initAuth();
 
     return () => {
-      unsubscribeAuth();
+      isMounted = false;
+      authPromise.then(unsub => unsub && unsub());
       if (unsubscribeUser) unsubscribeUser();
     };
   }, []);

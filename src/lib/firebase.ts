@@ -31,7 +31,7 @@ if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('TODO')) {
 
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
-}, firebaseConfig.firestoreDatabaseId || '(default)');
+}, firebaseConfig.firestoreDatabaseId);
 
 export const auth = getAuth(app);
 
@@ -91,6 +91,8 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 // Test connection to Firestore
 async function testConnection() {
+  // Wait a bit for network to stabilize
+  await new Promise(r => setTimeout(r, 2000));
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {

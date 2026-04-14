@@ -126,17 +126,27 @@ export default function Login() {
 
             <div className="space-y-4">
               {error && (
-                <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl text-red-400 text-[11px] text-left space-y-2">
+                <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl text-red-400 text-[11px] text-left space-y-3">
                   <div className="flex items-center gap-2 font-bold">
                     <Info size={14} />
                     <span>Login Issue Detected</span>
                   </div>
                   <p>{error}</p>
+                  
+                  <div className="pt-2 border-t border-red-500/10 space-y-2">
+                    <p className="font-bold text-white/90">Common Fixes:</p>
+                    <ul className="list-disc list-inside space-y-1 opacity-80">
+                      <li>Enable "Third-party cookies" in Chrome settings</li>
+                      <li>Open in Chrome/Safari (not Instagram/Telegram)</li>
+                      <li>Try the "Redirect Method" below</li>
+                    </ul>
+                  </div>
+
                   <button 
                     onClick={checkStatus}
-                    className="text-purple-400 font-bold hover:underline mt-1"
+                    className="w-full bg-purple-500/20 text-purple-400 py-2 rounded-xl font-bold hover:bg-purple-500/30 transition-all"
                   >
-                    Already signed in? Click here to check status
+                    Already signed in? Check Status
                   </button>
                 </div>
               )}
