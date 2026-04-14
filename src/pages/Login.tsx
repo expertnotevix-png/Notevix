@@ -47,33 +47,33 @@ export default function Login() {
       // Root Fix: Ensure persistence is set before any auth action
       await setPersistence(auth, browserLocalPersistence);
 
-      // Root Fix: Mobile browsers (especially in-app) are extremely aggressive with popup blocking.
-      // We force Redirect for all mobile/in-app browsers to ensure the flow isn't killed by the browser.
-      if (useRedirect || isMobile || isInAppBrowser) {
-        console.log("Triggering Redirect Login for mobile/in-app browser...");
+      // Change: Default to Popup even on mobile. 
+      // Redirect often fails with "missing initial state" on mobile browsers that block 3rd party cookies.
+      if (useRedirect) {
+        console.log("Triggering Redirect Login...");
         await signInWithRedirect(auth, googleProvider);
       } else {
         console.log("Triggering Popup Login...");
         await signInWithPopup(auth, googleProvider);
-        // Analytics is non-blocking
-        analytics.then(a => {
-          if (a) logEvent(a, 'login', { method: 'Google_Popup' });
-        }).catch(() => {});
+        // If popup succeeds, the App.tsx listener will handle the rest
       }
     } catch (error: any) {
       setLoading(false);
       console.error("Login execution error:", error);
       
       if (error.code === 'auth/popup-closed-by-user') return;
+      if (error.code === 'auth/cancelled-by-user') return;
       
       if (error.code === 'auth/unauthorized-domain') {
         setError(`Domain Not Authorized: Please add "${window.location.hostname}" to Authorized Domains in Firebase Console.`);
       } else if (error.code === 'auth/internal-error' || error.code === 'auth/network-request-failed') {
-        setError("Connection Error: Your browser or network blocked the login. Try the 'Redirect Method' or use Chrome/Safari.");
+        setError("Connection Error: Your browser or network blocked the login. Try switching from Wi-Fi to Mobile Data.");
+      } else if (error.message?.includes('missing initial state') || error.code === 'auth/web-storage-unsupported') {
+        setError("Browser Error: 'Missing Initial State'. This happens when third-party cookies are blocked. Please use the 'Continue' button (Popup method) instead of Redirect.");
       } else if (error.message?.includes('third-party cookies')) {
-        setError("Cookie Error: Your browser is blocking third-party cookies. Please enable them in settings or use Chrome/Safari.");
+        setError("Cookie Error: Your browser is blocking third-party cookies. Please enable them in Chrome Settings > Privacy > Cookies.");
       } else {
-        setError(error.message || "Login failed. Please try the Redirect Method.");
+        setError(error.message || "Login failed. Please try again or use the Redirect Method.");
       }
     }
   };

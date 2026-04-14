@@ -280,14 +280,25 @@ export default function App() {
         <h2 className="text-lg font-bold text-white/90">Loading NoteVix...</h2>
         <p className="text-gray-500 text-sm mt-2 max-w-xs">Preparing your study session</p>
         
-        <div className="mt-12 pt-12 border-t border-white/5">
-          <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-4">Taking too long?</p>
-          <button 
-            onClick={() => window.location.href = '/login'}
-            className="text-purple-500 text-xs font-bold hover:underline"
-          >
-            Go to Login Page
-          </button>
+        <div className="mt-12 pt-12 border-t border-white/5 space-y-4">
+          <p className="text-[10px] text-gray-600 uppercase tracking-widest">Taking too long?</p>
+          <div className="flex flex-col gap-3">
+            <button 
+              onClick={() => window.location.href = '/login'}
+              className="text-purple-500 text-xs font-bold hover:underline"
+            >
+              Go to Login Page
+            </button>
+            <button 
+              onClick={() => {
+                auth.signOut();
+                window.location.reload();
+              }}
+              className="text-gray-500 text-[10px] hover:text-white transition-colors"
+            >
+              Force Logout & Refresh
+            </button>
+          </div>
         </div>
       </div>
     );
