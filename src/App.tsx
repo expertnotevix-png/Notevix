@@ -39,6 +39,7 @@ import { Toaster, toast } from 'sonner';
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
@@ -73,31 +74,17 @@ export default function App() {
     // Root Fix: Handle redirect result immediately on mount
     const handleRedirect = async () => {
       try {
-        if (!auth) {
-          console.warn("Auth not yet initialized for redirect check");
-          return;
-        }
-        console.log("Checking for redirect result...");
+        if (!auth) return;
+        console.log("App: Checking redirect result...");
         const result = await getRedirectResult(auth);
         if (result?.user) {
-          console.log("Redirect login successful for:", result.user.email);
-          // Analytics is non-blocking
-          analytics.then(a => {
-            if (a) logEvent(a, 'login', { method: 'Google_Redirect' });
-          }).catch(() => {});
+          console.log("App: Redirect login success:", result.user.email);
         }
       } catch (error: any) {
-        console.error("Redirect login failed:", error);
+        console.error("App: Redirect error:", error);
         if (error.code === 'auth/unauthorized-domain') {
-          setLoadingError(`Domain Not Authorized: Please add "${window.location.hostname}" to Authorized Domains in Firebase Console.`);
-        } else if (error.code !== 'auth/popup-closed-by-user') {
-          // Don't show error for user cancellation, but log others
-          console.warn("Auth redirect error handled:", error.message);
+          setLoadingError(`Domain Not Authorized: Please add "${window.location.hostname}" to Firebase.`);
         }
-      } finally {
-        // Always ensure loading is cleared if we were waiting for a redirect
-        // We relax this to ensure we don't get stuck
-        setLoading(false);
       }
     };
 
@@ -106,106 +93,22 @@ export default function App() {
     let unsubscribeUser: (() => void) | undefined;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      console.log("App: Auth state changed:", firebaseUser ? "User present" : "No user");
+      
       try {
         if (firebaseUser) {
-          console.log("Auth state: User logged in", firebaseUser.email);
           const userRef = doc(db, 'users', firebaseUser.uid);
           
-          // Use a promise to wait for the first valid snapshot
-          const waitForUser = new Promise<void>((resolve) => {
-            unsubscribeUser = onSnapshot(userRef, async (docSnap) => {
-              if (docSnap.exists()) {
-                const userData = docSnap.data() as UserProfile;
-                
-                // Streak Logic
-                const today = new Date().toISOString().split('T')[0];
-                const lastUpdate = userData.streak?.lastUpdateDate;
-                
-                if (lastUpdate !== today) {
-                  const yesterday = new Date();
-                  yesterday.setDate(yesterday.getDate() - 1);
-                  const yesterdayStr = yesterday.toISOString().split('T')[0];
-                  
-                  let newCount = userData.streak?.currentCount || 0;
-                  if (lastUpdate === yesterdayStr) {
-                    newCount += 1;
-                  } else {
-                    newCount = 1;
-                  }
-                  
-                  updateDoc(userRef, {
-                    'streak.currentCount': newCount,
-                    'streak.lastUpdateDate': today
-                  }).catch(err => console.warn("Streak update failed:", err));
-                }
-
-                // Admin promotion
-                if (firebaseUser.email === 'expertraj8@gmail.com' && userData.role !== 'admin') {
-                  updateDoc(userRef, { role: 'admin' }).catch(() => {});
-                }
-
-                setUser(userData);
-
-                // Initialize Community Stats if missing
-                const statsRef = doc(db, 'community_stats', 'global');
-                getDoc(statsRef).then(sSnap => {
-                  if (!sSnap.exists()) {
-                    setDoc(statsRef, {
-                      totalQuestions: 0,
-                      totalAnswers: 0,
-                      totalStudents: 1,
-                      solvedToday: 0,
-                      lastResetDate: new Date().toISOString().split('T')[0]
-                    });
-                  }
-                }).catch(() => {});
-
-                // Client-side notification trigger
-                const lastNotifDate = localStorage.getItem('last_daily_notif');
-                if (lastNotifDate !== today) {
-                  const checkDailyNotifs = async () => {
-                    if (userData.streak?.currentCount > 0) {
-                      await addDoc(collection(db, 'notifications'), {
-                        userId: userData.uid,
-                        title: 'Daily Streak Update',
-                        message: `You are on a ${userData.streak.currentCount} day streak! Keep it up!`,
-                        type: 'streak',
-                        read: false,
-                        timestamp: new Date().toISOString()
-                      });
-                    }
-                    localStorage.setItem('last_daily_notif', today);
-                  };
-                  checkDailyNotifs().catch(() => {});
-                }
-
-                // Sync to leaderboard
-                const leaderboardRef = doc(db, 'leaderboard', userData.uid);
-                setDoc(leaderboardRef, {
-                  uid: userData.uid,
-                  displayName: userData.displayName,
-                  photoURL: userData.photoURL,
-                  totalFocusMinutes: userData.totalFocusMinutes || 0,
-                  totalPoints: userData.totalPoints || 0,
-                  streakCount: Math.max(userData.streak?.currentCount || 0, 1),
-                  class: userData.class || '?'
-                }, { merge: true }).catch(() => {});
-
-                resolve();
-              } else {
-                // Document doesn't exist yet, we'll handle creation below
-                console.log("User document does not exist, creating...");
-                resolve(); 
-              }
-            }, (error) => {
-              console.error("User snapshot error:", error);
-              resolve();
-            });
-          });
-
-          // Check if we need to create the user
+          // 1. Try to get existing user
           const userDoc = await getDoc(userRef);
-          if (!userDoc.exists()) {
+          
+          if (userDoc.exists()) {
+            const userData = userDoc.data() as UserProfile;
+            setUser(userData);
+            console.log("App: Existing user loaded");
+          } else {
+            // 2. Create new user if doesn't exist
+            console.log("App: Creating new user document...");
             const referredBy = localStorage.getItem('referredBy');
             const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
@@ -218,10 +121,7 @@ export default function App() {
               savedNotes: [],
               notificationsEnabled: true,
               studyModeEnabled: false,
-              streak: {
-                currentCount: 1,
-                lastUpdateDate: new Date().toISOString().split('T')[0],
-              },
+              streak: { currentCount: 1, lastUpdateDate: new Date().toISOString().split('T')[0] },
               totalFocusMinutes: 0,
               totalPoints: 0,
               referralCode,
@@ -231,60 +131,30 @@ export default function App() {
               ...(referredBy ? { referredBy } : {}),
             };
 
-            try {
-              // Retry mechanism for initial creation
-              let success = false;
-              let attempts = 0;
-              while (!success && attempts < 3) {
-                try {
-                  await setDoc(userRef, newUser);
-                  success = true;
-                  console.log("New user document created successfully");
-                } catch (e) {
-                  attempts++;
-                  if (attempts === 3) throw e;
-                  await new Promise(r => setTimeout(r, 1000 * attempts));
-                }
-              }
-              
-              // Non-blocking stats update
-              setDoc(doc(db, 'community_stats', 'global'), {
-                totalStudents: increment(1)
-              }, { merge: true }).catch(() => {});
-
-              if (referredBy) {
-                const qReferrer = query(collection(db, 'users'), where('referralCode', '==', referredBy));
-                getDocs(qReferrer).then(snap => {
-                  if (!snap.empty) {
-                    const refDoc = snap.docs[0];
-                    const newCount = (refDoc.data().referralCount || 0) + 1;
-                    updateDoc(doc(db, 'users', refDoc.id), {
-                      referralCount: newCount,
-                      isPremium: newCount >= 3
-                    }).catch(() => {});
-                  }
-                }).catch(() => {});
-                localStorage.removeItem('referredBy');
-              }
-            } catch (error: any) {
-              console.error("Critical: Failed to create user document:", error);
-              const isPermissionError = error.message?.includes('permission-denied');
-              setLoadingError(
-                isPermissionError 
-                  ? "Account Setup Error: Please ensure you are using a valid Google account and try again."
-                  : "Connection Issue: We couldn't set up your profile. Please check your internet or try opening in Chrome/Safari."
-              );
-            }
+            await setDoc(userRef, newUser);
+            setUser(newUser);
+            console.log("App: New user created and set");
           }
 
-          await waitForUser;
+          // 3. Set up real-time listener for updates
+          if (unsubscribeUser) unsubscribeUser();
+          unsubscribeUser = onSnapshot(userRef, (docSnap) => {
+            if (docSnap.exists()) {
+              setUser(docSnap.data() as UserProfile);
+            }
+          });
+
         } else {
           setUser(null);
           if (unsubscribeUser) unsubscribeUser();
         }
-      } catch (err) {
-        console.error("Auth state change error:", err);
+      } catch (err: any) {
+        console.error("App: Auth processing error:", err);
+        if (err.code === 'permission-denied') {
+          setLoadingError("Database access denied. Please try logging out and back in.");
+        }
       } finally {
+        setIsAuthReady(true);
         setLoading(false);
       }
     });
@@ -401,7 +271,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [user?.uid]);
 
-  if (loading) {
+  if (loading || !isAuthReady) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
         <motion.div
@@ -411,6 +281,16 @@ export default function App() {
         />
         <h2 className="text-lg font-bold text-white/90">Loading NoteVix...</h2>
         <p className="text-gray-500 text-sm mt-2 max-w-xs">Preparing your study session</p>
+        
+        <div className="mt-12 pt-12 border-t border-white/5">
+          <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-4">Taking too long?</p>
+          <button 
+            onClick={() => window.location.href = '/login'}
+            className="text-purple-500 text-xs font-bold hover:underline"
+          >
+            Go to Login Page
+          </button>
+        </div>
       </div>
     );
   }
