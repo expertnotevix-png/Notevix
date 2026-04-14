@@ -102,8 +102,33 @@ export default function App() {
             
             if (userDoc.exists()) {
               const userData = userDoc.data() as UserProfile;
+              
+              // Streak Logic: Update if it's a new day
+              const today = new Date().toISOString().split('T')[0];
+              const lastUpdate = userData.streak?.lastUpdateDate;
+              
+              if (lastUpdate !== today) {
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                const yesterdayStr = yesterday.toISOString().split('T')[0];
+                
+                let newCount = userData.streak?.currentCount || 0;
+                if (lastUpdate === yesterdayStr) {
+                  newCount += 1;
+                } else {
+                  newCount = 1; // Reset if they missed a day
+                }
+                
+                await updateDoc(userRef, {
+                  'streak.currentCount': newCount,
+                  'streak.lastUpdateDate': today
+                });
+                userData.streak = { currentCount: newCount, lastUpdateDate: today };
+                toast.success(`Welcome back! Your streak is now ${newCount} days! 🔥`);
+              }
+
               setUser(userData);
-              console.log("App: User profile loaded");
+              console.log("App: User profile loaded and streak updated");
             } else {
               console.log("App: Creating new user document...");
               const referredBy = localStorage.getItem('referredBy');
