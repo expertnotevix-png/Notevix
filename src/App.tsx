@@ -185,7 +185,7 @@ export default function App() {
                   photoURL: userData.photoURL,
                   totalFocusMinutes: userData.totalFocusMinutes || 0,
                   totalPoints: userData.totalPoints || 0,
-                  streakCount: userData.streak?.currentCount || 0,
+                  streakCount: Math.max(userData.streak?.currentCount || 0, 1),
                   class: userData.class || '?'
                 }, { merge: true }).catch(() => {});
 
