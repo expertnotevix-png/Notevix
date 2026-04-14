@@ -68,12 +68,26 @@ export default function Login() {
       
       if (error.code === 'auth/unauthorized-domain') {
         setError(`Domain Not Authorized: Please add "${window.location.hostname}" to Authorized Domains in Firebase Console.`);
-      } else if (error.code === 'auth/internal-error') {
+      } else if (error.code === 'auth/internal-error' || error.code === 'auth/network-request-failed') {
         setError("Connection Error: Your browser or network blocked the login. Try the 'Redirect Method' or use Chrome/Safari.");
+      } else if (error.message?.includes('third-party cookies')) {
+        setError("Cookie Error: Your browser is blocking third-party cookies. Please enable them in settings or use Chrome/Safari.");
       } else {
         setError(error.message || "Login failed. Please try the Redirect Method.");
       }
     }
+  };
+
+  const checkStatus = () => {
+    setLoading(true);
+    setTimeout(() => {
+      if (auth.currentUser) {
+        window.location.href = '/';
+      } else {
+        setLoading(false);
+        setError("You are not logged in yet. Please complete the Google sign-in process.");
+      }
+    }, 2000);
   };
 
   const copyLink = () => {
@@ -118,6 +132,12 @@ export default function Login() {
                     <span>Login Issue Detected</span>
                   </div>
                   <p>{error}</p>
+                  <button 
+                    onClick={checkStatus}
+                    className="text-purple-400 font-bold hover:underline mt-1"
+                  >
+                    Already signed in? Click here to check status
+                  </button>
                 </div>
               )}
 
@@ -127,7 +147,7 @@ export default function Login() {
                   <p>These apps often block login. For a smooth experience, please open NoteVix in your real browser (Chrome/Safari).</p>
                   <button 
                     onClick={copyLink}
-                    className="w-full bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 py-2 rounded-xl flex items-center justify-center gap-2 font-bold transition-all"
+                    className="w-full bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 py-3 rounded-xl flex items-center justify-center gap-2 font-bold transition-all border border-blue-500/30"
                   >
                     {copied ? <Check size={14} /> : <Copy size={14} />}
                     {copied ? 'Link Copied!' : 'Copy Link to Open in Chrome'}
@@ -141,21 +161,30 @@ export default function Login() {
                 className="w-full purple-gradient text-white font-bold py-4 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-purple-500/30 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
-                {isMobile ? 'Continue with Google' : 'Continue with Google'}
+                Continue with Google
               </button>
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10"></div></div>
-                <div className="relative flex justify-center text-[10px] uppercase tracking-widest text-gray-500"><span className="bg-black px-2">Alternative</span></div>
+                <div className="relative flex justify-center text-[10px] uppercase tracking-widest text-gray-500"><span className="bg-black px-2">Troubleshooting</span></div>
               </div>
 
-              <button
-                onClick={() => handleLogin(true)}
-                disabled={loading || !agreed}
-                className="w-full bg-white/5 text-gray-400 font-medium py-3 px-6 rounded-2xl flex items-center justify-center gap-3 border border-white/10 active:scale-95 transition-transform hover:bg-white/10 disabled:opacity-50"
-              >
-                Try Redirect Method
-              </button>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => handleLogin(true)}
+                  disabled={loading || !agreed}
+                  className="flex-1 bg-white/5 text-gray-400 font-medium py-3 px-4 rounded-xl flex items-center justify-center gap-2 border border-white/10 active:scale-95 transition-transform hover:bg-white/10 text-[11px] disabled:opacity-50"
+                >
+                  Redirect Method
+                </button>
+                <button
+                  onClick={checkStatus}
+                  disabled={loading}
+                  className="flex-1 bg-white/5 text-gray-400 font-medium py-3 px-4 rounded-xl flex items-center justify-center gap-2 border border-white/10 active:scale-95 transition-transform hover:bg-white/10 text-[11px] disabled:opacity-50"
+                >
+                  Check Status
+                </button>
+              </div>
             </div>
         </div>
 

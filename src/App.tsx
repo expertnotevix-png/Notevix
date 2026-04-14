@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { onAuthStateChanged, getRedirectResult } from 'firebase/auth';
+import { onAuthStateChanged, getRedirectResult, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, query, collection, where, getDocs, addDoc, increment, orderBy, limit } from 'firebase/firestore';
 import { logEvent } from 'firebase/analytics';
 import { auth, db, handleFirestoreError, OperationType, analytics } from './lib/firebase';
@@ -67,6 +67,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    // Root Fix: Ensure persistence is set globally
+    setPersistence(auth, browserLocalPersistence).catch(err => console.error("Persistence error:", err));
+
     // Root Fix: Handle redirect result immediately on mount
     const handleRedirect = async () => {
       try {
@@ -93,9 +96,8 @@ export default function App() {
         }
       } finally {
         // Always ensure loading is cleared if we were waiting for a redirect
-        if (window.location.hash.includes('access_token') || window.location.search.includes('code=')) {
-          setLoading(false);
-        }
+        // We relax this to ensure we don't get stuck
+        setLoading(false);
       }
     };
 
