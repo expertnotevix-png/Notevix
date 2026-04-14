@@ -46,3 +46,33 @@ body {
   margin: 1rem 0;
 }
 
+/* Markdown Styling */
+.markdown-body {
+  line-height: 1.6;
+}
+
+.markdown-body p {
+  margin-bottom: 0.5rem;
+}
+
+.markdown-body ul, .markdown-body ol {
+  margin-left: 1.25rem;
+  margin-bottom: 0.5rem;
+  list-style-type: disc;
+}
+
+.markdown-body strong {
+  color: white;
+  font-weight: 700;
+}
+
+.markdown-body .katex-display {
+  margin: 0.5rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.markdown-body .katex {
+  font-size: 1.1em;
+}
+

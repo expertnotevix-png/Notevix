@@ -4,6 +4,11 @@ import { MessageCircle, X, Send, Loader2, Bot, User, Minimize2 } from 'lucide-re
 import { Logo } from './Logo';
 import { geminiService } from '../services/geminiService';
 
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
+
 export function FloatingChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<{ role: 'user' | 'model', text: string }[]>([]);
@@ -107,7 +112,14 @@ export function FloatingChatbot() {
                         ? 'bg-purple-600 text-white rounded-tr-none' 
                         : 'bg-white/5 border border-white/10 text-gray-200 rounded-tl-none'
                     }`}>
-                      {msg.text}
+                      <div className="markdown-body">
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkMath]} 
+                          rehypePlugins={[rehypeKatex]}
+                        >
+                          {msg.text}
+                        </ReactMarkdown>
+                      </div>
                     </div>
                   </div>
                 </div>

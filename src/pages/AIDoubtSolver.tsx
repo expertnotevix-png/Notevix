@@ -5,6 +5,11 @@ import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { geminiService } from '../services/geminiService';
 
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
+
 interface Message {
   id: string;
   text: string;
@@ -107,7 +112,14 @@ export default function AIDoubtSolver() {
                     ? 'bg-purple-600 text-white rounded-tr-none' 
                     : 'bg-white/5 border border-white/10 text-gray-200 rounded-tl-none'
                 }`}>
-                  {msg.text}
+                  <div className="markdown-body">
+                    <ReactMarkdown 
+                      remarkPlugins={[remarkMath]} 
+                      rehypePlugins={[rehypeKatex]}
+                    >
+                      {msg.text}
+                    </ReactMarkdown>
+                  </div>
                 </div>
               </div>
             </motion.div>

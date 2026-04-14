@@ -56,7 +56,7 @@ export const geminiService = {
         model: "gemini-3-flash-preview",
         contents: query,
         config: {
-          systemInstruction: "You are an expert CBSE Class 8-10 tutor. Answer the student's doubt in simple Hinglish (Hindi + English). Keep answers short, clear, and student-friendly. Use bullet points if necessary.",
+          systemInstruction: "You are an expert CBSE Class 8-10 tutor. Answer the student's doubt in simple Hinglish (Hindi + English). Keep answers short, clear, and student-friendly. Avoid using complex symbols like '##' or '$' for simple things. Use bold text for headings instead of Markdown headers. Only use math symbols if absolutely necessary for a formula.",
         },
       });
       return response.text;
@@ -119,7 +119,7 @@ export const geminiService = {
       const chat = ai.chats.create({
         model: "gemini-3-flash-preview",
         config: {
-          systemInstruction: "You are NoteVix AI, a friendly study assistant for CBSE students. Answer anything related to the CBSE syllabus. Keep responses concise and helpful.",
+          systemInstruction: "You are NoteVix AI, a friendly study assistant for CBSE students. Answer anything related to the CBSE syllabus. Keep responses concise and helpful. Use simple language and avoid complex Markdown or LaTeX symbols unless explaining a specific formula. Use bold text for emphasis instead of headers.",
         },
         history: history,
       });

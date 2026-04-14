@@ -22,6 +22,11 @@ import { UserProfile } from '../types';
 import { useModeration } from '../hooks/useModeration';
 import { geminiService } from '../services/geminiService';
 
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
+
 export default function PostDetail({ user }: { user: UserProfile | null }) {
   const { isBanned, banReason } = useModeration(user);
   const { postId } = useParams();
@@ -303,9 +308,16 @@ export default function PostDetail({ user }: { user: UserProfile | null }) {
                 )}
               </div>
 
-              <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap mb-6">
-                {reply.content}
-              </p>
+              <div className="text-gray-300 text-sm leading-relaxed mb-6">
+                <div className="markdown-body">
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkMath]} 
+                    rehypePlugins={[rehypeKatex]}
+                  >
+                    {reply.content}
+                  </ReactMarkdown>
+                </div>
+              </div>
 
               <div className="flex items-center justify-between pt-4 border-t border-white/5">
                 <div className="flex items-center gap-4 text-gray-500">

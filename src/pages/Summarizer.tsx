@@ -5,6 +5,11 @@ import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { geminiService } from '../services/geminiService';
 
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
+
 export default function Summarizer() {
   const [text, setText] = useState('');
   const [summary, setSummary] = useState<string | null>(null);
@@ -119,8 +124,15 @@ export default function Summarizer() {
 
               <div className="glass-card p-8 rounded-3xl border-purple-500/20 bg-purple-500/5">
                 <div className="prose prose-invert max-w-none">
-                  <div className="text-gray-200 leading-loose whitespace-pre-wrap">
-                    {summary}
+                  <div className="text-gray-200 leading-loose">
+                    <div className="markdown-body">
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkMath]} 
+                        rehypePlugins={[rehypeKatex]}
+                      >
+                        {summary}
+                      </ReactMarkdown>
+                    </div>
                   </div>
                 </div>
               </div>
