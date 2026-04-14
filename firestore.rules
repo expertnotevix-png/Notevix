@@ -96,7 +96,7 @@ service cloud.firestore {
     }
 
     function isBanned() {
-      return exists(/databases/$(database)/documents/user_moderation/$(request.auth.uid)) && (
+      return isAuthenticated() && exists(/databases/$(database)/documents/user_moderation/$(request.auth.uid)) && (
         get(/databases/$(database)/documents/user_moderation/$(request.auth.uid)).data.isPermanentlyBanned == true || 
         (get(/databases/$(database)/documents/user_moderation/$(request.auth.uid)).data.banUntil != null && 
          request.time < timestamp(get(/databases/$(database)/documents/user_moderation/$(request.auth.uid)).data.banUntil))
@@ -193,7 +193,7 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      allow read: if isAuthenticated(); // Allow reading other profiles for community
+      allow read: if true; // Allow reading profiles for leaderboard and community
       allow create: if isOwner(userId) && isValidUser(request.resource.data) && 
                     (request.resource.data.role == 'student' || isAdmin());
       allow update: if isOwner(userId) && isValidUser(request.resource.data) && 

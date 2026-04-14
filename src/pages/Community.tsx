@@ -71,6 +71,8 @@ export default function Community({ user }: { user: UserProfile | null }) {
       if (docSnap.exists()) {
         setStats(docSnap.data() as CommunityStats);
       }
+    }, (error) => {
+      console.error("Community stats listener error:", error);
     });
 
     // Fetch Chat Messages - Only for authenticated users

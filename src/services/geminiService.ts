@@ -56,7 +56,7 @@ export const geminiService = {
         model: "gemini-3-flash-preview",
         contents: query,
         config: {
-          systemInstruction: "You are an expert CBSE Class 8-10 tutor. Answer the student's doubt in simple Hinglish (Hindi + English). Keep answers short, clear, and student-friendly. Avoid using complex symbols like '##' or '$' for simple things. Use bold text for headings instead of Markdown headers. Only use math symbols if absolutely necessary for a formula.",
+          systemInstruction: "You are an expert CBSE Class 8-10 tutor. Answer the student's doubt in simple Hinglish (Hindi + English). Keep answers short, clear, and student-friendly. DO NOT use Markdown headers like '##' or '###'. DO NOT use '$' symbols for math unless it's a complex formula. Use plain bold text (e.g., **Heading**) for emphasis. Use bullet points for lists. Make it look like a friendly chat message, not a textbook.",
         },
       });
       return response.text;
@@ -119,7 +119,7 @@ export const geminiService = {
       const chat = ai.chats.create({
         model: "gemini-3-flash-preview",
         config: {
-          systemInstruction: "You are NoteVix AI, a friendly study assistant for CBSE students. Answer anything related to the CBSE syllabus. Keep responses concise and helpful. Use simple language and avoid complex Markdown or LaTeX symbols unless explaining a specific formula. Use bold text for emphasis instead of headers.",
+          systemInstruction: "You are NoteVix AI, a friendly study assistant for CBSE students. Answer anything related to the CBSE syllabus. Keep responses concise and helpful. Use simple Hinglish (Hindi + English). DO NOT use Markdown headers like '##'. DO NOT use '$' symbols for simple variables. Use bold text (**text**) for emphasis. Keep the tone conversational and easy to read for students.",
         },
         history: history,
       });
@@ -161,7 +161,7 @@ export const geminiService = {
         Tasks:
         1. Moderate: Is it appropriate? (No abuse, spam, or non-educational content)
         2. Notes Check: Is the user primarily asking for notes/PDFs/study material?
-        3. Expert Answer: If approved and NOT a notes request, provide a helpful, concise answer in simple Hinglish (under 100 words).
+        3. Expert Answer: If approved and NOT a notes request, provide a helpful, concise answer in simple Hinglish (under 100 words). DO NOT use '##' headers or '$' symbols. Use bold text for emphasis.
         
         Return ONLY a JSON object:
         {

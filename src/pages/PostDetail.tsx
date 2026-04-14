@@ -48,6 +48,9 @@ export default function PostDetail({ user }: { user: UserProfile | null }) {
         navigate('/community');
       }
       setLoading(false);
+    }, (error) => {
+      console.error("Post detail listener error:", error);
+      setLoading(false);
     });
 
     const repliesQuery = query(
@@ -58,6 +61,8 @@ export default function PostDetail({ user }: { user: UserProfile | null }) {
 
     const repliesUnsub = onSnapshot(repliesQuery, (snapshot) => {
       setReplies(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Replies listener error:", error);
     });
 
     return () => {

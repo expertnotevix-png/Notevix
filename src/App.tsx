@@ -162,6 +162,8 @@ export default function App() {
               if (docSnap.exists()) {
                 setUser(docSnap.data() as UserProfile);
               }
+            }, (error) => {
+              console.error("App: User profile listener error:", error);
             });
 
           } else {

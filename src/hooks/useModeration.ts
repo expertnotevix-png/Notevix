@@ -30,6 +30,9 @@ export function useModeration(user: UserProfile | null) {
         setBanReason(null);
       }
       setLoading(false);
+    }, (error) => {
+      console.error("Moderation listener error:", error);
+      setLoading(false);
     });
 
     return () => unsubscribe();
