@@ -128,47 +128,14 @@ export default function Admin() {
   const addSampleData = async () => {
     const chapterSamples = [
       {
-        class: '10',
+        class: '9',
         subject: 'maths',
-        title: 'Polynomials',
-        summary: 'A polynomial is an expression consisting of variables and coefficients, involving only the operations of addition, subtraction, multiplication, and non-negative integer exponents.',
-        keyPoints: [
-          'Degree of a polynomial is the highest power of x.',
-          'Linear polynomial has degree 1.',
-          'Quadratic polynomial has degree 2.',
-          'Relationship between zeros and coefficients: Sum = -b/a, Product = c/a.',
-        ],
-        formulas: [
-          'p(x) = ax² + bx + c',
-          'α + β = -b/a',
-          'αβ = c/a',
-        ],
-        importantQuestions: [
-          { question: 'Find the zeros of x² - 2x - 8.', answer: 'The zeros are 4 and -2.' },
-          { question: 'What is the degree of a constant polynomial?', answer: 'The degree of a non-zero constant polynomial is 0.' },
-        ],
-        isPremium: false,
-      },
-      {
-        class: '10',
-        subject: 'science',
-        title: 'Chemical Reactions',
-        summary: 'A chemical reaction is a process in which one or more substances, the reactants, are converted to one or more different substances, the products.',
-        keyPoints: [
-          'Combination Reaction: Two or more reactants form a single product.',
-          'Decomposition Reaction: A single reactant breaks down into two or more products.',
-          'Displacement Reaction: A more reactive element displaces a less reactive element.',
-          'Redox Reaction: Both oxidation and reduction occur simultaneously.',
-        ],
-        formulas: [
-          '2H₂ + O₂ → 2H₂O',
-          'CaCO₃ → CaO + CO₂',
-        ],
-        importantQuestions: [
-          { question: 'Why should a magnesium ribbon be cleaned before burning in air?', answer: 'To remove the protective layer of basic magnesium carbonate from its surface.' },
-          { question: 'What is a balanced chemical equation?', answer: 'An equation where the number of atoms of each element is the same on both sides.' },
-        ],
-        isPremium: true,
+        title: 'Number Systems',
+        summary: 'Introduction to real numbers.',
+        keyPoints: ['Rational numbers', 'Irrational numbers', 'Real numbers'],
+        formulas: [],
+        importantQuestions: [{ question: 'Is zero a rational number?', answer: 'Yes.' }],
+        isPremium: false
       }
     ];
 
@@ -236,34 +203,6 @@ export default function Admin() {
         fullNotesUrl: 'https://drive.google.com/file/d/1B81cuGvF5-jJnhUA1n-Yy6nAk-H9W-B3/view?usp=drivesdk',
         importantQuestionsUrl: 'https://drive.google.com/file/d/10X16DY-AxnxyXrIDwbNqJSt_Y8NRZyv7/view?usp=drivesdk',
         examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1n4_HnHrShSzIMkfiVQYDtuJSWPnkqqO2/view?usp=drivesdk'
-      },
-      {
-        class: '10', subject: 'science',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1vVRXXenGoaFzn1R2cEs_es5gDzzEzO9J/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1Rer-yq5_lUAx79ziwtXDR0AXgaoB10Eh/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/17gHE4BBgTcFbq6Z1jUMEaooPuDhSxrFR/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1lGG-l-89veqwwbEIltxRtXql1Xhb1uVT/view?usp=drivesdk'
-      },
-      {
-        class: '10', subject: 'sst',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1oa2WBPNO4ChJrAp-aP7uyvVCn2SPI6w1/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1wNNhEXC06_qpsom2lzfAoOAjxZtfzc2f/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/1jUpfYzuNwiE6b6CTYTE--Gk8ttqZ5b26/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1nWLsptC9vEV7egT8rbapiRi_gBm7SeTW/view?usp=drivesdk'
-      },
-      {
-        class: '10', subject: 'maths',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1oa2WBPNO4ChJrAp-aP7uyvVCn2SPI6w1/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1wNNhEXC06_qpsom2lzfAoOAjxZtfzc2f/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/1jUpfYzuNwiE6b6CTYTE--Gk8ttqZ5b26/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1nWLsptC9vEV7egT8rbapiRi_gBm7SeTW/view?usp=drivesdk'
-      },
-      {
-        class: '10', subject: 'english',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1oa2WBPNO4ChJrAp-aP7uyvVCn2SPI6w1/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1wNNhEXC06_qpsom2lzfAoOAjxZtfzc2f/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/1jUpfYzuNwiE6b6CTYTE--Gk8ttqZ5b26/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1nWLsptC9vEV7egT8rbapiRi_gBm7SeTW/view?usp=drivesdk'
       }
     ];
 
@@ -444,29 +383,30 @@ export default function Admin() {
             </button>
             <button
               onClick={async () => {
-                if (!window.confirm("This will overwrite all Class 10 Science resources. Continue?")) return;
-                const scienceRes = {
-                  class: '10', subject: 'science',
-                  onePageNotesUrl: 'https://drive.google.com/file/d/1vVRXXenGoaFzn1R2cEs_es5gDzzEzO9J/view?usp=drivesdk',
-                  fullNotesUrl: 'https://drive.google.com/file/d/1Rer-yq5_lUAx79ziwtXDR0AXgaoB10Eh/view?usp=drivesdk',
-                  importantQuestionsUrl: 'https://drive.google.com/file/d/17gHE4BBgTcFbq6Z1jUMEaooPuDhSxrFR/view?usp=drivesdk',
-                  examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1lGG-l-89veqwwbEIltxRtXql1Xhb1uVT/view?usp=drivesdk'
-                };
-                const q = query(collection(db, 'subject_resources'), where('class', '==', '10'), where('subject', '==', 'science'));
-                const snap = await getDocs(q);
-                if (snap.empty) {
-                  await addDoc(collection(db, 'subject_resources'), scienceRes);
-                } else {
-                  for (const d of snap.docs) {
-                    await updateDoc(doc(db, 'subject_resources', d.id), scienceRes);
-                  }
+                if (!window.confirm("This will delete ALL Class 10 resources from the database. Are you sure?")) return;
+                try {
+                  const q = query(collection(db, 'subject_resources'), where('class', '==', '10'));
+                  const snap = await getDocs(q);
+                  const deletes = snap.docs.map(d => deleteDoc(doc(db, 'subject_resources', d.id)));
+                  await Promise.all(deletes);
+                  
+                  // Also delete chapters for class 10
+                  const qChapters = query(collection(db, 'chapters'), where('class', '==', '10'));
+                  const snapChapters = await getDocs(qChapters);
+                  const deletesChapters = snapChapters.docs.map(d => deleteDoc(doc(db, 'chapters', d.id)));
+                  await Promise.all(deletesChapters);
+                  
+                  alert("All Class 10 resources and chapters deleted successfully!");
+                  fetchChapters();
+                } catch (error) {
+                  console.error("Cleanup error:", error);
+                  alert("Error cleaning up resources.");
                 }
-                alert("Class 10 Science resources updated!");
               }}
-              className="glass-card p-4 rounded-2xl flex items-center justify-center gap-2 text-green-400 font-bold"
+              className="glass-card p-4 rounded-2xl flex items-center justify-center gap-2 text-red-400 font-bold"
             >
-              <RefreshCw className="w-5 h-5" />
-              Fix Class 10 Science
+              <Trash2 className="w-5 h-5" />
+              Clear Class 10 Data
             </button>
           </div>
 
