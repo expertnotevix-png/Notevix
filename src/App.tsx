@@ -160,7 +160,22 @@ export default function App() {
             if (unsubscribeUser) unsubscribeUser();
             unsubscribeUser = onSnapshot(userRef, (docSnap) => {
               if (docSnap.exists()) {
-                setUser(docSnap.data() as UserProfile);
+                const data = docSnap.data() as UserProfile;
+                setUser(data);
+
+                // Sync with Leaderboard (Public Profile)
+                if (data.role !== 'admin') {
+                  const leaderboardRef = doc(db, 'leaderboard', data.uid);
+                  setDoc(leaderboardRef, {
+                    uid: data.uid,
+                    displayName: data.displayName,
+                    photoURL: data.photoURL,
+                    totalPoints: data.totalPoints || 0,
+                    totalFocusMinutes: data.totalFocusMinutes || 0,
+                    class: data.class || '',
+                    streakCount: data.streak?.currentCount || 0
+                  }, { merge: true }).catch(err => console.error("Leaderboard sync failed:", err));
+                }
               }
             }, (error) => {
               console.error("App: User profile listener error:", error);

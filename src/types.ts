@@ -21,6 +21,7 @@ export interface UserProfile {
   referralCount: number;
   isPremium: boolean;
   createdAt: string;
+  onboardingCompleted?: boolean;
 }
 
 export interface Message {

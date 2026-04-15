@@ -20,12 +20,14 @@ const subjects = [
 import { Logo } from '../components/Logo';
 import { MotivationalCarousel } from '../components/MotivationalCarousel';
 import { AdBanner } from '../components/AdBanner';
+import { Onboarding } from '../components/Onboarding';
 
 const classes = ['8', '9', '10'];
 
 export default function Home({ user }: HomeProps) {
   const navigate = useNavigate();
   const [selectedClass, setSelectedClass] = useState<string | null>(user.class || null);
+  const [showOnboarding, setShowOnboarding] = useState(!user.onboardingCompleted);
 
   useEffect(() => {
     if (user.role === 'admin') {
@@ -227,6 +229,12 @@ export default function Home({ user }: HomeProps) {
 
   return (
     <div className="p-6 space-y-8">
+      {showOnboarding && (
+        <Onboarding 
+          userId={user.uid} 
+          onComplete={() => setShowOnboarding(false)} 
+        />
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

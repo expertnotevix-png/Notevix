@@ -149,6 +149,31 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Popular Resources Section for SEO */}
+      <section className="py-24 px-6 bg-white/[0.01]">
+        <div className="max-w-7xl mx-auto space-y-12">
+          <div className="text-center space-y-4">
+            <h2 className="text-3xl md:text-4xl font-black">Popular Study Resources</h2>
+            <p className="text-gray-500">Quick access to the most searched CBSE study materials.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { title: 'CBSE Class 9 Science Notes', desc: 'Comprehensive one-page summaries for Physics, Chemistry, and Biology.' },
+              { title: 'Class 10 Maths Important Questions', desc: 'Handpicked questions that are most likely to appear in board exams.' },
+              { title: 'Class 8 Social Science Summaries', desc: 'Easy-to-understand notes for History, Geography, and Civics.' },
+              { title: 'NCERT Solutions Class 10', desc: 'Detailed explanations for all NCERT textbook exercises.' },
+              { title: 'Class 9 English Grammar Guide', desc: 'Master grammar rules with our simplified guides and practice sets.' },
+              { title: 'Class 10 Science Sample Papers', desc: 'Practice with the latest pattern sample papers for 2025-26.' }
+            ].map((resource, i) => (
+              <div key={i} className="glass-card p-6 rounded-2xl border-white/5 hover:border-purple-500/30 transition-all cursor-default">
+                <h3 className="font-bold text-purple-400 mb-2">{resource.title}</h3>
+                <p className="text-sm text-gray-500">{resource.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* How it Works */}
       <section className="py-24 px-6 bg-white/[0.01]">
         <div className="max-w-7xl mx-auto space-y-16">
