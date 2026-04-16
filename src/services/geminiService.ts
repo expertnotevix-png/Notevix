@@ -62,7 +62,11 @@ export const geminiService = {
     try {
       const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
       if (nvidiaKey) {
-        return await this.callNvidiaAPI(query, "You are an expert CBSE Class 8-10 tutor. Answer the student's doubt in simple Hinglish (Hindi + English). Keep answers short, clear, and student-friendly. DO NOT use Markdown headers like '##' or '###'. DO NOT use '$' symbols for math unless it's a complex formula. Use plain bold text (e.g., **Heading**) for emphasis. Use bullet points for lists. Make it look like a friendly chat message, not a textbook.");
+        try {
+          return await this.callNvidiaAPI(query, "You are an expert CBSE Class 8-10 tutor. Answer the student's doubt in simple Hinglish (Hindi + English). Keep answers short, clear, and student-friendly. Use bold text (**Heading**) for emphasis. Make it look like a friendly chat message.");
+        } catch (nvidiaErr) {
+          console.warn("NVIDIA failed, falling back to Gemini:", nvidiaErr);
+        }
       }
 
       const ai = getAI();
@@ -70,7 +74,7 @@ export const geminiService = {
         model: "gemini-3-flash-preview",
         contents: query,
         config: {
-          systemInstruction: "You are an expert CBSE Class 8-10 tutor. Answer the student's doubt in simple Hinglish (Hindi + English). Keep answers short, clear, and student-friendly. DO NOT use Markdown headers like '##' or '###'. DO NOT use '$' symbols for math unless it's a complex formula. Use plain bold text (e.g., **Heading**) for emphasis. Use bullet points for lists. Make it look like a friendly chat message, not a textbook.",
+          systemInstruction: "You are an expert CBSE Class 8-10 tutor. Answer the student's doubt in simple Hinglish (Hindi + English). Keep answers short, clear, and student-friendly. Use bold text (**Heading**) for emphasis. Use bullet points for lists. Make it look like a friendly chat message.",
         },
       });
       return response.text;
@@ -85,20 +89,24 @@ export const geminiService = {
     Avoid extremely basic/obvious questions. Include a mix of theory and practical problems if applicable.
     Return ONLY a JSON array of objects.
     Each object must have: question (string), options (array of 4 strings), correctAnswer (string matching one option), explanation (string).`;
-    const system = "You are an expert CBSE exam paper setter for top-tier schools. You create high-quality, concept-based MCQs that challenge a student's understanding. Return ONLY raw JSON without markdown code blocks.";
+    const system = "You are an expert CBSE exam paper setter for top-tier schools. Return ONLY raw JSON without markdown code blocks.";
 
     try {
       const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
       if (nvidiaKey) {
-        const res = await this.callNvidiaAPI(prompt, system, true);
-        return JSON.parse(res.replace(/```json|```/g, '').trim());
+        try {
+          const res = await this.callNvidiaAPI(prompt, system, true);
+          return JSON.parse(res.replace(/```json|```/g, '').trim());
+        } catch (nvidiaErr) {
+          console.warn("NVIDIA Quiz failed, falling back to Gemini:", nvidiaErr);
+        }
       }
 
       const ai = getAI();
       if (!ai) throw new Error("AI not initialized");
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Generate 5 MCQ questions for CBSE Class ${className} ${subject}.`,
+        contents: `Generate 5 MCQ questions for CBSE Class ${className} ${subject}. Return the result as a JSON array.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -297,35 +305,34 @@ export const geminiService = {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: "meta/llama-3.1-405b-instruct",
+          model: "meta/llama-3.1-70b-instruct",
           messages: [
             { role: "system", content: systemInstruction },
             { role: "user", content: prompt }
           ],
-          temperature: isJson ? 0.1 : 0.5,
-          top_p: 0.7,
-          max_tokens: 1024,
+          temperature: isJson ? 0.1 : 0.6,
+          max_tokens: 1536,
         })
       });
 
       const responseText = await response.text();
       let data;
       try {
-        data = responseText ? JSON.parse(responseText) : { error: "No response from AI service" };
+        data = responseText ? JSON.parse(responseText) : null;
       } catch (e) {
-        throw new Error(`AI Service Response Error: Received invalid data from server (${response.status})`);
+        throw new Error(`Invalid response from AI server. Status: ${response.status}`);
       }
 
-      if (!response.ok) {
-        // Handle specific proxy errors
-        if (data.error) {
-          const errMsg = typeof data.error === 'string' ? data.error : (data.error.message || "Unknown AI error");
-          if (errMsg.includes("Key (VITE_NVIDIA_API_KEY) is not configured")) {
-            throw new Error("AI Configuration Error: VITE_NVIDIA_API_KEY is missing on the server. Please check your Secrets! 🔑");
-          }
-          throw new Error(errMsg);
+      if (!response.ok || !data || data.error) {
+        const errMsg = data?.error?.message || data?.error || `Server error (${response.status})`;
+        if (typeof errMsg === 'string' && errMsg.includes("Key (VITE_NVIDIA_API_KEY) is not configured")) {
+          throw new Error("NVIDIA API Key is missing on the server. Please check your 'Secrets'! 🔑");
         }
-        throw new Error(`AI Service Error: Server returned ${response.status}`);
+        throw new Error(errMsg);
+      }
+
+      if (!data.choices?.[0]?.message?.content) {
+        throw new Error("AI returned an empty response. Please try again.");
       }
 
       return data.choices[0].message.content;
