@@ -56,7 +56,7 @@ export function FloatingChatbot() {
         onClick={() => setIsOpen(true)}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
-        className={`fixed bottom-24 right-6 w-14 h-14 purple-gradient rounded-full shadow-2xl shadow-purple-500/40 flex items-center justify-center z-40 transition-opacity ${isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        className={`fixed bottom-24 right-6 w-14 h-14 purple-gradient rounded-full shadow-2xl shadow-purple-500/40 flex items-center justify-center z-[60] transition-opacity ${isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
       >
         <MessageCircle className="w-7 h-7 text-white" />
         <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-black animate-pulse" />
@@ -69,7 +69,7 @@ export function FloatingChatbot() {
             initial={{ opacity: 0, scale: 0.9, y: 20, transformOrigin: 'bottom right' }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="fixed bottom-24 right-6 w-[calc(100vw-3rem)] sm:w-96 h-[500px] max-h-[70vh] glass-card rounded-3xl shadow-2xl z-50 flex flex-col overflow-hidden border-purple-500/20"
+            className="fixed bottom-24 right-6 w-[calc(100vw-3rem)] sm:w-96 h-[500px] max-h-[70vh] glass-card rounded-3xl shadow-2xl z-[70] flex flex-col overflow-hidden border-purple-500/20"
           >
             {/* Header */}
             <div className="p-4 border-b border-white/10 flex items-center justify-between bg-purple-500/10 backdrop-blur-xl">

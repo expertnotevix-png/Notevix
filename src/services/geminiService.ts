@@ -78,9 +78,12 @@ export const geminiService = {
   },
 
   async generateQuiz(subject: string, className: string) {
-    const prompt = `Generate 5 MCQ questions for CBSE Class ${className} ${subject}. Return ONLY a JSON array of objects.
+    const prompt = `Generate 5 challenging MCQ questions for CBSE Class ${className} ${subject} based on the standard NCERT syllabus. 
+    Ensure the questions are of high quality, covering conceptual understanding and actual exam-style difficulty. 
+    Avoid extremely basic/obvious questions. Include a mix of theory and practical problems if applicable.
+    Return ONLY a JSON array of objects.
     Each object must have: question (string), options (array of 4 strings), correctAnswer (string matching one option), explanation (string).`;
-    const system = "You are an expert CBSE exam paper setter. Return ONLY raw JSON without markdown code blocks.";
+    const system = "You are an expert CBSE exam paper setter for top-tier schools. You create high-quality, concept-based MCQs that challenge a student's understanding. Return ONLY raw JSON without markdown code blocks.";
 
     try {
       const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY || (import.meta as any).env?.VITE_NVIDIA_API;
