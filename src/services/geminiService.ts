@@ -7,7 +7,7 @@ function getAI() {
     // Support both AI Studio (process.env) and external Vite deployments (VITE_ prefix)
     // Note: In Cloudflare Pages, use a regular "Environment Variable", NOT a "Secret" 
     // because Secrets are not available during the 'npm run build' process.
-    const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || 
+    const apiKey = (typeof process !== 'undefined' && (process.env?.GEMINI_API_KEY || process.env?.VITE_GEMINI_API_KEY)) || 
                    (import.meta as any).env?.VITE_GEMINI_API_KEY;
     
     // Check for NVIDIA API Key if user wants to use NVIDIA
