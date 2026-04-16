@@ -307,14 +307,27 @@ export const geminiService = {
           max_tokens: 1024,
         })
       });
-      const data = await response.json();
-      if (data.error) {
-        // If it's a configuration error from our server
-        if (typeof data.error === 'string' && data.error.includes("Key is not configured")) {
-          throw new Error("AI Configuration Error: NVIDIA API Key is missing. Check your 'Secrets'! 🔑");
-        }
-        throw new Error(data.error.message || data.error);
+
+      const responseText = await response.text();
+      let data;
+      try {
+        data = responseText ? JSON.parse(responseText) : { error: "No response from AI service" };
+      } catch (e) {
+        throw new Error(`AI Service Response Error: Received invalid data from server (${response.status})`);
       }
+
+      if (!response.ok) {
+        // Handle specific proxy errors
+        if (data.error) {
+          const errMsg = typeof data.error === 'string' ? data.error : (data.error.message || "Unknown AI error");
+          if (errMsg.includes("Key (VITE_NVIDIA_API_KEY) is not configured")) {
+            throw new Error("AI Configuration Error: VITE_NVIDIA_API_KEY is missing on the server. Please check your Secrets! 🔑");
+          }
+          throw new Error(errMsg);
+        }
+        throw new Error(`AI Service Error: Server returned ${response.status}`);
+      }
+
       return data.choices[0].message.content;
     } catch (error: any) {
       console.error("NVIDIA API Error:", error);

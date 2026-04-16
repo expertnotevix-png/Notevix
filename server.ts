@@ -25,7 +25,7 @@ async function startServer() {
 
     try {
       console.log("NVIDIA Proxy: Forwarding request for model", req.body.model);
-      const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+      const nvidiaResponse = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -33,7 +33,25 @@ async function startServer() {
         },
         body: JSON.stringify(req.body)
       });
-      const data = await response.json();
+
+      const responseText = await nvidiaResponse.text();
+      
+      let data;
+      try {
+        data = responseText ? JSON.parse(responseText) : { error: "Empty response from NVIDIA" };
+      } catch (e) {
+        console.error("NVIDIA Proxy: Failed to parse JSON from NVIDIA:", responseText);
+        return res.status(502).json({ 
+          error: "NVIDIA returned an invalid response. Please try again or check your API key.",
+          details: responseText.substring(0, 200)
+        });
+      }
+
+      if (!nvidiaResponse.ok) {
+        console.error("NVIDIA Proxy: NVIDIA returned error status", nvidiaResponse.status, data);
+        return res.status(nvidiaResponse.status).json(data);
+      }
+
       res.json(data);
     } catch (error: any) {
       console.error("Server-side NVIDIA Error:", error);
