@@ -200,6 +200,24 @@
         "isPermanentlyBanned": { "type": "boolean" }
       },
       "required": ["userId", "strikes"]
+    },
+    "PurchaseRequest": {
+      "title": "PurchaseRequest",
+      "description": "Request for premium membership",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "userName": { "type": "string" },
+        "planId": { "type": "string" },
+        "planName": { "type": "string" },
+        "amount": { "type": "number" },
+        "transactionId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "whatsappNumber": { "type": "string" }
+      },
+      "required": ["userId", "userEmail", "planId", "transactionId", "status", "timestamp"]
     }
   },
   "firestore": {
@@ -250,6 +268,10 @@
     "/user_moderation/{userId}": {
       "schema": "UserModeration",
       "description": "User moderation data"
+    },
+    "/purchase_requests/{requestId}": {
+      "schema": "PurchaseRequest",
+      "description": "Premium purchase requests"
     }
   }
 }

@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { geminiService } from '../services/geminiService';
-import { Chapter, Message, Notification } from '../types';
-import { Plus, Trash2, Edit2, Save, X, ChevronLeft, Database, MessageSquare, Bell, Send, CheckCircle2, Clock, Shield, RefreshCw } from 'lucide-react';
+import { Chapter, Message, Notification, PurchaseRequest, UserProfile } from '../types';
+import { Plus, Trash2, Edit2, Save, X, ChevronLeft, Database, MessageSquare, Bell, Send, CheckCircle2, Clock, Shield, RefreshCw, CreditCard, Check, XCircle, Users, Instagram } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ModerationTab from '../components/community/ModerationTab';
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'chapters' | 'messages' | 'notifications' | 'moderation'>('chapters');
+  const [activeTab, setActiveTab] = useState<'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users'>('chapters');
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const navigate = useNavigate();
@@ -23,7 +25,22 @@ export default function Admin() {
     if (activeTab === 'chapters') fetchChapters();
     if (activeTab === 'messages') fetchMessages();
     if (activeTab === 'notifications') fetchNotifications();
+    if (activeTab === 'payments') fetchPurchaseRequests();
+    if (activeTab === 'users') fetchUsers();
   }, [activeTab]);
+
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(100));
+      const snap = await getDocs(q);
+      setAllUsers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const [formData, setFormData] = useState<Partial<Chapter>>({
     class: '10',
@@ -273,6 +290,87 @@ export default function Admin() {
     return unsubscribe;
   };
 
+  const fetchPurchaseRequests = async () => {
+    setLoading(true);
+    const q = query(collection(db, 'purchase_requests'), orderBy('timestamp', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PurchaseRequest));
+      setPurchaseRequests(data);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'purchase_requests');
+    });
+    return unsubscribe;
+  };
+
+  const handleApprovePurchase = async (req: PurchaseRequest) => {
+    try {
+      // 1. Update request status
+      await updateDoc(doc(db, 'purchase_requests', req.id), { status: 'approved' });
+      
+      // 2. Grant access to user
+      const userRef = doc(db, 'users', req.userId);
+      
+      if (req.planType === 'subscription') {
+        // Subscription grants everything
+        await updateDoc(userRef, { 
+          isPremium: true,
+          subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        });
+      } else if (req.planType === 'one-time' && req.targetClass) {
+        // One-time grants specific class
+        const userSnap = await getDocs(query(collection(db, 'users'), where('uid', '==', req.userId)));
+        const currentUnlocked = (userSnap.docs[0]?.data()?.unlockedClasses || []) as string[];
+        if (!currentUnlocked.includes(req.targetClass)) {
+          await updateDoc(userRef, { 
+            unlockedClasses: [...currentUnlocked, req.targetClass] 
+          });
+        }
+      } else {
+        // Fallback for old requests
+        await updateDoc(userRef, { isPremium: true });
+      }
+      
+      // 3. Notify user
+      await addDoc(collection(db, 'notifications'), {
+        userId: req.userId,
+        title: 'Premium Activated! 👑',
+        message: `Your payment for ${req.planName} has been verified. Enjoy your premium access!`,
+        type: 'rank',
+        read: false,
+        timestamp: new Date().toISOString()
+      });
+
+      alert("Purchase approved and user upgraded!");
+    } catch (error) {
+      console.error(error);
+      handleFirestoreError(error, OperationType.UPDATE, `purchase_requests/${req.id}`);
+      alert("Verification failed");
+    }
+  };
+
+  const handleRejectPurchase = async (req: PurchaseRequest) => {
+    const reason = window.prompt("Reason for rejection?");
+    if (reason === null) return;
+
+    try {
+      await updateDoc(doc(db, 'purchase_requests', req.id), { status: 'rejected' });
+      
+      await addDoc(collection(db, 'notifications'), {
+        userId: req.userId,
+        title: 'Payment Rejected',
+        message: `Your payment verification failed. Reason: ${reason}. Please contact support with Transaction ID.`,
+        type: 'info',
+        read: false,
+        timestamp: new Date().toISOString()
+      });
+
+      alert("Purchase rejected.");
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const handleReply = async (messageId: string, userId: string) => {
     const text = replyText[messageId];
     if (!text?.trim()) return;
@@ -383,6 +481,8 @@ export default function Admin() {
         {[
           { id: 'chapters', label: 'Chapters', icon: Database },
           { id: 'messages', label: 'Messages', icon: MessageSquare },
+          { id: 'payments', label: 'Payments', icon: CreditCard },
+          { id: 'users', label: 'Users', icon: Users },
           { id: 'notifications', label: 'Broadcast', icon: Bell },
           { id: 'moderation', label: 'Moderation', icon: Shield },
         ].map((tab) => (
@@ -398,6 +498,55 @@ export default function Admin() {
           </button>
         ))}
       </div>
+
+      {activeTab === 'users' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-bold">Student Database</h3>
+            <p className="text-xs text-gray-400">Total: {allUsers.length}</p>
+          </div>
+          
+          <div className="space-y-3">
+            {allUsers.map((u) => (
+              <div key={u.uid} className="glass-card p-4 rounded-3xl flex items-center justify-between border-white/5 bg-white/5">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-purple-500">
+                    <img src={u.photoURL} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold">{u.displayName}</h4>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Class {u.class || '?'}</p>
+                      {u.instagramUsername && (
+                        <p className="text-[10px] text-pink-500 font-bold flex items-center gap-1">
+                          <Instagram className="w-3 h-3" />
+                          @{u.instagramUsername}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {u.isPremium && (
+                    <span className="bg-yellow-500/20 text-yellow-500 text-[8px] font-black px-2 py-1 rounded-lg uppercase tracking-widest">PRO</span>
+                  )}
+                  <button 
+                    onClick={async () => {
+                      if(window.confirm(`Delete ${u.displayName}?`)) {
+                        await deleteDoc(doc(db, 'users', u.uid));
+                        fetchUsers();
+                      }
+                    }}
+                    className="p-2 bg-white/5 rounded-xl text-gray-500 hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {activeTab === 'chapters' && (
         <div className="space-y-8">
@@ -570,6 +719,75 @@ export default function Admin() {
       )}
 
       {activeTab === 'moderation' && <ModerationTab />}
+
+      {activeTab === 'payments' && (
+        <div className="space-y-4">
+          <h3 className="font-bold text-gray-400 uppercase text-xs tracking-widest px-1">Payment Verifications</h3>
+          {loading ? (
+             <div className="text-center py-10 text-gray-500">Loading requests...</div>
+          ) : purchaseRequests.length > 0 ? (
+            purchaseRequests.map((req) => (
+              <div key={req.id} className="glass-card p-6 rounded-3xl space-y-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h4 className="font-bold text-lg">{req.userName}</h4>
+                    <p className="text-xs text-gray-500">{req.userEmail}</p>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      <p className="text-xs text-purple-400 font-bold">WA: {req.whatsappNumber || 'N/A'}</p>
+                      {req.instagramUsername && (
+                        <p className="text-xs text-pink-500 font-bold flex items-center gap-1">
+                          <Instagram className="w-3 h-3" />
+                          @{req.instagramUsername}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                    req.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500' :
+                    req.status === 'approved' ? 'bg-green-500/20 text-green-500' :
+                    'bg-red-500/20 text-red-500'
+                  }`}>
+                    {req.status}
+                  </div>
+                </div>
+
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest mb-1">Plan</p>
+                    <p className="text-sm font-bold">{req.planName}</p>
+                    <p className="text-xs text-green-500 font-black tracking-tight">₹{req.amount}</p>
+                  </div>
+                  <div>
+                    <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest mb-1">Transaction ID</p>
+                    <p className="text-sm font-mono font-bold text-white break-all">{req.transactionId}</p>
+                  </div>
+                </div>
+
+                {req.status === 'pending' && (
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => handleApprovePurchase(req)}
+                      className="flex-1 bg-green-600 text-white py-3 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                    >
+                      <Check className="w-4 h-4" />
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleRejectPurchase(req)}
+                      className="flex-1 bg-red-600/20 text-red-500 border border-red-500/20 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-20 text-gray-500">No payment requests yet.</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

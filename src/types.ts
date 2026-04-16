@@ -20,6 +20,9 @@ export interface UserProfile {
   referredBy?: string;
   referralCount: number;
   isPremium: boolean;
+  unlockedClasses?: string[];
+  subscriptionExpiry?: string;
+  instagramUsername?: string;
   createdAt: string;
   onboardingCompleted?: boolean;
 }
@@ -88,4 +91,21 @@ export interface SubjectResource {
   fullNotesUrl?: string;
   importantQuestionsUrl?: string;
   examOrientedQuestionsUrl?: string;
+}
+
+export interface PurchaseRequest {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  planId: string;
+  planName: string;
+  amount: number;
+  transactionId: string;
+  status: 'pending' | 'approved' | 'rejected';
+  timestamp: string;
+  whatsappNumber?: string;
+  planType?: 'subscription' | 'one-time';
+  targetClass?: string;
+  instagramUsername?: string;
 }

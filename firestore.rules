@@ -54,6 +54,20 @@
 //   - content: string (required) - Message text
 //   - timestamp: string (required, iso8601) - Message timestamp
 //
+// Collection: purchase_requests
+// Document ID: {requestId}
+// Fields:
+//   - userId: string (required) - Buyer's UID
+//   - userEmail: string (required) - Buyer's email
+//   - userName: string (required) - Buyer's name
+//   - planId: string (required) - Selected plan ID
+//   - planName: string (required) - Selected plan name
+//   - amount: number (required) - Paid amount
+//   - transactionId: string (required) - UPI transaction ID
+//   - status: string (required, enum: ["pending", "approved", "rejected"])
+//   - timestamp: string (required, iso8601) - Request timestamp
+//   - whatsappNumber: string (optional) - Contact number
+//
 // ===============================================================
 
 rules_version = '2';
@@ -188,6 +202,20 @@ service cloud.firestore {
              isValidDateString(data.createdAt);
     }
 
+    function isValidPurchaseRequest(data) {
+      return data.keys().hasAll(['userId', 'userEmail', 'userName', 'planId', 'planName', 'amount', 'transactionId', 'status', 'timestamp']) &&
+             data.userId == request.auth.uid &&
+             isValidEmail(data.userEmail) &&
+             data.userName is string && data.userName.size() < 100 &&
+             data.planId is string &&
+             data.planName is string &&
+             data.amount is number &&
+             data.transactionId is string && data.transactionId.size() > 0 && data.transactionId.size() < 100 &&
+             data.status == 'pending' &&
+             isValidDateString(data.timestamp) &&
+             (!('whatsappNumber' in data) || (data.whatsappNumber is string && data.whatsappNumber.size() < 20));
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -280,6 +308,13 @@ service cloud.firestore {
                     request.resource.data.content.size() > 0 && 
                     request.resource.data.content.size() < 1000;
       allow update, delete: if isAdmin();
+    }
+
+    match /purchase_requests/{requestId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidPurchaseRequest(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     // Default deny

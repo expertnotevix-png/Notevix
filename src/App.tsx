@@ -14,11 +14,11 @@ import Profile from './pages/Profile';
 import Login from './pages/Login';
 import ChapterList from './pages/ChapterList';
 import NoteView from './pages/NoteView';
-import FocusTimer from './pages/FocusTimer';
 import Admin from './pages/Admin';
 import Leaderboard from './pages/Leaderboard';
 import Schedule from './pages/Schedule';
 import Notifications from './pages/Notifications';
+import PremiumNotes from './pages/PremiumNotes';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import AboutUs from './pages/AboutUs';
 import Contact from './pages/Contact';
@@ -392,7 +392,7 @@ export default function App() {
           
           <Route path="/class/:classId/:subjectId" element={user ? <ChapterList /> : <Navigate to="/login" />} />
           <Route path="/note/:noteId" element={user ? <NoteView user={user} /> : <Navigate to="/login" />} />
-          <Route path="/focus" element={user ? <FocusTimer user={user} /> : <Navigate to="/login" />} />
+          <Route path="/premium-notes" element={user ? <PremiumNotes user={user} /> : <Navigate to="/login" />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/about" element={<AboutUs />} />
           <Route path="/contact" element={<Contact user={user} />} />

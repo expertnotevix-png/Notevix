@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, BookOpen, MessageSquare, Trophy, ChevronRight, X } from 'lucide-react';
+import { Sparkles, BookOpen, MessageSquare, Trophy, ChevronRight, X, Instagram } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { toast } from 'sonner';
 
 interface OnboardingProps {
   userId: string;
@@ -37,24 +38,39 @@ const steps = [
     icon: Trophy,
     color: 'text-pink-400',
     bgColor: 'bg-pink-400/10'
+  },
+  {
+    title: 'Connect on Instagram',
+    description: 'Share your Instagram handle so we can tag you when you top the leaderboard! (Optional)',
+    icon: Instagram,
+    color: 'text-purple-500',
+    bgColor: 'bg-purple-500/10',
+    isInput: true
   }
 ];
 
 export function Onboarding({ userId, onComplete }: OnboardingProps) {
   const [currentStep, setCurrentStep] = useState(0);
+  const [instagram, setInstagram] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleNext = async () => {
     if (currentStep < steps.length - 1) {
       setCurrentStep(prev => prev + 1);
     } else {
+      setIsSubmitting(true);
       try {
         await updateDoc(doc(db, 'users', userId), {
-          onboardingCompleted: true
+          onboardingCompleted: true,
+          instagramUsername: instagram.trim() || null
         });
         onComplete();
       } catch (error) {
         console.error("Error completing onboarding:", error);
+        toast.error("Failed to save. Try again!");
         onComplete(); // Still complete locally if DB fails
+      } finally {
+        setIsSubmitting(false);
       }
     }
   };
@@ -95,6 +111,26 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
                 <h2 className="text-2xl font-black tracking-tight">{step.title}</h2>
                 <p className="text-gray-400 leading-relaxed">{step.description}</p>
               </div>
+
+              {(step as any).isInput && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="pt-2"
+                >
+                  <div className="relative group">
+                    <div className="absolute left-6 top-1/2 -translate-y-1/2 text-purple-500 font-bold">@</div>
+                    <input 
+                      type="text" 
+                      value={instagram}
+                      onChange={(e) => setInstagram(e.target.value)}
+                      placeholder="username"
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-6 text-sm font-bold focus:outline-none focus:border-purple-500 transition-all outline-none"
+                      autoFocus
+                    />
+                  </div>
+                </motion.div>
+              )}
             </motion.div>
           </AnimatePresence>
 
@@ -111,10 +147,17 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
 
           <button
             onClick={handleNext}
-            className="w-full py-4 purple-gradient rounded-2xl font-black text-lg shadow-xl shadow-purple-500/20 flex items-center justify-center gap-2 group"
+            disabled={isSubmitting}
+            className="w-full py-4 purple-gradient rounded-2xl font-black text-lg shadow-xl shadow-purple-500/20 flex items-center justify-center gap-2 group disabled:opacity-50"
           >
-            {currentStep === steps.length - 1 ? 'Get Started' : 'Next'}
-            <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            {isSubmitting ? (
+              <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <>
+                {currentStep === steps.length - 1 ? 'Get Started' : 'Next'}
+                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </>
+            )}
           </button>
         </div>
       </motion.div>

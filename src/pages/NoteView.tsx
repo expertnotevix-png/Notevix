@@ -4,7 +4,7 @@ import { doc, getDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firest
 import { db } from '../lib/firebase';
 import { Chapter, UserProfile } from '../types';
 import { motion } from 'motion/react';
-import { ChevronLeft, Bookmark, Download, Share2, Info, HelpCircle, CheckCircle2, Lock, Share2 as ShareIcon } from 'lucide-react';
+import { ChevronLeft, Bookmark, Download, Share2, Info, HelpCircle, CheckCircle2, Lock, Share2 as ShareIcon, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface NoteViewProps {
@@ -61,7 +61,7 @@ export default function NoteView({ user }: NoteViewProps) {
     );
   }
 
-  const isPremiumLocked = chapter.isPremium && !user.isPremium && user.role !== 'admin';
+  const isPremiumLocked = chapter.isPremium && !user.isPremium && !user.unlockedClasses?.includes(chapter.class) && user.role !== 'admin';
 
   return (
     <div className="min-h-screen bg-white text-gray-900 pb-24">
@@ -108,16 +108,25 @@ export default function NoteView({ user }: NoteViewProps) {
               
               <div className="bg-yellow-50 p-4 rounded-2xl border border-yellow-100">
                 <p className="text-xs font-bold text-yellow-700 uppercase tracking-widest mb-2">How to unlock?</p>
-                <p className="text-sm text-gray-700">Refer <span className="font-bold text-yellow-700">3 students</span> to NoteVix and get lifetime access to all premium notes!</p>
+                <p className="text-sm text-gray-700">Buy the <span className="font-bold text-yellow-700">Class {chapter.class} Pack</span> for ₹99 or refer 3 friends to NoteVix!</p>
               </div>
 
-              <button 
-                onClick={() => navigate('/profile')}
-                className="w-full bg-yellow-500 text-black font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-yellow-500/20 active:scale-95 transition-transform"
-              >
-                <ShareIcon className="w-5 h-5" />
-                Get Referral Link
-              </button>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => navigate('/premium-notes')}
+                  className="flex-1 bg-yellow-500 text-black font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-yellow-500/20 active:scale-95 transition-transform"
+                >
+                  <Sparkles className="w-5 h-5" />
+                  Buy Now
+                </button>
+                <button 
+                  onClick={() => navigate('/profile')}
+                  className="flex-1 bg-black text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                >
+                  <ShareIcon className="w-5 h-5" />
+                  Refer
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

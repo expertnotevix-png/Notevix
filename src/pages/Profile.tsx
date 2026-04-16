@@ -46,6 +46,12 @@ export default function Profile({ user }: ProfileProps) {
     toast.success(newState ? 'Study Mode On' : 'Study Mode Off');
   };
 
+  const updateInstagram = async (handle: string) => {
+    const userRef = doc(db, 'users', user.uid);
+    await updateDoc(userRef, { instagramUsername: handle.trim() });
+    toast.success('Instagram Handle Updated');
+  };
+
   const updateClass = async (cls: string) => {
     const userRef = doc(db, 'users', user.uid);
     await updateDoc(userRef, { class: cls });
@@ -167,6 +173,32 @@ export default function Profile({ user }: ProfileProps) {
         </div>
         <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${user.isPremium ? 'bg-yellow-500/20 text-yellow-500' : 'bg-purple-500/20 text-purple-400'}`}>
           {user.isPremium ? 'Pro' : 'Free'}
+        </div>
+      </div>
+
+      {/* Instagram Handle Settings */}
+      <div className="space-y-4">
+        <h3 className="font-bold text-gray-400 uppercase text-xs tracking-widest">Social Connection</h3>
+        <div className="glass-card p-5 rounded-3xl border-pink-500/20 bg-pink-500/5 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-pink-500/20 rounded-xl flex items-center justify-center">
+              <Instagram className="w-5 h-5 text-pink-500" />
+            </div>
+            <div>
+              <h4 className="font-bold text-sm">Instagram Handle</h4>
+              <p className="text-[10px] text-gray-500">Tagging you for ranks</p>
+            </div>
+          </div>
+          <div className="relative group">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-pink-500 font-bold">@</div>
+            <input 
+              type="text"
+              defaultValue={user.instagramUsername || ''}
+              onBlur={(e) => updateInstagram(e.target.value)}
+              placeholder="username"
+              className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-10 pr-4 text-sm font-bold focus:outline-none focus:border-pink-500 transition-all"
+            />
+          </div>
         </div>
       </div>
 

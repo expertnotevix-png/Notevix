@@ -21,6 +21,7 @@ import { Logo } from '../components/Logo';
 import { MotivationalCarousel } from '../components/MotivationalCarousel';
 import { AdBanner } from '../components/AdBanner';
 import { Onboarding } from '../components/Onboarding';
+import { FocusTimerWidget } from '../components/FocusTimerWidget';
 
 const classes = ['8', '9', '10'];
 
@@ -414,6 +415,8 @@ export default function Home({ user }: HomeProps) {
           </div>
         </motion.div>
       </div>
+
+      <FocusTimerWidget />
 
       {/* Class Selector */}
       <div className="space-y-4">
