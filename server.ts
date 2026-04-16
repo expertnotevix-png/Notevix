@@ -17,12 +17,14 @@ async function startServer() {
   });
 
   app.post("/api/ai/nvidia", async (req, res) => {
-    const nvidiaKey = process.env.VITE_NVIDIA_API || process.env.VITE_NVIDIA_API_KEY || process.env.NVIDIA_API_KEY;
+    const nvidiaKey = process.env.VITE_NVIDIA_API_KEY;
     if (!nvidiaKey) {
-      return res.status(500).json({ error: "NVIDIA API Key is not configured on the server." });
+      console.error("NVIDIA Proxy: Key missing in process.env");
+      return res.status(500).json({ error: "NVIDIA API Key (VITE_NVIDIA_API_KEY) is not configured on the server." });
     }
 
     try {
+      console.log("NVIDIA Proxy: Forwarding request for model", req.body.model);
       const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
         method: "POST",
         headers: {

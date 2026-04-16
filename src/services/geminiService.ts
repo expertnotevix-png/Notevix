@@ -4,14 +4,11 @@ let aiInstance: GoogleGenAI | null = null;
 
 function getAI() {
   if (!aiInstance) {
-    // Support both AI Studio (process.env) and external Vite deployments (VITE_ prefix)
-    // Note: In Cloudflare Pages, use a regular "Environment Variable", NOT a "Secret" 
-    // because Secrets are not available during the 'npm run build' process.
     const apiKey = (typeof process !== 'undefined' && (process.env?.GEMINI_API_KEY || process.env?.VITE_GEMINI_API_KEY)) || 
                    (import.meta as any).env?.VITE_GEMINI_API_KEY;
     
-    // Check for NVIDIA API Key if user wants to use NVIDIA
-    const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY || (import.meta as any).env?.VITE_NVIDIA_API;
+    // Check for NVIDIA API Key - Strictly use VITE_NVIDIA_API_KEY per user request
+    const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
     
     if (!apiKey && !nvidiaKey) {
       const isLocal = window.location.hostname === 'localhost' || window.location.hostname.includes('ais-dev');
@@ -37,8 +34,13 @@ function handleAIError(error: any): never {
   const errorString = error?.message?.toLowerCase() || "";
   
   // Specific NVIDIA errors
-  if (errorString.includes('unauthorized') || errorString.includes('401')) {
-    throw new Error("AI Configuration Error: The API key is invalid. Please check your NVIDIA or Gemini key in Settings! 🔑");
+  if (errorString.includes('unauthorized') || errorString.includes('401') || errorString.includes('invalid api key')) {
+    throw new Error("AI Configuration Error: The API key (VITE_NVIDIA_API_KEY) is invalid or missing. Please check your Secrets! 🔑");
+  }
+
+  // Handle descriptive error messages from the server
+  if (errorString.length > 10 && errorString.length < 200 && !errorString.includes('{')) {
+    throw new Error(error.message);
   }
 
   // Check for Rate Limit (429)
@@ -58,14 +60,14 @@ function handleAIError(error: any): never {
 export const geminiService = {
   async solveDoubt(query: string) {
     try {
-      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY || (import.meta as any).env?.VITE_NVIDIA_API;
+      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
       if (nvidiaKey) {
         return await this.callNvidiaAPI(query, "You are an expert CBSE Class 8-10 tutor. Answer the student's doubt in simple Hinglish (Hindi + English). Keep answers short, clear, and student-friendly. DO NOT use Markdown headers like '##' or '###'. DO NOT use '$' symbols for math unless it's a complex formula. Use plain bold text (e.g., **Heading**) for emphasis. Use bullet points for lists. Make it look like a friendly chat message, not a textbook.");
       }
 
       const ai = getAI();
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: query,
         config: {
           systemInstruction: "You are an expert CBSE Class 8-10 tutor. Answer the student's doubt in simple Hinglish (Hindi + English). Keep answers short, clear, and student-friendly. DO NOT use Markdown headers like '##' or '###'. DO NOT use '$' symbols for math unless it's a complex formula. Use plain bold text (e.g., **Heading**) for emphasis. Use bullet points for lists. Make it look like a friendly chat message, not a textbook.",
@@ -86,7 +88,7 @@ export const geminiService = {
     const system = "You are an expert CBSE exam paper setter for top-tier schools. You create high-quality, concept-based MCQs that challenge a student's understanding. Return ONLY raw JSON without markdown code blocks.";
 
     try {
-      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY || (import.meta as any).env?.VITE_NVIDIA_API;
+      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
       if (nvidiaKey) {
         const res = await this.callNvidiaAPI(prompt, system, true);
         return JSON.parse(res.replace(/```json|```/g, '').trim());
@@ -95,7 +97,7 @@ export const geminiService = {
       const ai = getAI();
       if (!ai) throw new Error("AI not initialized");
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: `Generate 5 MCQ questions for CBSE Class ${className} ${subject}.`,
         config: {
           responseMimeType: "application/json",
@@ -128,7 +130,7 @@ export const geminiService = {
     const system = "You are a helpful study assistant. Summarize the provided text into exactly 5 clear bullet points using simple Hinglish.";
 
     try {
-      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY || (import.meta as any).env?.VITE_NVIDIA_API;
+      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
       if (nvidiaKey) {
         return await this.callNvidiaAPI(prompt, system);
       }
@@ -136,7 +138,7 @@ export const geminiService = {
       const ai = getAI();
       if (!ai) throw new Error("AI not initialized");
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: `Summarize the following chapter text in 5 bullet points in simple Hinglish:\n\n${text}`,
         config: {
           systemInstruction: "You are a helpful study assistant. Summarize the provided text into exactly 5 clear bullet points using simple Hinglish.",
@@ -152,17 +154,17 @@ export const geminiService = {
     const system = "You are NoteVix AI, a friendly study assistant for CBSE students. Answer anything related to the CBSE syllabus. Keep responses concise and helpful. Use simple Hinglish (Hindi + English). DO NOT use Markdown headers like '##'. DO NOT use '$' symbols for simple variables. Use bold text (**text**) for emphasis. Keep the tone conversational and easy to read for students.";
 
     try {
-      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY || (import.meta as any).env?.VITE_NVIDIA_API;
+      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
       if (nvidiaKey) {
         // Simple chat simulation for Nvidia (joining history)
-        const chatPrompt = history.map(h => `${h.role}: ${h.parts[0].text}`).join("\n") + `\nuser: ${message}`;
+        const chatPrompt = history.map(h => `${h.role === 'model' ? 'assistant' : h.role}: ${h.parts[0].text}`).join("\n") + `\nuser: ${message}`;
         return await this.callNvidiaAPI(chatPrompt, system);
       }
 
       const ai = getAI();
       if (!ai) throw new Error("AI not initialized");
       const chat = ai.chats.create({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         config: {
           systemInstruction: "You are NoteVix AI, a friendly study assistant for CBSE students. Answer anything related to the CBSE syllabus. Keep responses concise and helpful. Use simple Hinglish (Hindi + English). DO NOT use Markdown headers like '##'. DO NOT use '$' symbols for simple variables. Use bold text (**text**) for emphasis. Keep the tone conversational and easy to read for students.",
         },
@@ -181,7 +183,7 @@ export const geminiService = {
     Return ONLY JSON: { "approved": boolean, "reason": "string if rejected" }`;
 
     try {
-      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY || (import.meta as any).env?.VITE_NVIDIA_API;
+      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
       if (nvidiaKey) {
         const res = await this.callNvidiaAPI(prompt, "You are a strict community moderator. Return ONLY raw JSON.", true);
         return JSON.parse(res.replace(/```json|```/g, '').trim());
@@ -190,7 +192,7 @@ export const geminiService = {
       const ai = getAI();
       if (!ai) return { approved: true };
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: `Analyze if this content is appropriate for a school study community. 
         Content: "${text}"
         Return JSON: { "approved": boolean, "reason": "string if rejected" }`,
@@ -224,7 +226,7 @@ export const geminiService = {
     }`;
 
     try {
-      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY || (import.meta as any).env?.VITE_NVIDIA_API;
+      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
       if (nvidiaKey) {
         const res = await this.callNvidiaAPI(prompt, "Expert CBSE Moderator. Return ONLY JSON.", true);
         return JSON.parse(res.replace(/```json|```/g, '').trim());
@@ -233,7 +235,7 @@ export const geminiService = {
       const ai = getAI();
       if (!ai) return { approved: true, isNotes: false };
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: `Analyze this student's question for a community forum:
         Title: ${title}
         Description: ${description}
@@ -268,7 +270,7 @@ export const geminiService = {
     Description: ${description}`;
 
     try {
-      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY || (import.meta as any).env?.VITE_NVIDIA_API;
+      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
       if (nvidiaKey) {
         return await this.callNvidiaAPI(prompt, "Expert CBSE Tutor.");
       }
@@ -276,7 +278,7 @@ export const geminiService = {
       const ai = getAI();
       if (!ai) throw new Error("AI not initialized");
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: `Provide a helpful, expert answer to this student's question for the community forum.
         Title: ${title}
         Description: ${description}`,
