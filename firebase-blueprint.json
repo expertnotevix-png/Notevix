@@ -218,6 +218,39 @@
         "whatsappNumber": { "type": "string" }
       },
       "required": ["userId", "userEmail", "planId", "transactionId", "status", "timestamp"]
+    },
+    "StudyGroup": {
+      "title": "StudyGroup",
+      "description": "Public study groups for users to join and chat",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "creatorName": { "type": "string" },
+        "memberCount": { "type": "number" },
+        "class": { "type": "string" },
+        "subject": { "type": "string" },
+        "isPublic": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "creatorId", "createdAt"]
+    },
+    "GroupMessage": {
+      "title": "GroupMessage",
+      "description": "Chat message within a study group",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "groupId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhoto": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["groupId", "userId", "text", "timestamp"]
     }
   },
   "firestore": {
@@ -272,6 +305,14 @@
     "/purchase_requests/{requestId}": {
       "schema": "PurchaseRequest",
       "description": "Premium purchase requests"
+    },
+    "/study_groups/{groupId}": {
+      "schema": "StudyGroup",
+      "description": "Public study groups"
+    },
+    "/study_groups/{groupId}/messages/{messageId}": {
+      "schema": "GroupMessage",
+      "description": "Chat messages within a group"
     }
   }
 }

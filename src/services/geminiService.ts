@@ -76,12 +76,11 @@ export const geminiService = {
   },
 
   async generateQuiz(subject: string, className: string) {
-    const prompt = `Generate 5 challenging MCQ questions for CBSE Class ${className} ${subject} based on the standard NCERT syllabus. 
-    Ensure the questions are of high quality, covering conceptual understanding and actual exam-style difficulty. 
-    Avoid extremely basic/obvious questions. Include a mix of theory and practical problems if applicable.
-    Return ONLY a JSON array of objects.
-    Each object must have: question (string), options (array of 4 strings), correctAnswer (string matching one option), explanation (string).`;
-    const system = "You are an expert CBSE exam paper setter for top-tier schools. Return ONLY raw JSON without markdown code blocks.";
+    const prompt = `CBSE Class ${className} ${subject} Quiz:
+    Generate 5 deep NCERT MCQs.
+    Format: JSON array of objects.
+    Fields: question, options (4), correctAnswer, explanation.`;
+    const system = "Expert CBSE Exam Setter. ONLY raw JSON []. No markdown.";
 
     try {
       const { apiKey, nvidiaKey } = getAI();
@@ -90,7 +89,7 @@ export const geminiService = {
           const res = await this.callNvidiaAPI(prompt, system, true);
           return JSON.parse(res.replace(/```json|```/g, '').trim());
         } catch (nvidiaErr) {
-          console.warn("NVIDIA Quiz failed, falling back to Gemini:", nvidiaErr);
+          console.warn("NVIDIA Quiz slow/failed, jumping to Gemini...");
         }
       }
 
@@ -98,7 +97,7 @@ export const geminiService = {
         const res = await this.callGeminiDirect(prompt, system, apiKey);
         return JSON.parse(res.replace(/```json|```/g, '').trim());
       }
-      throw new Error("No AI providers available");
+      throw new Error("AI engine currently busy. Please try again in 30 seconds.");
     } catch (error) {
       return handleAIError(error);
     }
@@ -121,7 +120,35 @@ export const geminiService = {
       if (apiKey) {
         return await this.callGeminiDirect(prompt, system, apiKey);
       }
-      throw new Error("No AI providers available");
+      throw new Error("AI engine currently busy. Please try again in 30 seconds.");
+    } catch (error) {
+      return handleAIError(error);
+    }
+  },
+
+  async summarizeLongText(text: string, pageCount: number) {
+    // Dynamic summary length: 50 pages -> 2 pages (~1000 words), 20 pages -> 1 page (~500 words)
+    const targetWords = pageCount >= 40 ? 1000 : pageCount >= 20 ? 500 : 300;
+    const prompt = `Please provide a detailed, comprehensive summary of this study material.
+    Material length: ${pageCount} pages.
+    Target summary length: approx ${targetWords} words.
+    Style: Detailed yet easy to read, use bullet points for key concepts, bold terms, and Hinglish.
+    
+    Content:
+    ${text}`;
+    
+    const system = `Expert Academic Summarizer. Provide a ${targetWords}-word detailed breakdown. Focus on core concepts and exam points.`;
+
+    try {
+      const { apiKey, nvidiaKey } = getAI();
+      // For very long text, Gemini is better due to 1M token window
+      if (apiKey) {
+        return await this.callGeminiDirect(prompt, system, apiKey);
+      }
+      if (nvidiaKey) {
+        return await this.callNvidiaAPI(prompt, system);
+      }
+      throw new Error("AI engine currently busy.");
     } catch (error) {
       return handleAIError(error);
     }
@@ -243,15 +270,20 @@ export const geminiService = {
   },
 
   async callNvidiaAPI(prompt: string, systemInstruction: string, isJson: boolean = false) {
-    const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
-    console.log("AI Transition: Attempting NVIDIA call. Key detected:", nvidiaKey ? "YES (Partial: " + nvidiaKey.substring(0, 8) + "...)" : "NO");
+    const { nvidiaKey } = getAI();
+    console.log("AI Transition: Attempting NVIDIA call...");
     const model = "meta/llama-3.1-70b-instruct"; 
+
+    // Create a timeout controller to speed up fallbacks
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
     try {
       // 1. Try server-side first (Secure)
       const response = await fetch("/api/ai/nvidia", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           model,
           messages: [
@@ -263,13 +295,9 @@ export const geminiService = {
         })
       });
 
-      // If server returns 405/404, it might mean we are on a platform that doesn't 
-      // support the Express backend. But we now have /functions/api/ai/nvidia.js!
+      clearTimeout(timeoutId);
+
       if (response.status === 405 || response.status === 404 || response.status === 500) {
-        const errorText = await response.text();
-        console.warn(`Backend Proxy Issue (${response.status}):`, errorText);
-        
-        // If Backend proxy fails or is missing, try direct as absolute last resort
         if (nvidiaKey) {
           return await this.callNvidiaDirect(prompt, systemInstruction, nvidiaKey, model, isJson);
         }
@@ -290,32 +318,46 @@ export const geminiService = {
 
       return data.choices[0].message.content;
     } catch (error: any) {
-      // 2. If server fetch failed entirely (Network error), try direct if key exists
-      if (nvidiaKey && (error.message.includes('fetch') || error.message.includes('Network'))) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error("NVIDIA took too long (>15s). Moving to secondary engine...");
+      }
+      
+      if (nvidiaKey && (error.message?.includes('fetch') || error.message?.includes('Network'))) {
         return await this.callNvidiaDirect(prompt, systemInstruction, nvidiaKey, model, isJson);
       }
-      console.error("NVIDIA API Error:", error);
       throw error;
     }
   },
 
   async callNvidiaDirect(prompt: string, system: string, key: string, model: string, isJson: boolean) {
-    const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${key}`
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
-        temperature: isJson ? 0.1 : 0.6,
-        max_tokens: 1536,
-      })
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000); // Shorter 12s for direct fallback
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data?.error?.message || "NVIDIA Direct Call Failed");
-    return data.choices[0].message.content;
+    try {
+      const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${key}`
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
+          temperature: isJson ? 0.1 : 0.6,
+          max_tokens: 1536,
+        })
+      });
+
+      clearTimeout(timeoutId);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error?.message || "NVIDIA Direct Call Failed");
+      return data.choices[0].message.content;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') throw new Error("NVIDIA Direct timed out.");
+      throw error;
+    }
   }
 };

@@ -68,6 +68,29 @@
 //   - timestamp: string (required, iso8601) - Request timestamp
 //   - whatsappNumber: string (optional) - Contact number
 //
+// Collection: study_groups
+// Document ID: {groupId}
+// Fields:
+//   - name: string (required) 
+//   - description: string (optional)
+//   - creatorId: string (required)
+//   - creatorName: string (optional)
+//   - memberCount: number (optional)
+//   - class: string (optional)
+//   - subject: string (optional)
+//   - isPublic: bool (optional)
+//   - createdAt: string (required, iso8601)
+//
+// Collection: group_messages (subcollection of study_groups)
+// Document ID: {messageId}
+// Fields:
+//   - groupId: string (required)
+//   - userId: string (required)
+//   - userName: string (required)
+//   - userPhoto: string (optional)
+//   - text: string (required)
+//   - timestamp: string (required, iso8601)
+//
 // ===============================================================
 
 rules_version = '2';
@@ -216,6 +239,25 @@ service cloud.firestore {
              (!('whatsappNumber' in data) || (data.whatsappNumber is string && data.whatsappNumber.size() < 20));
     }
 
+    function isValidStudyGroup(data) {
+      return data.keys().hasAll(['name', 'creatorId', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.creatorId == request.auth.uid &&
+             (data.createdAt is timestamp || isValidDateString(data.createdAt)) &&
+             (!('description' in data) || (data.description is string && data.description.size() < 500)) &&
+             (!('class' in data) || data.class is string) &&
+             (!('subject' in data) || data.subject is string) &&
+             (!('isPublic' in data) || data.isPublic is bool);
+    }
+
+    function isValidGroupMessage(data) {
+      return data.keys().hasAll(['groupId', 'userId', 'userName', 'text', 'timestamp']) &&
+             data.userId == request.auth.uid &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 2000 &&
+             (data.timestamp is timestamp || isValidDateString(data.timestamp)) &&
+             (!('userPhoto' in data) || isValidUrl(data.userPhoto));
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -315,6 +357,22 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isValidPurchaseRequest(request.resource.data);
       allow update: if isAdmin();
       allow delete: if isAdmin();
+    }
+
+    match /study_groups/{groupId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && !isBanned() && isValidStudyGroup(request.resource.data);
+      allow update: if isAdmin() || (isAuthenticated() && !isBanned() && (
+        isOwner(resource.data.creatorId) || 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
+      ));
+      allow delete: if isAdmin() || (isAuthenticated() && isOwner(resource.data.creatorId));
+
+      match /messages/{messageId} {
+        allow read: if true;
+        allow create: if isAuthenticated() && !isBanned() && isValidGroupMessage(request.resource.data);
+        allow update, delete: if isAdmin() || (isAuthenticated() && isOwner(resource.data.userId));
+      }
     }
 
     // Default deny
