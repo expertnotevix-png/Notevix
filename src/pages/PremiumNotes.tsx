@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, Crown, Check, ShieldCheck, QrCode, Copy, ExternalLink, X, Send, CreditCard } from 'lucide-react';
 import { UserProfile, PurchaseRequest } from '../types';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { toast } from 'sonner';
 
 interface PremiumNotesProps {
@@ -63,24 +63,21 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   const upiId = (import.meta as any).env?.VITE_UPI_ID || '9236489649@mbk';
 
   useEffect(() => {
-    checkExistingRequests();
-  }, [user]);
+    // 1. Check for pending requests in real-time
+    const q = query(
+      collection(db, 'purchase_requests'),
+      where('userId', '==', user.uid),
+      where('status', '==', 'pending')
+    );
 
-  const checkExistingRequests = async () => {
-    try {
-      const q = query(
-        collection(db, 'purchase_requests'),
-        where('userId', '==', user.uid),
-        where('status', '==', 'pending')
-      );
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        setHasPendingRequest(true);
-      }
-    } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'purchase_requests');
-    }
-  };
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setHasPendingRequest(!snap.empty);
+    }, (error) => {
+      console.error("Error monitoring purchase requests:", error);
+    });
+
+    return () => unsubscribe();
+  }, [user.uid]);
 
   const handlePurchase = async () => {
     if (!transactionId || !whatsapp) {

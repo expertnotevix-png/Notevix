@@ -350,7 +350,11 @@ export default function Admin() {
         timestamp: new Date().toISOString()
       });
 
-      alert("Purchase approved and user upgraded!");
+      // 5. Refresh Admin View
+      if (activeTab === 'users') fetchUsers();
+      if (activeTab === 'payments') fetchPurchaseRequests();
+
+      alert("Purchase approved and student upgraded!");
     } catch (error) {
       console.error(error);
       handleFirestoreError(error, OperationType.UPDATE, `purchase_requests/${req.id}`);

@@ -7,7 +7,7 @@ import { geminiService } from '../services/geminiService';
 import * as pdfjs from 'pdfjs-dist';
 
 // Configure PDF.js worker
-const workerUrl = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+const workerUrl = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.6.205/pdf.worker.min.js`;
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 import ReactMarkdown from 'react-markdown';
@@ -62,9 +62,9 @@ export default function Summarizer() {
 
       setText(fullText);
       setMode('text'); // Switch to text mode to show the content
-    } catch (err) {
+    } catch (err: any) {
       console.error("PDF Parsing Error:", err);
-      setError("Failed to read PDF. Make sure it's not password protected.");
+      setError(`Failed to read PDF: ${err.message || 'Unknown error'}. Make sure it's not password protected.`);
     } finally {
       setParsingPdf(false);
     }
