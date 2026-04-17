@@ -305,12 +305,22 @@ export default function Admin() {
 
   const handleApprovePurchase = async (req: PurchaseRequest) => {
     try {
-      // 1. Update request status
+      // 1. Find user document (don't assume doc ID == UID)
+      const userQuery = query(collection(db, 'users'), where('uid', '==', req.userId));
+      const userSnap = await getDocs(userQuery);
+      
+      if (userSnap.empty) {
+        alert("User record not found! Check if the student deleted their account.");
+        return;
+      }
+
+      const userDoc = userSnap.docs[0];
+      const userRef = doc(db, 'users', userDoc.id);
+      
+      // 2. Update request status
       await updateDoc(doc(db, 'purchase_requests', req.id), { status: 'approved' });
       
-      // 2. Grant access to user
-      const userRef = doc(db, 'users', req.userId);
-      
+      // 3. Grant access to user
       if (req.planType === 'subscription') {
         // Subscription grants everything
         await updateDoc(userRef, { 
@@ -319,8 +329,7 @@ export default function Admin() {
         });
       } else if (req.planType === 'one-time' && req.targetClass) {
         // One-time grants specific class
-        const userSnap = await getDocs(query(collection(db, 'users'), where('uid', '==', req.userId)));
-        const currentUnlocked = (userSnap.docs[0]?.data()?.unlockedClasses || []) as string[];
+        const currentUnlocked = (userDoc.data()?.unlockedClasses || []) as string[];
         if (!currentUnlocked.includes(req.targetClass)) {
           await updateDoc(userRef, { 
             unlockedClasses: [...currentUnlocked, req.targetClass] 
@@ -331,7 +340,7 @@ export default function Admin() {
         await updateDoc(userRef, { isPremium: true });
       }
       
-      // 3. Notify user
+      // 4. Notify user
       await addDoc(collection(db, 'notifications'), {
         userId: req.userId,
         title: 'Premium Activated! 👑',
@@ -538,11 +547,23 @@ export default function Admin() {
                   {u.isPremium && (
                     <span className="bg-yellow-500/20 text-yellow-500 text-[8px] font-black px-2 py-1 rounded-lg uppercase tracking-widest">PRO</span>
                   )}
+                  {u.unlockedClasses?.length > 0 && u.unlockedClasses.map((c: string) => (
+                    <span key={c} className="bg-blue-500/20 text-blue-400 text-[8px] font-bold px-2 py-1 rounded-lg uppercase tracking-widest">C{c}</span>
+                  ))}
                   <button 
                     onClick={async () => {
                       if(window.confirm(`Delete ${u.displayName}?`)) {
-                        await deleteDoc(doc(db, 'users', u.uid));
-                        fetchUsers();
+                        try {
+                          // Find document by UID query to get actual doc id
+                          const q = query(collection(db, 'users'), where('uid', '==', u.uid));
+                          const snap = await getDocs(q);
+                          if (!snap.empty) {
+                            await deleteDoc(doc(db, 'users', snap.docs[0].id));
+                            fetchUsers();
+                          }
+                        } catch (err) {
+                          console.error("Delete error:", err);
+                        }
                       }
                     }}
                     className="p-2 bg-white/5 rounded-xl text-gray-500 hover:text-red-500 transition-colors"

@@ -7,7 +7,8 @@ import { geminiService } from '../services/geminiService';
 import * as pdfjs from 'pdfjs-dist';
 
 // Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+const workerUrl = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -37,11 +38,28 @@ export default function Summarizer() {
       setPageCount(numPages);
 
       for (let i = 1; i <= numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item: any) => item.str).join(' ');
-        fullText += pageText + '\n';
+        try {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items
+            .map((item: any) => item.str)
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          
+          if (pageText) {
+            fullText += pageText + '\n\n';
+          }
+        } catch (pageErr) {
+          console.warn(`Error on page ${i}:`, pageErr);
+          continue;
+        }
       }
+
+      if (!fullText.trim()) {
+        throw new Error("No readable text found in this PDF. It might be scanned or image-only.");
+      }
+
       setText(fullText);
       setMode('text'); // Switch to text mode to show the content
     } catch (err) {
