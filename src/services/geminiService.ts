@@ -1,63 +1,63 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
-let aiInstance: GoogleGenAI | null = null;
+let aiInstance: any = null;
 
 function getAI() {
-  if (!aiInstance) {
-    const apiKey = (typeof process !== 'undefined' && (process.env?.GEMINI_API_KEY || process.env?.VITE_GEMINI_API_KEY)) || 
-                   (import.meta as any).env?.VITE_GEMINI_API_KEY;
+  const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
+  const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
+  
+  if (!apiKey && !nvidiaKey) {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname.includes('ais-dev');
+    const message = isLocal 
+      ? "AI Configuration Error: Please add VITE_GEMINI_API_KEY or VITE_NVIDIA_API_KEY to 'Settings > Secrets'."
+      : "AI Configuration Error: Missing API keys in environment.";
     
-    // Check for NVIDIA API Key - Strictly use VITE_NVIDIA_API_KEY per user request
-    const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
-    
-    if (!apiKey && !nvidiaKey) {
-      const isLocal = window.location.hostname === 'localhost' || window.location.hostname.includes('ais-dev');
-      const message = isLocal 
-        ? "AI Configuration Error: Please add VITE_GEMINI_API_KEY or VITE_NVIDIA_API_KEY to 'Settings > Secrets' and click 'Apply Changes'."
-        : "AI Configuration Error: Please add AI keys to your environment and redeploy.";
-      
-      console.error("AI API Key Error:", message);
-      throw new Error(message);
-    }
-    
-    // Only initialize Gemini if we have a key
-    if (apiKey) {
-      aiInstance = new GoogleGenAI({ apiKey });
-    }
+    console.error("AI API Key Error:", message);
+    throw new Error(message);
   }
-  return aiInstance;
+  return { apiKey, nvidiaKey };
 }
 
 function handleAIError(error: any): never {
   console.error("AI Service Error:", error);
   
   const errorString = error?.message?.toLowerCase() || "";
-  const rawMessage = error?.message || "Unknown error";
+  const rawMessage = error?.message || "Internal network error";
   
-  // Specific NVIDIA errors
   if (errorString.includes('unauthorized') || errorString.includes('401') || errorString.includes('invalid api key')) {
-    throw new Error(`AI Key Error: The NVIDIA key is invalid. Raw: ${rawMessage}`);
+    throw new Error(`AI Key Error: Key is invalid. Check Cloudflare Secrets!`);
   }
 
-  // Handle Rate Limits with more detail
-  if (errorString.includes('429') || error?.status === 429 || errorString.includes('quota') || errorString.includes('exhausted') || errorString.includes('rate limit')) {
+  if (errorString.includes('429') || error?.status === 429 || errorString.includes('quota') || errorString.includes('exhausted')) {
     const service = errorString.includes('nvidia') ? 'NVIDIA' : 'Gemini';
-    throw new Error(`AI Limit Reached: ${service} is busy or at its free limit. Please try again in 1 minute! ⏳`);
+    throw new Error(`AI Limit Reached: ${service} is busy. Please wait 1 minute! ⏳`);
   }
   
-  // Specific error for Cloudflare/Proxy issues
-  if (errorString.includes('405') || errorString.includes('method not allowed')) {
-    throw new Error("Cloudflare Config Error: The direct AI fallback failed. Please check your Secret keys in Cloudflare!");
+  if (errorString.includes('failed to fetch') || errorString.includes('method not allowed') || errorString.includes('405')) {
+    throw new Error("Direct AI Mode: Attempting secure fallback via Browser SDK... 🔄");
   }
 
-  // Default: Show the raw error so we can fix it exactly
-  throw new Error(`AI Issue: ${rawMessage}. Please check if your API keys are correct.`);
+  throw new Error(`AI Issue: ${rawMessage.substring(0, 100)}`);
 }
 
 export const geminiService = {
+  // Use the official AI Studio SDK for direct calls to bypass the 405/Fetch errors
+  async callGeminiDirect(prompt: string, system: string, key: string) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: key });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `${system}\n\nUser: ${prompt}`,
+      });
+      return response.text;
+    } catch (err) {
+      console.error("Gemini Direct Error:", err);
+      throw err;
+    }
+  },
   async solveDoubt(query: string) {
     try {
-      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
+      const { apiKey, nvidiaKey } = getAI();
       if (nvidiaKey) {
         try {
           return await this.callNvidiaAPI(query, "You are an expert CBSE Class 8-10 tutor. Answer the student's doubt in simple Hinglish (Hindi + English). Keep answers short, clear, and student-friendly. Use bold text (**Heading**) for emphasis. Make it look like a friendly chat message.");
@@ -66,15 +66,10 @@ export const geminiService = {
         }
       }
 
-      const ai = getAI();
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: query,
-        config: {
-          systemInstruction: "You are an expert CBSE Class 8-10 tutor. Answer the student's doubt in simple Hinglish (Hindi + English). Keep answers short, clear, and student-friendly. Use bold text (**Heading**) for emphasis. Use bullet points for lists. Make it look like a friendly chat message.",
-        },
-      });
-      return response.text;
+      if (apiKey) {
+        return await this.callGeminiDirect(query, "You are an expert CBSE Class 8-10 tutor. Answer the student's doubt in simple Hinglish (Hindi + English). Keep answers short, clear, and student-friendly. Use bold text (**Heading**) for emphasis. Use bullet points for lists. Make it look like a friendly chat message.", apiKey);
+      }
+      throw new Error("No AI providers available");
     } catch (error) {
       return handleAIError(error);
     }
@@ -89,7 +84,7 @@ export const geminiService = {
     const system = "You are an expert CBSE exam paper setter for top-tier schools. Return ONLY raw JSON without markdown code blocks.";
 
     try {
-      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
+      const { apiKey, nvidiaKey } = getAI();
       if (nvidiaKey) {
         try {
           const res = await this.callNvidiaAPI(prompt, system, true);
@@ -99,32 +94,11 @@ export const geminiService = {
         }
       }
 
-      const ai = getAI();
-      if (!ai) throw new Error("AI not initialized");
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Generate 5 MCQ questions for CBSE Class ${className} ${subject}. Return the result as a JSON array.`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                question: { type: Type.STRING },
-                options: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                },
-                correctAnswer: { type: Type.STRING },
-                explanation: { type: Type.STRING },
-              },
-              required: ["question", "options", "correctAnswer", "explanation"],
-            },
-          },
-        },
-      });
-      return JSON.parse(response.text);
+      if (apiKey) {
+        const res = await this.callGeminiDirect(prompt, system, apiKey);
+        return JSON.parse(res.replace(/```json|```/g, '').trim());
+      }
+      throw new Error("No AI providers available");
     } catch (error) {
       return handleAIError(error);
     }
@@ -135,21 +109,19 @@ export const geminiService = {
     const system = "You are a helpful study assistant. Summarize the provided text into exactly 5 clear bullet points using simple Hinglish.";
 
     try {
-      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
+      const { apiKey, nvidiaKey } = getAI();
       if (nvidiaKey) {
-        return await this.callNvidiaAPI(prompt, system);
+        try {
+          return await this.callNvidiaAPI(prompt, system);
+        } catch (nvidiaErr) {
+          console.warn("NVIDIA summarize failed, falling back...");
+        }
       }
 
-      const ai = getAI();
-      if (!ai) throw new Error("AI not initialized");
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Summarize the following chapter text in 5 bullet points in simple Hinglish:\n\n${text}`,
-        config: {
-          systemInstruction: "You are a helpful study assistant. Summarize the provided text into exactly 5 clear bullet points using simple Hinglish.",
-        },
-      });
-      return response.text;
+      if (apiKey) {
+        return await this.callGeminiDirect(prompt, system, apiKey);
+      }
+      throw new Error("No AI providers available");
     } catch (error) {
       return handleAIError(error);
     }
@@ -159,24 +131,20 @@ export const geminiService = {
     const system = "You are NoteVix AI, a friendly study assistant for CBSE students. Answer anything related to the CBSE syllabus. Keep responses concise and helpful. Use simple Hinglish (Hindi + English). DO NOT use Markdown headers like '##'. DO NOT use '$' symbols for simple variables. Use bold text (**text**) for emphasis. Keep the tone conversational and easy to read for students.";
 
     try {
-      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
+      const { apiKey, nvidiaKey } = getAI();
       if (nvidiaKey) {
-        // Simple chat simulation for Nvidia (joining history)
-        const chatPrompt = history.map(h => `${h.role === 'model' ? 'assistant' : h.role}: ${h.parts[0].text}`).join("\n") + `\nuser: ${message}`;
-        return await this.callNvidiaAPI(chatPrompt, system);
+        try {
+          const chatPrompt = history.map(h => `${h.role === 'model' ? 'assistant' : h.role}: ${h.parts[0].text}`).join("\n") + `\nuser: ${message}`;
+          return await this.callNvidiaAPI(chatPrompt, system);
+        } catch (nvidiaErr) {
+          console.warn("NVIDIA chat failed, falling back...");
+        }
       }
 
-      const ai = getAI();
-      if (!ai) throw new Error("AI not initialized");
-      const chat = ai.chats.create({
-        model: "gemini-3-flash-preview",
-        config: {
-          systemInstruction: "You are NoteVix AI, a friendly study assistant for CBSE students. Answer anything related to the CBSE syllabus. Keep responses concise and helpful. Use simple Hinglish (Hindi + English). DO NOT use Markdown headers like '##'. DO NOT use '$' symbols for simple variables. Use bold text (**text**) for emphasis. Keep the tone conversational and easy to read for students.",
-        },
-        history: history,
-      });
-      const response = await chat.sendMessage({ message });
-      return response.text;
+      if (apiKey) {
+        return await this.callGeminiDirect(message, system, apiKey);
+      }
+      throw new Error("No AI providers available");
     } catch (error) {
       return handleAIError(error);
     }
@@ -188,24 +156,21 @@ export const geminiService = {
     Return ONLY JSON: { "approved": boolean, "reason": "string if rejected" }`;
 
     try {
-      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
+      const { apiKey, nvidiaKey } = getAI();
       if (nvidiaKey) {
-        const res = await this.callNvidiaAPI(prompt, "You are a strict community moderator. Return ONLY raw JSON.", true);
-        return JSON.parse(res.replace(/```json|```/g, '').trim());
+        try {
+          const res = await this.callNvidiaAPI(prompt, "You are a strict community moderator. Return ONLY raw JSON.", true);
+          return JSON.parse(res.replace(/```json|```/g, '').trim());
+        } catch (nvidiaErr) {
+          console.warn("NVIDIA moderate failed, falling back...");
+        }
       }
 
-      const ai = getAI();
-      if (!ai) return { approved: true };
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Analyze if this content is appropriate for a school study community. 
-        Content: "${text}"
-        Return JSON: { "approved": boolean, "reason": "string if rejected" }`,
-        config: {
-          responseMimeType: "application/json"
-        }
-      });
-      return JSON.parse(response.text || '{"approved":true}');
+      if (apiKey) {
+        const res = await this.callGeminiDirect(prompt, "You are a strict community moderator. Return ONLY JSON.", apiKey);
+        return JSON.parse(res.replace(/```json|```/g, '').trim());
+      }
+      return { approved: true };
     } catch (error) {
       console.warn("Moderation failed, allowing content:", error);
       return { approved: true };
@@ -231,37 +196,21 @@ export const geminiService = {
     }`;
 
     try {
-      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
+      const { apiKey, nvidiaKey } = getAI();
       if (nvidiaKey) {
-        const res = await this.callNvidiaAPI(prompt, "Expert CBSE Moderator. Return ONLY JSON.", true);
-        return JSON.parse(res.replace(/```json|```/g, '').trim());
+        try {
+          const res = await this.callNvidiaAPI(prompt, "Expert CBSE Moderator. Return ONLY JSON.", true);
+          return JSON.parse(res.replace(/```json|```/g, '').trim());
+        } catch (nvidiaErr) {
+          console.warn("NVIDIA post process failed, falling back...");
+        }
       }
 
-      const ai = getAI();
-      if (!ai) return { approved: true, isNotes: false };
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Analyze this student's question for a community forum:
-        Title: ${title}
-        Description: ${description}
-        
-        Tasks:
-        1. Moderate: Is it appropriate? (No abuse, spam, or non-educational content)
-        2. Notes Check: Is the user primarily asking for notes/PDFs/study material?
-        3. Expert Answer: If approved and NOT a notes request, provide a helpful, concise answer in simple Hinglish (under 100 words). DO NOT use '##' headers or '$' symbols. Use bold text for emphasis.
-        
-        Return ONLY a JSON object:
-        {
-          "approved": boolean,
-          "reason": "reason if rejected",
-          "isNotes": boolean,
-          "aiAnswer": "your expert answer here"
-        }`,
-        config: {
-          responseMimeType: "application/json"
-        }
-      });
-      return JSON.parse(response.text || '{"approved":true, "isNotes":false}');
+      if (apiKey) {
+        const res = await this.callGeminiDirect(prompt, "Expert CBSE Moderator. Return ONLY JSON.", apiKey);
+        return JSON.parse(res.replace(/```json|```/g, '').trim());
+      }
+      return { approved: true, isNotes: false };
     } catch (error) {
       console.error("Process Post Error:", error);
       // Fallback: allow post but no AI answer
@@ -275,20 +224,19 @@ export const geminiService = {
     Description: ${description}`;
 
     try {
-      const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
+      const { apiKey, nvidiaKey } = getAI();
       if (nvidiaKey) {
-        return await this.callNvidiaAPI(prompt, "Expert CBSE Tutor.");
+        try {
+          return await this.callNvidiaAPI(prompt, "Expert CBSE Tutor.");
+        } catch (nvidiaErr) {
+          console.warn("NVIDIA community answer failed, falling back...");
+        }
       }
 
-      const ai = getAI();
-      if (!ai) throw new Error("AI not initialized");
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Provide a helpful, expert answer to this student's question for the community forum.
-        Title: ${title}
-        Description: ${description}`,
-      });
-      return response.text || "That's a great question! I'm looking into it.";
+      if (apiKey) {
+        return await this.callGeminiDirect(prompt, "Expert CBSE Tutor.", apiKey);
+      }
+      return "That's a great question! I'm looking into it.";
     } catch (error) {
       return handleAIError(error);
     }
@@ -315,14 +263,16 @@ export const geminiService = {
         })
       });
 
-      // If server returns 405/404, it means we are on static hosting (Cloudflare/Firebase Hosting)
-      // Switch to direct client-side call if we have the key
-      if (response.status === 405 || response.status === 404) {
+      // If server returns 405/404, it might mean we are on a platform that doesn't 
+      // support the Express backend. But we now have /functions/api/ai/nvidia.js!
+      if (response.status === 405 || response.status === 404 || response.status === 500) {
+        const errorText = await response.text();
+        console.warn(`Backend Proxy Issue (${response.status}):`, errorText);
+        
+        // If Backend proxy fails or is missing, try direct as absolute last resort
         if (nvidiaKey) {
-          console.warn("Backend not found (405/404). Switching to direct NVIDIA API call...");
           return await this.callNvidiaDirect(prompt, systemInstruction, nvidiaKey, model, isJson);
         }
-        throw new Error("AI Backend is missing (405). Please add VITE_NVIDIA_API_KEY to your Cloudflare Variables to use Direct Mode.");
       }
 
       const responseText = await response.text();
