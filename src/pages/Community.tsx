@@ -82,17 +82,18 @@ export default function Community({ user }: { user: UserProfile | null }) {
       console.error("Community stats listener error:", error);
     });
 
-    // Fetch Global Chat Messages - Optimized limit
+    // Fetch Global Chat Messages - Optimized to get LATEST
     let chatUnsub: () => void = () => {};
     if (user) {
       const chatQuery = query(
         collection(db, 'community_chat'),
-        orderBy('timestamp', 'asc'),
+        orderBy('timestamp', 'desc'),
         limit(50)
       );
       chatUnsub = onSnapshot(chatQuery, (snapshot) => {
         const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ChatMessage[];
-        setMessages(msgs);
+        // Reverse for UI to show oldest at top, newest at bottom
+        setMessages([...msgs].reverse());
         if (activeTab === 'chat') {
           setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
         }
@@ -101,8 +102,8 @@ export default function Community({ user }: { user: UserProfile | null }) {
       });
     }
 
-    // Fetch Posts - Optimized queries
-    let postsQuery = query(collection(db, 'posts'), where('status', '==', 'approved'), limit(20));
+    // Fetch Posts - Increased limit to prevent perceived deletion
+    let postsQuery = query(collection(db, 'posts'), where('status', '==', 'approved'), limit(50));
     if (filterSubject !== 'All') postsQuery = query(postsQuery, where('subject', '==', filterSubject));
     if (filterClass !== 'All') postsQuery = query(postsQuery, where('class', '==', filterClass));
     if (sortBy === 'latest') postsQuery = query(postsQuery, orderBy('createdAt', 'desc'));

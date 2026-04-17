@@ -34,16 +34,17 @@ export default function GroupChat({
   useEffect(() => {
     if (!group?.id) return;
     
-    // Performance Optimization: limit to 50 for faster initial load
+    // Performance Optimization: Fetch LATEST messages
     const q = query(
       collection(db, 'study_groups', group.id, 'messages'),
-      orderBy('timestamp', 'asc'),
+      orderBy('timestamp', 'desc'),
       limit(100)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as GroupMessage[];
-      setMessages(msgs);
+      // Reverse to show oldest at top for natural chat flow
+      setMessages([...msgs].reverse());
       setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     }, (error) => {
       console.error("Group chat listener error:", error);
