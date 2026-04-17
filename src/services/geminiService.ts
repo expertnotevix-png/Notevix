@@ -32,29 +32,26 @@ function handleAIError(error: any): never {
   console.error("AI Service Error:", error);
   
   const errorString = error?.message?.toLowerCase() || "";
+  const rawMessage = error?.message || "Unknown error";
   
   // Specific NVIDIA errors
   if (errorString.includes('unauthorized') || errorString.includes('401') || errorString.includes('invalid api key')) {
-    throw new Error("AI Configuration Error: The API key (VITE_NVIDIA_API_KEY) is invalid or missing. Please check your Secrets! 🔑");
+    throw new Error(`AI Key Error: The NVIDIA key is invalid. Raw: ${rawMessage}`);
   }
 
-  // Handle descriptive error messages from the server
-  if (errorString.length > 10 && errorString.length < 200 && !errorString.includes('{')) {
-    throw new Error(error.message);
-  }
-
-  // Check for Rate Limit (429)
+  // Handle Rate Limits with more detail
   if (errorString.includes('429') || error?.status === 429 || errorString.includes('quota') || errorString.includes('exhausted') || errorString.includes('rate limit')) {
-    throw new Error("AI Limit Reached: The AI is a bit tired from high usage. Please wait a minute and try again! ⏳");
+    const service = errorString.includes('nvidia') ? 'NVIDIA' : 'Gemini';
+    throw new Error(`AI Limit Reached: ${service} is busy or at its free limit. Please try again in 1 minute! ⏳`);
   }
   
-  // Check for Safety Filters
-  if (errorString.includes('safety') || errorString.includes('blocked')) {
-    throw new Error("I can't answer that. Please ask something related to your studies! 📚");
+  // Specific error for Cloudflare/Proxy issues
+  if (errorString.includes('405') || errorString.includes('method not allowed')) {
+    throw new Error("Cloudflare Config Error: The direct AI fallback failed. Please check your Secret keys in Cloudflare!");
   }
 
-  // Generic Error
-  throw new Error("AI is currently busy or sleepy. This usually happens if the API key is wrong or the service is down. Please try again in a few seconds! 😴");
+  // Default: Show the raw error so we can fix it exactly
+  throw new Error(`AI Issue: ${rawMessage}. Please check if your API keys are correct.`);
 }
 
 export const geminiService = {
@@ -299,7 +296,8 @@ export const geminiService = {
 
   async callNvidiaAPI(prompt: string, systemInstruction: string, isJson: boolean = false) {
     const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
-    const model = "meta/llama-3.1-70b-instruct"; // Optimized model choice
+    console.log("AI Transition: Attempting NVIDIA call. Key detected:", nvidiaKey ? "YES (Partial: " + nvidiaKey.substring(0, 8) + "...)" : "NO");
+    const model = "meta/llama-3.1-70b-instruct"; 
 
     try {
       // 1. Try server-side first (Secure)

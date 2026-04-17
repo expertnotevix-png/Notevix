@@ -460,6 +460,14 @@ export default function Admin() {
                   <RefreshCw className={`w-3 h-3 ${aiStatus.status === 'checking' ? 'animate-spin' : ''}`} />
                 </button>
               </div>
+              <div className="flex flex-col items-end gap-1">
+                <p className="text-[8px] text-gray-400 font-mono">
+                  NVIDIA Key: {((import.meta as any).env?.VITE_NVIDIA_API_KEY) ? "Detected ✅" : "Missing ❌"}
+                </p>
+                <p className="text-[8px] text-gray-400 font-mono">
+                  Gemini Key: {((import.meta as any).env?.VITE_GEMINI_API_KEY) ? "Detected ✅" : "Missing ❌"}
+                </p>
+              </div>
               <p className="text-[8px] text-gray-500 max-w-[200px] text-right leading-tight">
                 Note: Gemini Free Tier has a limit of 15 requests per minute.
               </p>
