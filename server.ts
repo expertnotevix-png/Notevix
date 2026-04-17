@@ -13,14 +13,20 @@ async function startServer() {
 
   // API routes go here
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
+    res.json({ status: "ok", mode: process.env.NODE_ENV });
   });
 
-  app.post("/api/ai/nvidia", async (req, res) => {
+  // Supporting all methods temporarily for debugging; should be POST
+  app.all("/api/ai/nvidia", async (req, res) => {
+    if (req.method !== "POST") {
+      console.warn(`NVIDIA Proxy: Received ${req.method} request. Expected POST.`);
+      return res.status(405).json({ error: "Method Not Allowed. This chatbot service requires a POST request." });
+    }
+
     const nvidiaKey = process.env.VITE_NVIDIA_API_KEY;
     if (!nvidiaKey) {
       console.error("NVIDIA Proxy: Key missing in process.env");
-      return res.status(500).json({ error: "NVIDIA API Key (VITE_NVIDIA_API_KEY) is not configured on the server." });
+      return res.status(500).json({ error: "NVIDIA API Key (VITE_NVIDIA_API_KEY) is not configured in the server's 'Secrets' menu." });
     }
 
     try {

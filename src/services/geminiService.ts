@@ -315,18 +315,22 @@ export const geminiService = {
         })
       });
 
+      if (response.status === 405) {
+        throw new Error("Server Error (405): The AI service route is blocked or misconfigured. Please contact support.");
+      }
+
       const responseText = await response.text();
       let data;
       try {
         data = responseText ? JSON.parse(responseText) : null;
       } catch (e) {
-        throw new Error(`Invalid response from AI server. Status: ${response.status}`);
+        throw new Error(`Invalid response from AI server (Status: ${response.status}). The data was not valid JSON.`);
       }
 
       if (!response.ok || !data || data.error) {
         const errMsg = data?.error?.message || data?.error || `Server error (${response.status})`;
-        if (typeof errMsg === 'string' && errMsg.includes("Key (VITE_NVIDIA_API_KEY) is not configured")) {
-          throw new Error("NVIDIA API Key is missing on the server. Please check your 'Secrets'! 🔑");
+        if (typeof errMsg === 'string' && (errMsg.includes("Secrets") || errMsg.includes("Key"))) {
+          throw new Error("NVIDIA API Key is missing or invalid in your 'Secrets'. 🔑");
         }
         throw new Error(errMsg);
       }

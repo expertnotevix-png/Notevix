@@ -448,7 +448,7 @@ export default function Admin() {
                   aiStatus.status === 'error' ? 'bg-red-500' :
                   'bg-gray-500'
                 }`} />
-                <span className="text-[10px] font-bold uppercase tracking-widest">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-right max-w-[120px] truncate" title={aiStatus.message}>
                   {aiStatus.message || 'Checking AI...'}
                 </span>
                 <button 
