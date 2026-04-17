@@ -298,14 +298,16 @@ export const geminiService = {
   },
 
   async callNvidiaAPI(prompt: string, systemInstruction: string, isJson: boolean = false) {
+    const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
+    const model = "meta/llama-3.1-70b-instruct"; // Optimized model choice
+
     try {
+      // 1. Try server-side first (Secure)
       const response = await fetch("/api/ai/nvidia", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "meta/llama-3.1-70b-instruct",
+          model,
           messages: [
             { role: "system", content: systemInstruction },
             { role: "user", content: prompt }
@@ -315,8 +317,14 @@ export const geminiService = {
         })
       });
 
-      if (response.status === 405) {
-        throw new Error("Server Error (405): The AI service route is blocked or misconfigured. Please contact support.");
+      // If server returns 405/404, it means we are on static hosting (Cloudflare/Firebase Hosting)
+      // Switch to direct client-side call if we have the key
+      if (response.status === 405 || response.status === 404) {
+        if (nvidiaKey) {
+          console.warn("Backend not found (405/404). Switching to direct NVIDIA API call...");
+          return await this.callNvidiaDirect(prompt, systemInstruction, nvidiaKey, model, isJson);
+        }
+        throw new Error("AI Backend is missing (405). Please add VITE_NVIDIA_API_KEY to your Cloudflare Variables to use Direct Mode.");
       }
 
       const responseText = await response.text();
@@ -324,26 +332,42 @@ export const geminiService = {
       try {
         data = responseText ? JSON.parse(responseText) : null;
       } catch (e) {
-        throw new Error(`Invalid response from AI server (Status: ${response.status}). The data was not valid JSON.`);
+        throw new Error(`Invalid AI response (Status: ${response.status})`);
       }
 
       if (!response.ok || !data || data.error) {
         const errMsg = data?.error?.message || data?.error || `Server error (${response.status})`;
-        if (typeof errMsg === 'string' && (errMsg.includes("Secrets") || errMsg.includes("Key"))) {
-          throw new Error("NVIDIA API Key is missing or invalid in your 'Secrets'. 🔑");
-        }
         throw new Error(errMsg);
-      }
-
-      if (!data.choices?.[0]?.message?.content) {
-        throw new Error("AI returned an empty response. Please try again.");
       }
 
       return data.choices[0].message.content;
     } catch (error: any) {
+      // 2. If server fetch failed entirely (Network error), try direct if key exists
+      if (nvidiaKey && (error.message.includes('fetch') || error.message.includes('Network'))) {
+        return await this.callNvidiaDirect(prompt, systemInstruction, nvidiaKey, model, isJson);
+      }
       console.error("NVIDIA API Error:", error);
-      // Re-throw to be caught by the general handler
       throw error;
     }
+  },
+
+  async callNvidiaDirect(prompt: string, system: string, key: string, model: string, isJson: boolean) {
+    const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${key}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
+        temperature: isJson ? 0.1 : 0.6,
+        max_tokens: 1536,
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error?.message || "NVIDIA Direct Call Failed");
+    return data.choices[0].message.content;
   }
 };
