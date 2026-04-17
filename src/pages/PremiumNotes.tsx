@@ -60,7 +60,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasPendingRequest, setHasPendingRequest] = useState(false);
 
-  const upiId = (import.meta as any).env?.VITE_UPI_ID || 'expertraj8@upi';
+  const upiId = (import.meta as any).env?.VITE_UPI_ID || '9236489649@mbk';
 
   useEffect(() => {
     checkExistingRequests();
