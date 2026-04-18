@@ -4,9 +4,9 @@ import { ChevronLeft, Loader2, FileText, Sparkles, Copy, Check, Upload, FileUp, 
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { geminiService } from '../services/geminiService';
-// Configure PDF.js worker
+// Configure PDF.js worker - Use legacy build for better compatibility
 import * as pdfjs from 'pdfjs-dist';
-const workerUrl = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
+const workerUrl = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/legacy/build/pdf.worker.min.js`;
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 import ReactMarkdown from 'react-markdown';
@@ -63,7 +63,15 @@ export default function Summarizer() {
       setMode('text'); // Switch to text mode to show the content
     } catch (err: any) {
       console.error("PDF Parsing Error:", err);
-      setError(`Failed to read PDF: ${err.message || 'Unknown error'}. Make sure it's not password protected.`);
+      let errorMsg = `Failed to read PDF: ${err.message || 'Unknown error'}.`;
+      if (err.message?.includes('worker') || err.message?.includes('fetch')) {
+        errorMsg += " This looks like a connection issue with our PDF helper. Please check your internet or try again in a moment.";
+      } else if (err.name === 'PasswordException') {
+        errorMsg = "This PDF is password protected and cannot be read. Please upload an unprotected version.";
+      } else {
+        errorMsg += " Make sure the file is a valid, readable PDF (not an image-only scan or password protected).";
+      }
+      setError(errorMsg);
     } finally {
       setParsingPdf(false);
     }
