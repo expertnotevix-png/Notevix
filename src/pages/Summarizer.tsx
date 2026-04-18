@@ -4,10 +4,11 @@ import { ChevronLeft, Loader2, FileText, Sparkles, Copy, Check, Upload, FileUp, 
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { geminiService } from '../services/geminiService';
-// Configure PDF.js worker - Use legacy build for better compatibility
+// Configure PDF.js worker - Use Vite's native worker loader for best stability
 import * as pdfjs from 'pdfjs-dist';
-const workerUrl = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/legacy/build/pdf.worker.min.js`;
-pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+// @ts-ignore - pdf.worker?url is a Vite-specific feature
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
+pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
