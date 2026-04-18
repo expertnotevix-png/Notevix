@@ -23,14 +23,14 @@ export const analytics = isSupported().then(yes => {
   return null;
 }).catch(() => null);
 
-// Use robust Firestore settings
-console.log("Initializing Firestore with database:", firebaseConfig.firestoreDatabaseId || '(default)');
+// Use robust Firestore settings for various network environments
+console.log("Connecting to Firestore Database:", firebaseConfig.firestoreDatabaseId || '(default)');
 if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('TODO')) {
   console.warn("Firebase API Key is missing or invalid!");
 }
 
 export const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
+  experimentalAutoDetectLongPolling: true,
 }, firebaseConfig.firestoreDatabaseId);
 
 export const auth = getAuth(app);
@@ -94,10 +94,14 @@ async function testConnection() {
   // Wait a bit for network to stabilize
   await new Promise(r => setTimeout(r, 2000));
   try {
+    console.log("Testing Firestore connection...");
     await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
+    console.log("Firestore connection test completed (document may not exist, but connection is reached)");
+  } catch (error: any) {
+    if (error?.code === 'unavailable') {
+      console.error("Firestore is UNAVAILABLE. This often means the Database ID is wrong or your network is blocking the connection.");
+    } else {
+      console.log("Firestore connection test reached server, responded with:", error?.code || error?.message);
     }
   }
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { geminiService } from '../services/geminiService';
 import { Chapter, Message, Notification, PurchaseRequest, UserProfile } from '../types';
@@ -305,40 +305,58 @@ export default function Admin() {
 
   const handleApprovePurchase = async (req: PurchaseRequest) => {
     try {
-      // 1. Find user document (don't assume doc ID == UID)
-      const userQuery = query(collection(db, 'users'), where('uid', '==', req.userId));
-      const userSnap = await getDocs(userQuery);
+      // 1. Reference the user document directly by UID (as used in App.tsx)
+      const userRef = doc(db, 'users', req.userId);
+      const userSnap = await getDoc(userRef);
       
-      if (userSnap.empty) {
-        alert("User record not found! Check if the student deleted their account.");
-        return;
+      let finalUserRef = userRef;
+      let userData = userSnap.data();
+
+      if (!userSnap.exists()) {
+        console.warn("User document not found at UID: " + req.userId + ". Attempting fallback query...");
+        const userQuery = query(collection(db, 'users'), where('uid', '==', req.userId));
+        const qSnap = await getDocs(userQuery);
+        if (qSnap.empty) {
+          alert("Could not find user record. They might have deleted their account.");
+          return;
+        }
+        // Fallback to the found document
+        finalUserRef = doc(db, 'users', qSnap.docs[0].id);
+        userData = qSnap.docs[0].data();
       }
 
-      const userDoc = userSnap.docs[0];
-      const userRef = doc(db, 'users', userDoc.id);
-      
-      // 2. Update request status
-      await updateDoc(doc(db, 'purchase_requests', req.id), { status: 'approved' });
-      
-      // 3. Grant access to user
+      // 2. Grant access to user
       if (req.planType === 'subscription') {
-        // Subscription grants everything
-        await updateDoc(userRef, { 
+        await updateDoc(finalUserRef, { 
           isPremium: true,
           subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
         });
       } else if (req.planType === 'one-time' && req.targetClass) {
-        // One-time grants specific class
-        const currentUnlocked = (userDoc.data()?.unlockedClasses || []) as string[];
+        const currentUnlocked = (userData?.unlockedClasses || []) as string[];
         if (!currentUnlocked.includes(req.targetClass)) {
-          await updateDoc(userRef, { 
-            unlockedClasses: [...currentUnlocked, req.targetClass] 
+          await updateDoc(finalUserRef, { 
+            unlockedClasses: [...currentUnlocked, req.targetClass],
+            isPremium: true // Ensure they get premium flag
           });
+        } else {
+          await updateDoc(finalUserRef, { isPremium: true });
         }
       } else {
-        // Fallback for old requests
-        await updateDoc(userRef, { isPremium: true });
+        await updateDoc(finalUserRef, { isPremium: true });
       }
+
+      // 3. Update request status (and clear any other pending for this user to avoid stale UI)
+      await updateDoc(doc(db, 'purchase_requests', req.id), { status: 'approved' });
+      
+      // Optional: Cleanup other pending requests for the same user to avoid "Pending" stuck UI
+      const otherRequestsQuery = query(
+        collection(db, 'purchase_requests'), 
+        where('userId', '==', req.userId),
+        where('status', '==', 'pending')
+      );
+      const otherSnap = await getDocs(otherRequestsQuery);
+      const cleanupPromises = otherSnap.docs.map(d => updateDoc(d.ref, { status: 'processed' }));
+      await Promise.all(cleanupPromises);
       
       // 4. Notify user
       await addDoc(collection(db, 'notifications'), {

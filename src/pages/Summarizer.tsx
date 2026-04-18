@@ -4,10 +4,9 @@ import { ChevronLeft, Loader2, FileText, Sparkles, Copy, Check, Upload, FileUp, 
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { geminiService } from '../services/geminiService';
-import * as pdfjs from 'pdfjs-dist';
-
 // Configure PDF.js worker
-const workerUrl = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.6.205/pdf.worker.min.js`;
+import * as pdfjs from 'pdfjs-dist';
+const workerUrl = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 import ReactMarkdown from 'react-markdown';

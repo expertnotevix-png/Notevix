@@ -140,7 +140,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         </p>
       </div>
 
-      {hasPendingRequest && (
+      {!user.isPremium && hasPendingRequest && (
         <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex items-center gap-4">
           <div className="w-10 h-10 bg-yellow-500/20 rounded-full flex items-center justify-center">
             <ShieldCheck className="w-5 h-5 text-yellow-500" />
