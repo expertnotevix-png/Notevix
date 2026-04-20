@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, doc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { UserProfile } from '../types';
 import { motion } from 'motion/react';
-import { Trophy, Medal, Crown, Timer, TrendingUp, Instagram, Star } from 'lucide-react';
+import { Trophy, Medal, Crown, Timer, TrendingUp, Instagram, Star, History } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
 
 interface LeaderboardProps {
   user: UserProfile | null;
@@ -12,11 +13,21 @@ interface LeaderboardProps {
 
 export default function Leaderboard({ user }: LeaderboardProps) {
   const [topUsers, setTopUsers] = useState<UserProfile[]>([]);
+  const [lastReset, setLastReset] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const isSunday = new Date().getDay() === 0;
 
   useEffect(() => {
+    // Listen for leaderboard reset stats
+    const statsUnsubscribe = onSnapshot(doc(db, 'system_stats', 'leaderboard'), (doc) => {
+      if (doc.exists()) {
+        setLastReset(doc.data().lastReset);
+      }
+    }, (error) => {
+      console.error("Leaderboard stats listener error:", error);
+    });
+
     const q = query(
       collection(db, 'leaderboard'),
       orderBy('totalPoints', 'desc'),
@@ -35,7 +46,10 @@ export default function Leaderboard({ user }: LeaderboardProps) {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      statsUnsubscribe();
+    };
   }, []);
 
   if (loading) {
@@ -66,7 +80,15 @@ export default function Leaderboard({ user }: LeaderboardProps) {
             </div>
             <div>
               <h1 className="text-2xl font-bold">Leaderboard</h1>
-              <p className="text-gray-400 text-sm">Top students by study time</p>
+              <div className="flex items-center gap-2 text-gray-400">
+                <p className="text-sm">Top students by study time</p>
+                {lastReset && (
+                  <div className="flex items-center gap-1 text-[10px] bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+                    <History className="w-3 h-3" />
+                    <span>Last Reset: {format(new Date(lastReset), 'MMM d, h:mm a')}</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

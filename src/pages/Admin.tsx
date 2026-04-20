@@ -23,11 +23,19 @@ export default function Admin() {
   const [notifData, setNotifData] = useState({ title: '', message: '', type: 'info' as const });
 
   useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+
     if (activeTab === 'chapters') fetchChapters();
-    if (activeTab === 'messages') fetchMessages();
-    if (activeTab === 'notifications') fetchNotifications();
-    if (activeTab === 'payments') fetchPurchaseRequests();
+    if (activeTab === 'messages') unsubscribe = fetchMessages();
+    if (activeTab === 'notifications') unsubscribe = fetchNotifications();
+    if (activeTab === 'payments') unsubscribe = fetchPurchaseRequests();
     if (activeTab === 'users') fetchUsers();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [activeTab]);
 
   const fetchUsers = async () => {
@@ -271,7 +279,7 @@ export default function Admin() {
     alert("All resources synced successfully with new links!");
   };
 
-  const fetchMessages = async () => {
+  const fetchMessages = () => {
     setLoading(true);
     const q = query(collection(db, 'messages'), orderBy('timestamp', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -285,7 +293,7 @@ export default function Admin() {
     return unsubscribe;
   };
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = () => {
     setLoading(true);
     const q = query(collection(db, 'notifications'), orderBy('timestamp', 'desc'), limit(50));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -299,7 +307,7 @@ export default function Admin() {
     return unsubscribe;
   };
 
-  const fetchPurchaseRequests = async () => {
+  const fetchPurchaseRequests = () => {
     setLoading(true);
     const q = query(collection(db, 'purchase_requests'), orderBy('timestamp', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {

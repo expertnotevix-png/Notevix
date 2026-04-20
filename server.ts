@@ -16,15 +16,23 @@ const firebaseConfig = JSON.parse(
 dotenv.config();
 
 // Initialize Firebase Admin (Server-side)
-// Note: In some environments, this might require a service account. 
-// We try to initialize with the project ID from config.
 if (!getApps().length) {
   initializeApp({
     projectId: firebaseConfig.projectId,
   });
 }
 
-const dbAdmin = getFirestore(firebaseConfig.firestoreDatabaseId);
+// Get Firestore instance safely
+const getDbAdmin = () => {
+  const dbId = firebaseConfig.firestoreDatabaseId;
+  // If ID is null, undefined or empty/default string, use default DB
+  if (!dbId || dbId === "(default)" || dbId === "default") {
+    return getFirestore();
+  }
+  return getFirestore(dbId);
+};
+
+const dbAdmin = getDbAdmin();
 
 async function startServer() {
   const app = express();
@@ -67,22 +75,36 @@ async function startServer() {
       const collections = ["users", "leaderboard"];
       for (const collName of collections) {
         const snap = await dbAdmin.collection(collName).get();
-        if (snap.empty) continue;
+        if (snap.empty) {
+          console.log(`[Cron] Collection ${collName} is empty, skipping.`);
+          continue;
+        }
 
+        console.log(`[Cron] Found ${snap.size} documents in ${collName} to reset.`);
         let count = 0;
         let batch = dbAdmin.batch();
         
         for (const doc of snap.docs) {
-          batch.update(doc.ref, { 
-            totalPoints: 0, 
-            totalFocusMinutes: 0,
-            // Reset streak count if it's a new week? 
-            // User just said points, but typically you reset it all.
-          });
+          if (collName === 'users') {
+            batch.update(doc.ref, { 
+              totalPoints: 0, 
+              totalFocusMinutes: 0,
+              'streak.currentCount': 1,
+              'streak.lastActiveDate': new Date().toISOString().split('T')[0]
+            });
+          } else {
+            // leaderboard collection
+            batch.update(doc.ref, { 
+              totalPoints: 0, 
+              totalFocusMinutes: 0,
+              streakCount: 1
+            });
+          }
           count++;
           
-          if (count === 499) {
+          if (count === 490) {
             await batch.commit();
+            console.log(`[Cron] Committed batch of ${count} for ${collName}`);
             batch = dbAdmin.batch();
             count = 0;
           }
@@ -90,9 +112,16 @@ async function startServer() {
         
         if (count > 0) {
           await batch.commit();
+          console.log(`[Cron] Committed final batch of ${count} for ${collName}`);
         }
-        console.log(`[Cron] Reset ${snap.size} documents in ${collName}`);
       }
+
+      // Log the reset event in a system doc for the UI to see
+      await dbAdmin.collection("system_stats").doc("leaderboard").set({
+        lastReset: new Date().toISOString(),
+        resetBy: "system/admin"
+      }, { merge: true });
+
       console.log("[Cron] Weekly leaderboard reset completed successfully!");
       return true;
     } catch (error) {

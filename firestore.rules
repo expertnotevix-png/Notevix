@@ -1,104 +1,9 @@
-// ===============================================================
-// Assumed Data Model
-// ===============================================================
-//
-// Collection: users
-// Document ID: {userId} (Firebase Auth UID)
-// Fields:
-//   - uid: string (required) - User's unique ID
-//   - email: string (required, email format) - User's email address
-//   - displayName: string (optional) - User's display name
-//   - photoURL: string (optional, url format) - User's profile photo URL
-//   - class: string (optional, enum: ["8", "9", "10"]) - User's selected class
-//   - role: string (required, enum: ["student", "admin"]) - User's role
-//   - savedNotes: list (optional, strings) - List of saved note IDs
-//   - notificationsEnabled: bool (optional) - Notification preference
-//   - createdAt: string (required, iso8601) - Account creation timestamp
-//
-// Collection: chapters
-// Document ID: {chapterId}
-// Fields:
-//   - class: string (required) - Class level
-//   - subject: string (required) - Subject name
-//   - title: string (required) - Chapter title
-//   - summary: string (optional) - Chapter summary
-//   - keyPoints: list (optional, strings) - Key points
-//   - importantQuestions: list (optional, objects) - Q&A pairs
-//   - pdfUrl: string (optional, url format) - PDF link
-//   - isPremium: bool (optional) - Premium status
-//
-// Collection: doubts
-// Document ID: {doubtId}
-// Fields:
-//   - userId: string (required) - Owner's UID
-//   - query: string (required) - User's question
-//   - response: string (required) - AI response
-//   - timestamp: string (required, iso8601) - Query timestamp
-//
-// Collection: subject_resources
-// Document ID: {resourceId}
-// Fields:
-//   - class: string (required) - Class level
-//   - subject: string (required) - Subject name
-//   - onePageNotesUrl: string (optional, url format)
-//   - fullNotesUrl: string (optional, url format)
-//   - importantQuestionsUrl: string (optional, url format)
-//   - examOrientedQuestionsUrl: string (optional, url format)
-//
-// Collection: community_chat
-// Document ID: {messageId}
-// Fields:
-//   - userId: string (required) - Sender's UID
-//   - userName: string (required) - Sender's display name
-//   - userPhoto: string (optional, url format) - Sender's photo
-//   - content: string (required) - Message text
-//   - timestamp: string (required, iso8601) - Message timestamp
-//
-// Collection: purchase_requests
-// Document ID: {requestId}
-// Fields:
-//   - userId: string (required) - Buyer's UID
-//   - userEmail: string (required) - Buyer's email
-//   - userName: string (required) - Buyer's name
-//   - planId: string (required) - Selected plan ID
-//   - planName: string (required) - Selected plan name
-//   - amount: number (required) - Paid amount
-//   - transactionId: string (required) - UPI transaction ID
-//   - status: string (required, enum: ["pending", "approved", "rejected"])
-//   - timestamp: string (required, iso8601) - Request timestamp
-//   - whatsappNumber: string (optional) - Contact number
-//
-// Collection: study_groups
-// Document ID: {groupId}
-// Fields:
-//   - name: string (required) 
-//   - description: string (optional)
-//   - creatorId: string (required)
-//   - creatorName: string (optional)
-//   - memberCount: number (optional)
-//   - class: string (optional)
-//   - subject: string (optional)
-//   - isPublic: bool (optional)
-//   - createdAt: string (required, iso8601)
-//
-// Collection: group_messages (subcollection of study_groups)
-// Document ID: {messageId}
-// Fields:
-//   - groupId: string (required)
-//   - userId: string (required)
-//   - userName: string (required)
-//   - userPhoto: string (optional)
-//   - text: string (required)
-//   - timestamp: string (required, iso8601)
-//
-// ===============================================================
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     // ===============================================================
-    // Helper Functions
+    // Global Helper Functions
     // ===============================================================
 
     function isAuthenticated() {
@@ -110,10 +15,17 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
       return isAuthenticated() && (
-        (request.auth.token.email == "expertraj8@gmail.com" && request.auth.token.email_verified == true) ||
-        (exists(userPath) && get(userPath).data.role == 'admin')
+        request.auth.token.email == "expertraj8@gmail.com" || 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    function isBanned() {
+      let modPath = /databases/$(database)/documents/user_moderation/$(request.auth.uid);
+      return isAuthenticated() && exists(modPath) && (
+        get(modPath).data.isPermanentlyBanned == true || 
+        (get(modPath).data.banUntil != null && request.time < timestamp(get(modPath).data.banUntil))
       );
     }
 
@@ -129,256 +41,125 @@ service cloud.firestore {
       return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
     }
 
-    function isValidSimpleDate(dateStr) {
-      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}$");
-    }
-
-    function isBanned() {
-      return isAuthenticated() && exists(/databases/$(database)/documents/user_moderation/$(request.auth.uid)) && (
-        get(/databases/$(database)/documents/user_moderation/$(request.auth.uid)).data.isPermanentlyBanned == true || 
-        (get(/databases/$(database)/documents/user_moderation/$(request.auth.uid)).data.banUntil != null && 
-         request.time < timestamp(get(/databases/$(database)/documents/user_moderation/$(request.auth.uid)).data.banUntil))
-      );
-    }
-
     // ===============================================================
-    // Domain Validators
+    // Collection-specific Rules
     // ===============================================================
 
-    function isValidUser(data) {
-      return data.uid == request.auth.uid &&
-             isValidEmail(data.email) &&
-             data.role in ['student', 'admin'] &&
-             (!('createdAt' in data) || isValidDateString(data.createdAt)) &&
-             (!('referralCode' in data) || data.referralCode is string) &&
-             (!('referralCount' in data) || data.referralCount is number) &&
-             (!('isPremium' in data) || data.isPremium is bool) &&
-             (!('totalPoints' in data) || data.totalPoints is number) &&
-             (!('totalFocusMinutes' in data) || data.totalFocusMinutes is number) &&
-             (!('streak' in data) || (data.streak is map && data.streak.keys().hasAll(['currentCount', 'lastUpdateDate']))) &&
-             (!('savedNotes' in data) || data.savedNotes is list) &&
-             (!('notificationsEnabled' in data) || data.notificationsEnabled is bool) &&
-             (!('studyModeEnabled' in data) || data.studyModeEnabled is bool) &&
-             (!('photoURL' in data) || data.photoURL == null || isValidUrl(data.photoURL)) &&
-             (!('displayName' in data) || data.displayName == null || data.displayName is string) &&
-             (!('class' in data) || data.class == null || data.class == "" || data.class in ['8', '9', '10']) &&
-             (!('referredBy' in data) || data.referredBy == null || data.referredBy is string) &&
-             (!('lastActive' in data) || isValidDateString(data.lastActive)) &&
-             (!('streakCount' in data) || data.streakCount is number);
+    // System Stats (Leaderboard reset info, etc.)
+    match /system_stats/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
-    function isValidChapter(data) {
-      return data.keys().hasAll(['class', 'subject', 'title']) &&
-             data.class is string && data.class.size() > 0 &&
-             data.subject is string && data.subject.size() > 0 &&
-             data.title is string && data.title.size() > 0 &&
-             (!('pdfUrl' in data) || isValidUrl(data.pdfUrl));
-    }
-
-    function isValidDoubt(data) {
-      return data.keys().hasAll(['userId', 'query', 'response', 'timestamp']) &&
-             data.userId == request.auth.uid &&
-             data.query is string && data.query.size() > 0 && data.query.size() < 5000 &&
-             data.response is string && data.response.size() > 0 &&
-             isValidDateString(data.timestamp);
-    }
-
-    function isValidLeaderboardEntry(data) {
-      return data.keys().hasAll(['uid', 'displayName', 'totalFocusMinutes', 'totalPoints']) &&
-             data.uid == request.auth.uid &&
-             data.displayName is string &&
-             data.totalFocusMinutes is number &&
-             data.totalPoints is number &&
-             (!('photoURL' in data) || isValidUrl(data.photoURL)) &&
-             (!('class' in data) || data.class is string) &&
-             (!('streakCount' in data) || data.streakCount is number);
-    }
-
-    function isValidMessage(data) {
-      return data.keys().hasAll(['userId', 'userEmail', 'userName', 'subject', 'message', 'status', 'timestamp']) &&
-             (data.userId == 'anonymous' || (isAuthenticated() && data.userId == request.auth.uid)) &&
-             isValidEmail(data.userEmail) &&
-             data.userName is string &&
-             data.subject is string && data.subject.size() > 0 &&
-             data.message is string && data.message.size() > 0 &&
-             data.status == 'pending';
-    }
-
-    function isValidPost(data) {
-      return data.keys().hasAll(['userId', 'title', 'description', 'subject', 'class', 'status', 'createdAt']) &&
-             data.userId == request.auth.uid &&
-             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
-             data.description is string && data.description.size() > 0 && data.description.size() < 5000 &&
-             data.subject in ["Science", "Maths", "SST", "English", "Hindi", "Other"] &&
-             data.class in ["Class 8", "Class 9", "Class 10"] &&
-             data.status in ["pending", "approved", "rejected"] &&
-             isValidDateString(data.createdAt);
-    }
-
-    function isValidReply(data) {
-      let isAI = data.userId == 'notevix-ai' && 
-                 data.userName == 'NoteVix AI 🤖' && 
-                 data.userPhoto == 'https://img.icons8.com/fluency/96/bot.png';
-      
-      return data.keys().hasAll(['userId', 'userName', 'userPhoto', 'content', 'upvotes', 'downvotes', 'upvotesCount', 'isBest', 'createdAt']) &&
-             (data.userId == request.auth.uid || isAI) &&
-             data.content is string && data.content.size() > 0 && data.content.size() < 5000 &&
-             isValidDateString(data.createdAt);
-    }
-
-    function isValidPurchaseRequest(data) {
-      return data.keys().hasAll(['userId', 'userEmail', 'userName', 'planId', 'planName', 'amount', 'transactionId', 'status', 'timestamp']) &&
-             data.userId == request.auth.uid &&
-             isValidEmail(data.userEmail) &&
-             data.userName is string && data.userName.size() < 100 &&
-             data.planId is string &&
-             data.planName is string &&
-             data.amount is number &&
-             data.transactionId is string && data.transactionId.size() > 0 && data.transactionId.size() < 100 &&
-             data.status == 'pending' &&
-             isValidDateString(data.timestamp) &&
-             (!('whatsappNumber' in data) || (data.whatsappNumber is string && data.whatsappNumber.size() < 20));
-    }
-
-    function isValidStudyGroup(data) {
-      return data.keys().hasAll(['name', 'creatorId', 'createdAt']) &&
-             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.creatorId == request.auth.uid &&
-             (data.createdAt is timestamp || isValidDateString(data.createdAt)) &&
-             (!('description' in data) || (data.description is string && data.description.size() < 500)) &&
-             (!('class' in data) || data.class is string) &&
-             (!('subject' in data) || data.subject is string) &&
-             (!('isPublic' in data) || data.isPublic is bool);
-    }
-
-    function isValidGroupMessage(data) {
-      return data.keys().hasAll(['groupId', 'userId', 'userName', 'text', 'timestamp']) &&
-             data.userId == request.auth.uid &&
-             data.text is string && data.text.size() > 0 && data.text.size() < 2000 &&
-             (data.timestamp is timestamp || isValidDateString(data.timestamp)) &&
-             (!('userPhoto' in data) || isValidUrl(data.userPhoto));
-    }
-
-    // ===============================================================
-    // Rules
-    // ===============================================================
-
+    // Users
     match /users/{userId} {
+      allow list: if isAdmin();
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if (isOwner(userId) && isValidUser(request.resource.data) && 
-                    (request.resource.data.role == 'student' || isAdmin())) || isAdmin();
-      allow update: if isAdmin() || (isOwner(userId) && isValidUser(request.resource.data) && 
-                    request.resource.data.role == resource.data.role);
+      allow create: if (isAuthenticated() && userId == request.auth.uid && (request.resource.data.role == 'student' || isAdmin())) || isAdmin();
+      allow update: if isAdmin() || (isOwner(userId) && request.resource.data.role == resource.data.role);
       allow delete: if isAdmin();
     }
 
+    // Leaderboard
     match /leaderboard/{userId} {
-      allow read: if true;
-      allow write: if isAdmin() || (isOwner(userId) && isValidLeaderboardEntry(request.resource.data));
+      allow list, read: if true;
+      allow write: if isAdmin() || isOwner(userId);
     }
 
+    // Chapters & Subjects
     match /chapters/{chapterId} {
-      allow read: if true;
-      allow write: if isAdmin() && isValidChapter(request.resource.data);
+      allow list, read: if true;
+      allow write: if isAdmin();
+    }
+    match /subject_resources/{resourceId} {
+      allow list, read: if true;
+      allow write: if isAdmin();
     }
 
+    // Doubts (Immutable history)
     match /doubts/{doubtId} {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAuthenticated() && isValidDoubt(request.resource.data);
-      allow update, delete: if false; // Doubts are immutable history
-    }
-
-    match /subject_resources/{resourceId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    match /messages/{messageId} {
-      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-      allow create: if isValidMessage(request.resource.data);
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /schedule/{taskId} {
-      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow update, delete: if false;
     }
 
-    match /notifications/{notifId} {
-      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-      allow create: if isAdmin() || (isAuthenticated() && request.resource.data.userId == request.auth.uid);
-      allow update: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid && 
-                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
-      allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-    }
-
-    match /posts/{postId} {
-      allow read: if true;
-      allow create: if isAuthenticated() && !isBanned() && isValidPost(request.resource.data);
-      allow update: if isAdmin() || (isAuthenticated() && !isBanned() && (
-        (isOwner(resource.data.userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'description', 'subject', 'class'])) ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotes', 'downvotes', 'replyCount', 'isSolved', 'bestReplyId']))
-      ));
-      allow delete: if isAdmin() || (isAuthenticated() && isOwner(resource.data.userId));
-
-      match /replies/{replyId} {
-        allow read: if true;
-        allow create: if isAuthenticated() && !isBanned() && isValidReply(request.resource.data);
-        allow update: if isAdmin() || (isAuthenticated() && !isBanned() && (
-          (isOwner(resource.data.userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text'])) ||
-          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotes', 'downvotes', 'isBest']))
-        ));
-        allow delete: if isAdmin() || (isAuthenticated() && isOwner(resource.data.userId));
-      }
-    }
-
-    match /community_stats/global {
-      allow read: if true;
-      allow write: if isAdmin() || isAuthenticated(); // Allow incrementing stats
-    }
-
-    match /user_moderation/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow write: if isAdmin();
-    }
-
-    match /community_chat/{messageId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && !isBanned() && 
-                    request.resource.data.userId == request.auth.uid &&
-                    request.resource.data.content is string && 
-                    request.resource.data.content.size() > 0 && 
-                    request.resource.data.content.size() < 1000;
+    // Messages / Contact Form
+    match /messages/{messageId} {
+      allow list, read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if true; // Allow anyone to send contact message
       allow update, delete: if isAdmin();
     }
 
-    match /purchase_requests/{requestId} {
-      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-      allow create: if isAuthenticated() && isValidPurchaseRequest(request.resource.data);
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+    // Study Schedule
+    match /schedule/{taskId} {
+      allow list, read, write: if isAuthenticated() && (resource.data.userId == request.auth.uid || request.resource.data.userId == request.auth.uid || isAdmin());
     }
 
-    match /study_groups/{groupId} {
-      allow read: if true;
-      allow create: if isAuthenticated() && !isBanned() && isValidStudyGroup(request.resource.data);
-      allow update: if isAdmin() || (isAuthenticated() && !isBanned() && (
-        isOwner(resource.data.creatorId) || 
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
-      ));
-      allow delete: if isAdmin() || (isAuthenticated() && isOwner(resource.data.creatorId));
+    // Notifications
+    match /notifications/{notifId} {
+      allow list, read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if isAdmin() || (isAuthenticated() && (resource.data.userId == request.auth.uid || request.resource.data.userId == request.auth.uid));
+    }
 
-      match /messages/{messageId} {
+    // Community Posts & Replies
+    match /posts/{postId} {
+      allow list, read: if true;
+      allow create: if isAuthenticated() && !isBanned();
+      allow update: if isAdmin() || (isAuthenticated() && !isBanned());
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+
+      match /replies/{replyId} {
         allow read: if true;
-        allow create: if isAuthenticated() && !isBanned() && isValidGroupMessage(request.resource.data);
-        allow update, delete: if isAdmin() || (isAuthenticated() && isOwner(resource.data.userId));
+        allow create: if isAuthenticated() && !isBanned();
+        allow update: if isAdmin() || (isAuthenticated() && !isBanned());
+        allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
       }
     }
 
-    // Default deny
-    match /{path=**} {
+    // Global Stats
+    match /community_stats/global {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Moderation
+    match /user_moderation/{userId} {
+      allow list, read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Community Chat
+    match /community_chat/{messageId} {
+      allow list, read: if isAuthenticated();
+      allow create: if isAuthenticated() && !isBanned() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // Purchase Requests
+    match /purchase_requests/{requestId} {
+      allow list, read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    // Study Groups
+    match /study_groups/{groupId} {
+      allow list, read: if true;
+      allow create: if isAuthenticated() && !isBanned();
+      allow update: if isAdmin() || (isAuthenticated() && !isBanned());
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.creatorId == request.auth.uid);
+
+      match /messages/{messageId} {
+        allow list, read: if true;
+        allow create: if isAuthenticated() && !isBanned();
+        allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      }
+    }
+
+    // ===============================================================
+    // Default Deny
+    // ===============================================================
+    match /{document=**} {
       allow read, write: if false;
     }
   }

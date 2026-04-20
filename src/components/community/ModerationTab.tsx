@@ -14,6 +14,9 @@ export default function ModerationTab() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
+    }, (error) => {
+      console.error("Moderation listener error:", error);
+      setLoading(false);
     });
     return unsubscribe;
   }, []);
