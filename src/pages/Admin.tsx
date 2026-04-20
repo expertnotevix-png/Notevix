@@ -5,6 +5,7 @@ import { geminiService } from '../services/geminiService';
 import { Chapter, Message, Notification, PurchaseRequest, UserProfile } from '../types';
 import { Plus, Trash2, Edit2, Save, X, ChevronLeft, Database, MessageSquare, Bell, Send, CheckCircle2, Clock, Shield, RefreshCw, CreditCard, Check, XCircle, Users, Instagram } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import ModerationTab from '../components/community/ModerationTab';
 
 export default function Admin() {
@@ -317,7 +318,7 @@ export default function Admin() {
         const userQuery = query(collection(db, 'users'), where('uid', '==', req.userId));
         const qSnap = await getDocs(userQuery);
         if (qSnap.empty) {
-          alert("Could not find user record. They might have deleted their account.");
+          toast.error("Could not find user record. They might have deleted their account.");
           return;
         }
         // Fallback to the found document
@@ -372,11 +373,11 @@ export default function Admin() {
       if (activeTab === 'users') fetchUsers();
       if (activeTab === 'payments') fetchPurchaseRequests();
 
-      alert("Purchase approved and student upgraded!");
+      toast.success("Purchase approved and student upgraded!");
     } catch (error) {
       console.error(error);
       handleFirestoreError(error, OperationType.UPDATE, `purchase_requests/${req.id}`);
-      alert("Verification failed");
+      toast.error("Verification failed");
     }
   };
 
@@ -396,7 +397,7 @@ export default function Admin() {
         timestamp: new Date().toISOString()
       });
 
-      alert("Purchase rejected.");
+      toast.success("Purchase rejected.");
     } catch (error) {
       console.error(error);
     }
@@ -421,7 +422,7 @@ export default function Admin() {
       });
 
       setReplyText({ ...replyText, [messageId]: '' });
-      alert("Reply sent!");
+      toast.success("Reply sent!");
     } catch (error) {
       console.error("Error replying:", error);
     }
@@ -443,7 +444,7 @@ export default function Admin() {
       );
       await Promise.all(batch);
       setNotifData({ title: '', message: '', type: 'info' });
-      alert("Notification sent to all users!");
+      toast.success("Notification sent to all users!");
     } catch (error) {
       console.error("Error sending global notification:", error);
     }
@@ -624,7 +625,7 @@ export default function Admin() {
                   const deletesChapters = snapChapters.docs.map(d => deleteDoc(doc(db, 'chapters', d.id)));
                   await Promise.all(deletesChapters);
                   
-                  alert("All Class 10 resources and chapters deleted successfully!");
+                  toast.success("All Class 10 resources and chapters deleted successfully!");
                   fetchChapters();
                 } catch (error) {
                   console.error("Cleanup error:", error);
