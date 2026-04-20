@@ -30,7 +30,7 @@ if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('TODO')) {
 }
 
 export const db = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true,
+  experimentalForceLongPolling: true,
 }, firebaseConfig.firestoreDatabaseId);
 
 export const auth = getAuth(app);

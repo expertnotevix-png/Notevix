@@ -11,7 +11,15 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        "script-src": ["'self'", "'unsafe-inline'", "https://www.googletagmanager.com", "https://pagead2.googlesyndication.com", "https://apis.google.com"],
+        "connect-src": ["'self'", "https://*.googleapis.com", "https://*.firebaseio.com", "https://*.firebaseapp.com", "https://www.google-analytics.com"],
+        "img-src": ["'self'", "data:", "https:", "https://picsum.photos"],
+        "frame-src": ["'self'", "https://googleads.g.doubleclick.net", "https://tpc.googlesyndication.com", "https://*.firebaseapp.com"],
+      },
+    },
   }));
 
   // Manually set critical security headers for AdSense approval
@@ -20,6 +28,7 @@ async function startServer() {
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Content-Security-Policy', "default-src 'self'; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://www.google-analytics.com; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://pagead2.googlesyndication.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: https://picsum.photos; frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://*.firebaseapp.com;");
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     next();
   });
