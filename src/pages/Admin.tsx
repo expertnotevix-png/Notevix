@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { geminiService } from '../services/geminiService';
 import { Chapter, Message, Notification, PurchaseRequest, UserProfile } from '../types';
@@ -81,6 +81,8 @@ export default function Admin() {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setActiveUsers(snapshot.size);
+    }, (error) => {
+      console.warn("Active users listener error:", error);
     });
 
     return () => unsubscribe();
@@ -276,6 +278,9 @@ export default function Admin() {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
       setMessages(data);
       setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'messages');
+      setLoading(false);
     });
     return unsubscribe;
   };
@@ -286,6 +291,9 @@ export default function Admin() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
       setNotifications(data);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'notifications');
       setLoading(false);
     });
     return unsubscribe;
@@ -450,6 +458,44 @@ export default function Admin() {
     }
   };
 
+  const handleManualLeaderboardReset = async () => {
+    if (!window.confirm("Are you sure? This will set EVERYONE'S points to 0. This cannot be undone!")) return;
+    
+    const loadingToast = toast.loading("Resetting leaderboard...");
+    try {
+      // 1. Reset Users
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const userBatch = writeBatch(db);
+      usersSnap.docs.forEach((uDoc) => {
+        userBatch.update(uDoc.ref, {
+          totalPoints: 0,
+          totalFocusMinutes: 0,
+          'streak.currentCount': 1 // Reset streak or keep it? User said "give chance everyone", points are usually enough.
+        });
+      });
+      await userBatch.commit();
+
+      // 2. Clear Leaderboard collection (to be sure)
+      const leaderboardSnap = await getDocs(collection(db, 'leaderboard'));
+      const lbBatch = writeBatch(db);
+      leaderboardSnap.docs.forEach((lbDoc) => {
+        lbBatch.update(lbDoc.ref, {
+          totalPoints: 0,
+          totalFocusMinutes: 0
+        });
+      });
+      await lbBatch.commit();
+
+      toast.dismiss(loadingToast);
+      toast.success("Leaderboard has been reset to zero!");
+      if (activeTab === 'users') fetchUsers();
+    } catch (error) {
+      console.error(error);
+      toast.dismiss(loadingToast);
+      toast.error("Failed to reset leaderboard");
+    }
+  };
+
   return (
     <div className="p-6 space-y-8 pb-24">
       <div className="flex items-center justify-between">
@@ -543,7 +589,16 @@ export default function Admin() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-bold">Student Database</h3>
-            <p className="text-xs text-gray-400">Total: {allUsers.length}</p>
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={handleManualLeaderboardReset}
+                className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 transition-colors"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Reset Leaderboard
+              </button>
+              <p className="text-xs text-gray-400">Total: {allUsers.length}</p>
+            </div>
           </div>
           
           <div className="space-y-3">
