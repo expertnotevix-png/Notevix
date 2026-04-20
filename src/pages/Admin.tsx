@@ -463,36 +463,62 @@ export default function Admin() {
     
     const loadingToast = toast.loading("Resetting leaderboard...");
     try {
-      // 1. Reset Users
-      const usersSnap = await getDocs(collection(db, 'users'));
-      const userBatch = writeBatch(db);
-      usersSnap.docs.forEach((uDoc) => {
-        userBatch.update(uDoc.ref, {
-          totalPoints: 0,
-          totalFocusMinutes: 0,
-          'streak.currentCount': 1 // Reset streak or keep it? User said "give chance everyone", points are usually enough.
-        });
+      // Try server-side reset first (it's faster and handles large amounts of users)
+      const response = await fetch('/api/admin/reset-leaderboard', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
       });
-      await userBatch.commit();
 
-      // 2. Clear Leaderboard collection (to be sure)
-      const leaderboardSnap = await getDocs(collection(db, 'leaderboard'));
-      const lbBatch = writeBatch(db);
-      leaderboardSnap.docs.forEach((lbDoc) => {
-        lbBatch.update(lbDoc.ref, {
-          totalPoints: 0,
-          totalFocusMinutes: 0
-        });
-      });
-      await lbBatch.commit();
+      if (response.ok) {
+        toast.dismiss(loadingToast);
+        toast.success("Leaderboard has been reset to zero via server!");
+        if (activeTab === 'users') fetchUsers();
+        return;
+      }
+
+      // Fallback to client-side if API fails (e.g. during local dev without server or if endpoint is broken)
+      console.warn("Server reset failed, falling back to client-side batch reset");
+      
+      const resetCollection = async (collName: string) => {
+        const snap = await getDocs(collection(db, collName));
+        if (snap.empty) return;
+
+        let batch = writeBatch(db);
+        let count = 0;
+
+        for (const doc of snap.docs) {
+          batch.update(doc.ref, {
+            totalPoints: 0,
+            totalFocusMinutes: 0,
+            ...(collName === 'users' ? { 'streak.currentCount': 1 } : {})
+          });
+          count++;
+
+          // Firestore batch limit is 500
+          if (count === 450) {
+            await batch.commit();
+            batch = writeBatch(db);
+            count = 0;
+          }
+        }
+
+        if (count > 0) {
+          await batch.commit();
+        }
+      };
+
+      await resetCollection('users');
+      await resetCollection('leaderboard');
 
       toast.dismiss(loadingToast);
       toast.success("Leaderboard has been reset to zero!");
       if (activeTab === 'users') fetchUsers();
     } catch (error) {
-      console.error(error);
+      console.error("Leaderboard reset error:", error);
       toast.dismiss(loadingToast);
-      toast.error("Failed to reset leaderboard");
+      toast.error("Failed to reset leaderboard. Check console for details.");
     }
   };
 
