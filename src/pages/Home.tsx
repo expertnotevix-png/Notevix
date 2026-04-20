@@ -416,6 +416,43 @@ export default function Home({ user }: HomeProps) {
         </motion.div>
       </div>
 
+      {/* Study Insights Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-5 h-5 text-purple-400" />
+            <h3 className="font-bold text-lg">Study Insights</h3>
+          </div>
+          <button 
+            onClick={() => navigate('/articles')}
+            className="text-purple-400 text-xs font-bold hover:underline"
+          >
+            View All
+          </button>
+        </div>
+        <div className="grid grid-cols-1 gap-4">
+          <motion.div
+            whileTap={{ scale: 0.98 }}
+            onClick={() => navigate('/article/how-to-study-class-10-science')}
+            className="glass-card overflow-hidden rounded-3xl group cursor-pointer border-white/5 active:border-purple-500/30 transition-all"
+          >
+            <div className="aspect-[21/9] relative scale-105">
+              <img 
+                src="https://picsum.photos/seed/science/800/400" 
+                alt="Study Tips" 
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+              <div className="absolute bottom-4 left-4 right-4">
+                <h4 className="font-bold text-white text-sm line-clamp-1">How to Master Class 10 Science: Study Tips from Toppers</h4>
+                <p className="text-[10px] text-gray-300 mt-1">Read expert advice for boards</p>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+
       <FocusTimerWidget />
 
       {/* Class Selector */}

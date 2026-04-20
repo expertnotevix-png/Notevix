@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { UserProfile } from '../types';
+import { useNavigate } from 'react-router-dom';
 import { useModeration } from '../hooks/useModeration';
 import CreatePostModal from '../components/community/CreatePostModal';
 import PostCard from '../components/community/PostCard';
@@ -51,6 +52,7 @@ interface ChatMessage {
 }
 
 export default function Community({ user }: { user: UserProfile | null }) {
+  const navigate = useNavigate();
   const { isBanned, banReason } = useModeration(user);
   const [activeTab, setActiveTab] = useState<'chat' | 'discussions' | 'groups'>('chat');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -84,23 +86,21 @@ export default function Community({ user }: { user: UserProfile | null }) {
 
     // Fetch Global Chat Messages - Optimized to get LATEST
     let chatUnsub: () => void = () => {};
-    if (user) {
-      const chatQuery = query(
-        collection(db, 'community_chat'),
-        orderBy('timestamp', 'desc'),
-        limit(50)
-      );
-      chatUnsub = onSnapshot(chatQuery, (snapshot) => {
-        const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ChatMessage[];
-        // Reverse for UI to show oldest at top, newest at bottom
-        setMessages([...msgs].reverse());
-        if (activeTab === 'chat') {
-          setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-        }
-      }, (error) => {
-        console.warn("Chat listener error:", error);
-      });
-    }
+    const chatQuery = query(
+      collection(db, 'community_chat'),
+      orderBy('timestamp', 'desc'),
+      limit(50)
+    );
+    chatUnsub = onSnapshot(chatQuery, (snapshot) => {
+      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ChatMessage[];
+      // Reverse for UI to show oldest at top, newest at bottom
+      setMessages([...msgs].reverse());
+      if (activeTab === 'chat') {
+        setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      }
+    }, (error) => {
+      console.warn("Chat listener error:", error);
+    });
 
     // Fetch Posts - Increased limit to prevent perceived deletion
     let postsQuery = query(collection(db, 'posts'), where('status', '==', 'approved'), limit(50));
@@ -302,7 +302,20 @@ export default function Community({ user }: { user: UserProfile | null }) {
       {!selectedGroup && (
         <div className="bg-black/80 backdrop-blur-xl border-t border-white/5 p-4 shrink-0 pb-24 md:pb-6 z-20 overflow-visible">
           <div className="max-w-4xl mx-auto relative h-full">
-            {activeTab === 'chat' ? (
+            {!user ? (
+               <div className="bg-purple-600/10 border border-purple-500/20 rounded-2xl p-4 flex items-center justify-between gap-4">
+                 <div className="space-y-1">
+                   <h4 className="font-bold text-sm">Join the Conversation</h4>
+                   <p className="text-[10px] text-gray-500">Sign in to ask questions, chat with peers, and join groups.</p>
+                 </div>
+                 <button 
+                   onClick={() => navigate('/login')}
+                   className="purple-gradient px-6 py-2 rounded-xl text-xs font-bold shadow-lg shadow-purple-500/20"
+                 >
+                   Sign In
+                 </button>
+               </div>
+            ) : activeTab === 'chat' ? (
               <div className="relative">
                 {showEmoji && (
                   <div className="absolute bottom-full left-0 right-0 z-30 mb-2">

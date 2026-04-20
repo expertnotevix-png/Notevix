@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { ChevronLeft, Target, Users, BookOpen, Award } from 'lucide-react';
+import { ChevronLeft, Target, Users, BookOpen, Award, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 
@@ -31,10 +31,47 @@ export default function AboutUs() {
             <h2 className="font-bold">Our Mission</h2>
           </div>
           <p>
-            NoteVix was founded with a single mission: to provide CBSE Class 8, 9, and 10 students with the highest quality, most concise study materials. We believe that smart work is better than hard work, and our "One Page Notes" are designed to help students revise entire chapters in minutes.
+            NoteVix was founded with a single mission: to revolutionize how CBSE Class 8, 9, and 10 students approach their studies. We believe that the current traditional education system often prioritizes quantity over quality, leading to burnout and stress. Our goal is to provide students with the highest quality, most concise study materials that emphasize understanding and retention over rote memorization.
           </p>
           <p>
-            In today's fast-paced world, students are often overwhelmed with massive textbooks and endless online resources. NoteVix aims to cut through the noise by providing only what is essential for exam success. Our content is designed to be visually engaging and easy to remember.
+            Our core philosophy is "Smart Revision." We understand that as exams approach, a student's most valuable resource is time. That's why our "One Page Notes" are meticulously designed to help students master entire chapters in under 15 minutes. We don't just summarize; we synthesize information into a format that the human brain can process and recall with ease during high-pressure exam situations.
+          </p>
+        </section>
+
+        <section className="space-y-3">
+          <div className="flex items-center gap-2 text-white">
+            <Award className="w-5 h-5 text-purple-500" />
+            <h2 className="font-bold">Our Pedagogy: The 3-Step Success Cycle</h2>
+          </div>
+          <p>
+            At the heart of NoteVix is a research-backed educational framework designed specifically for the Indian CBSE curriculum. Our methodology consists of three distinct phases:
+          </p>
+          <div className="space-y-4 pt-2">
+            <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+              <h4 className="font-bold text-purple-400 mb-1">1. Cognitive Synthesis</h4>
+              <p className="text-xs">We strip away the academic jargon found in bulky textbooks and present the core "AHA!" moments of each chapter. This reduced cognitive load allows the brain to focus on the truly important concepts that examiners love to test.</p>
+            </div>
+            <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+              <h4 className="font-bold text-purple-400 mb-1">2. Visual Mapping</h4>
+              <p className="text-xs">Our notes are not just text. They are blueprints. We use strategic typography, color-coding, and spatial organization to mirror how memory works. When you see a NoteVix page, your brain creates a visual anchor for the information.</p>
+            </div>
+            <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+              <h4 className="font-bold text-purple-400 mb-1">3. AI-Accelerated Problem Solving</h4>
+              <p className="text-xs">Learning doesn't stop at reading. Our integrated AI Doubt Solver and Quiz Generator provide immediate feedback, closing the "learning gap" that often occurs when a student gets stuck on a specific numerical or concept at home.</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-3">
+          <div className="flex items-center gap-2 text-white">
+            <Shield className="w-5 h-5 text-purple-500" />
+            <h2 className="font-bold">Bridging the Technology Gap</h2>
+          </div>
+          <p>
+            The 2025-26 academic year has brought significant changes to the CBSE exam pattern, with a heightened focus on "Competency-Based Questions." NoteVix is the first platform to fully integrate generative AI specifically tuned for these new formats. We provide students with the tools of the future, today.
+          </p>
+          <p>
+            From our smart AI Summarizer that can digest complex question banks to our Focus Timer that utilizes the Pomodoro technique to maintain mental health, every feature on NoteVix is built with a student-first mindset. We are not just a website; we are a digital study partner that stays awake when you do.
           </p>
         </section>
 

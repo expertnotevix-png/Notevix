@@ -23,10 +23,10 @@ const features = [
 ];
 
 const subjects = [
-  { name: 'Mathematics', icon: BookOpen, color: 'text-blue-500' },
-  { name: 'Science', icon: FlaskConical, color: 'text-green-500' },
-  { name: 'Social Science', icon: Globe, color: 'text-orange-500' },
-  { name: 'English', icon: Languages, color: 'text-pink-500' }
+  { id: 'maths', name: 'Mathematics', icon: BookOpen, color: 'text-blue-500' },
+  { id: 'science', name: 'Science', icon: FlaskConical, color: 'text-green-500' },
+  { id: 'sst', name: 'Social Science', icon: Globe, color: 'text-orange-500' },
+  { id: 'english', name: 'English', icon: Languages, color: 'text-pink-500' }
 ];
 
 export default function Landing() {
@@ -112,16 +112,17 @@ export default function Landing() {
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {subjects.map((subject, i) => (
-              <motion.div
+              <motion.button
                 key={i}
                 whileHover={{ y: -5 }}
-                className="glass-card p-8 rounded-3xl text-center space-y-4 border-white/5"
+                onClick={() => navigate(`/class/10/${subject.id}`)}
+                className="glass-card p-8 rounded-3xl text-center space-y-4 border-white/5 hover:border-purple-500/30 transition-all"
               >
                 <div className={`w-16 h-16 mx-auto rounded-2xl bg-white/5 flex items-center justify-center ${subject.color}`}>
                   <subject.icon className="w-8 h-8" />
                 </div>
                 <h3 className="font-bold text-lg">{subject.name}</h3>
-              </motion.div>
+              </motion.button>
             ))}
           </div>
         </div>
@@ -158,17 +159,21 @@ export default function Landing() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
-              { title: 'CBSE Class 9 Science Notes', desc: 'Comprehensive one-page summaries for Physics, Chemistry, and Biology.' },
-              { title: 'Class 10 Maths Important Questions', desc: 'Handpicked questions that are most likely to appear in board exams.' },
-              { title: 'Class 8 Social Science Summaries', desc: 'Easy-to-understand notes for History, Geography, and Civics.' },
-              { title: 'NCERT Solutions Class 10', desc: 'Detailed explanations for all NCERT textbook exercises.' },
-              { title: 'Class 9 English Grammar Guide', desc: 'Master grammar rules with our simplified guides and practice sets.' },
-              { title: 'Class 10 Science Sample Papers', desc: 'Practice with the latest pattern sample papers for 2025-26.' }
+              { title: 'CBSE Class 9 Science Notes', path: '/class/9/science', desc: 'Comprehensive one-page summaries for Physics, Chemistry, and Biology.' },
+              { title: 'Class 10 Maths Important Questions', path: '/class/10/maths', desc: 'Handpicked questions that are most likely to appear in board exams.' },
+              { title: 'Class 8 Social Science Summaries', path: '/class/8/sst', desc: 'Easy-to-understand notes for History, Geography, and Civics.' },
+              { title: 'NCERT Solutions Class 10', path: '/explore?q=ncert', desc: 'Detailed explanations for all NCERT textbook exercises.' },
+              { title: 'Class 9 English Grammar Guide', path: '/class/9/english', desc: 'Master grammar rules with our simplified guides and practice sets.' },
+              { title: 'Class 10 Science Sample Papers', path: '/class/10/science', desc: 'Practice with the latest pattern sample papers for 2025-26.' }
             ].map((resource, i) => (
-              <div key={i} className="glass-card p-6 rounded-2xl border-white/5 hover:border-purple-500/30 transition-all cursor-default">
+              <button 
+                key={i} 
+                onClick={() => navigate(resource.path)}
+                className="glass-card p-6 rounded-2xl border-white/5 hover:border-purple-500/30 transition-all text-left"
+              >
                 <h3 className="font-bold text-purple-400 mb-2">{resource.title}</h3>
                 <p className="text-sm text-gray-500">{resource.desc}</p>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -291,12 +296,14 @@ export default function Landing() {
             <ul className="space-y-4 text-sm text-gray-500">
               <li><button onClick={() => navigate('/privacy')} className="hover:text-purple-400">Privacy Policy</button></li>
               <li><button onClick={() => navigate('/terms')} className="hover:text-purple-400">Terms of Service</button></li>
+              <li><button onClick={() => navigate('/disclaimer')} className="hover:text-purple-400">Disclaimer</button></li>
             </ul>
           </div>
 
           <div className="space-y-6">
-            <h4 className="font-bold uppercase text-xs tracking-widest text-gray-400">Support</h4>
+            <h4 className="font-bold uppercase text-xs tracking-widest text-gray-400">Resources</h4>
             <ul className="space-y-4 text-sm text-gray-500">
+              <li><button onClick={() => navigate('/articles')} className="hover:text-purple-400">Study Insights</button></li>
               <li><button onClick={() => navigate('/about')} className="hover:text-purple-400">About Us</button></li>
               <li><button onClick={() => navigate('/contact')} className="hover:text-purple-400">Contact Us</button></li>
             </ul>

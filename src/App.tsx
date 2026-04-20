@@ -6,6 +6,10 @@ import { logEvent } from 'firebase/analytics';
 import { auth, db, handleFirestoreError, OperationType, analytics } from './lib/firebase';
 import { UserProfile } from './types';
 
+import Articles from './pages/Articles';
+import ArticleDetail from './pages/ArticleDetail';
+import Disclaimer from './pages/Disclaimer';
+
 // Pages
 import Home from './pages/Home';
 import Explore from './pages/Explore';
@@ -390,13 +394,16 @@ export default function App() {
           <Route path="/saved" element={user ? <Saved user={user} /> : <Navigate to="/login" />} />
           <Route path="/profile" element={user ? <Profile user={user} /> : <Navigate to="/login" />} />
           
-          <Route path="/class/:classId/:subjectId" element={user ? <ChapterList /> : <Navigate to="/login" />} />
-          <Route path="/note/:noteId" element={user ? <NoteView user={user} /> : <Navigate to="/login" />} />
+          <Route path="/class/:classId/:subjectId" element={<ChapterList />} />
+          <Route path="/note/:noteId" element={<NoteView user={user} />} />
           <Route path="/premium-notes" element={user ? <PremiumNotes user={user} /> : <Navigate to="/login" />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/about" element={<AboutUs />} />
           <Route path="/contact" element={<Contact user={user} />} />
           <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/disclaimer" element={<Disclaimer />} />
+          <Route path="/articles" element={<Articles />} />
+          <Route path="/article/:id" element={<ArticleDetail />} />
           
           <Route path="/ai-doubts" element={user ? <AIDoubtSolver /> : <Navigate to="/login" />} />
           <Route path="/ai-quiz" element={user ? <QuizGenerator /> : <Navigate to="/login" />} />

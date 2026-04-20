@@ -8,7 +8,7 @@ import { ChevronLeft, Bookmark, Download, Share2, Info, HelpCircle, CheckCircle2
 import { Link } from 'react-router-dom';
 
 interface NoteViewProps {
-  user: UserProfile;
+  user: UserProfile | null;
 }
 
 export default function NoteView({ user }: NoteViewProps) {
@@ -16,7 +16,7 @@ export default function NoteView({ user }: NoteViewProps) {
   const navigate = useNavigate();
   const [chapter, setChapter] = useState<Chapter | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isSaved, setIsSaved] = useState(user.savedNotes.includes(noteId || ''));
+  const [isSaved, setIsSaved] = useState(user?.savedNotes.includes(noteId || '') || false);
 
   useEffect(() => {
     const fetchChapter = async () => {
@@ -33,6 +33,10 @@ export default function NoteView({ user }: NoteViewProps) {
   }, [noteId]);
 
   const toggleSave = async () => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
     if (!noteId) return;
     const userRef = doc(db, 'users', user.uid);
     if (isSaved) {
@@ -61,7 +65,10 @@ export default function NoteView({ user }: NoteViewProps) {
     );
   }
 
-  const isPremiumLocked = chapter.isPremium && !user.isPremium && !user.unlockedClasses?.includes(chapter.class) && user.role !== 'admin';
+  const isPremiumLocked = chapter.isPremium && (
+    !user || 
+    (!user.isPremium && !user.unlockedClasses?.includes(chapter.class) && user.role !== 'admin')
+  );
 
   return (
     <div className="min-h-screen bg-white text-gray-900 pb-24">
