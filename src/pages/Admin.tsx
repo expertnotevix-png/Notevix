@@ -352,11 +352,8 @@ export default function Admin() {
         const currentUnlocked = (userData?.unlockedClasses || []) as string[];
         if (!currentUnlocked.includes(req.targetClass)) {
           await updateDoc(finalUserRef, { 
-            unlockedClasses: [...currentUnlocked, req.targetClass],
-            isPremium: true // Ensure they get premium flag
+            unlockedClasses: [...currentUnlocked, req.targetClass]
           });
-        } else {
-          await updateDoc(finalUserRef, { isPremium: true });
         }
       } else {
         await updateDoc(finalUserRef, { isPremium: true });
