@@ -239,53 +239,73 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       const extractedTxId = aiResult.transactionId!;
       toast.success(`AI Verified! Transaction ID: ${extractedTxId}`);
 
-      // 2. Submit Request to Firestore
-      const request: Omit<PurchaseRequest, 'id'> = {
-        userId: user.uid,
-        userEmail: user.email,
-        userName: user.displayName,
-        planId: selectedPlan!.id,
-        planName: selectedPlan!.name,
-        amount: selectedPlan!.price,
-        transactionId: extractedTxId,
-        whatsappNumber: whatsapp,
-        status: 'pending',
-        timestamp: new Date().toISOString()
-      };
-
-      const finalRequest = {
-        ...request,
-        targetClass: (selectedPlan as any).class || null,
-        planType: (selectedPlan as any).type,
-        instagramUsername: user.instagramUsername || null,
-        screenshotUrl: screenshotPreview // Using base64 for now as placeholder for storage
-      };
-
-      const docRef = await addDoc(collection(db, 'purchase_requests'), finalRequest);
-      
-      // 3. Automated Approval via Server Webhook
+      // 2. Automated Approval via Server Webhook (Creates record + Upgrades user)
       try {
-        const secret = (import.meta as any).env.VITE_WEBHOOK_SECRET || "notevix_ai_verify_2024_xyz"; // Default for demo if not set
+        const secret = (import.meta as any).env.VITE_WEBHOOK_SECRET || "notevix_ai_verify_2024_xyz"; 
         const response = await fetch('/api/webhooks/approve-payment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             transactionId: extractedTxId,
-            secret: secret
+            secret: secret,
+            userId: user.uid,
+            planId: selectedPlan!.id,
+            planName: selectedPlan!.name,
+            amount: selectedPlan!.price,
+            whatsappNumber: whatsapp,
+            planType: (selectedPlan as any).type,
+            targetClass: (selectedPlan as any).class || null,
+            screenshotUrl: screenshotPreview
           })
         });
 
         const approveResult = await response.json();
         if (approveResult.success) {
-          toast.success('System Approval: Your premium access is now LIVE!');
+          toast.success('👑 Premium Access Activated! Enjoy your notes.');
           setSelectedPlan(null);
           setScreenshotPreview(null);
         } else {
-          toast.info('Request submitted. Manual verification may be required.');
+          // If webhook fails but AI passed, we should still record the intent in Firestore for safety as backup
+          console.error("Webhook failed after AI success:", approveResult.error);
+          toast.info('Verification semi-successful. Please refresh or contact support.');
+          
+          // Safety fallback: manual entry to Firestore if the server failed for some reason
+          await addDoc(collection(db, 'purchase_requests'), {
+            userId: user.uid,
+            userEmail: user.email,
+            userName: user.displayName,
+            planId: selectedPlan!.id,
+            planName: selectedPlan!.name,
+            amount: selectedPlan!.price,
+            transactionId: extractedTxId,
+            whatsappNumber: whatsapp,
+            status: 'pending',
+            timestamp: new Date().toISOString(),
+            targetClass: (selectedPlan as any).class || null,
+            planType: (selectedPlan as any).type,
+            screenshotUrl: screenshotPreview
+          });
         }
       } catch (webhookErr) {
-        console.warn("Automated approval failed, falling back to pending:", webhookErr);
-        toast.info('Request submitted for manual review.');
+        console.warn("Automated approval failed, falling back to manual:", webhookErr);
+        toast.info('AI verified, but system sync failed. Admins will activate you manually.');
+        
+        // Safety fallback
+        await addDoc(collection(db, 'purchase_requests'), {
+          userId: user.uid,
+          userEmail: user.email,
+          userName: user.displayName,
+          planId: selectedPlan!.id,
+          planName: selectedPlan!.name,
+          amount: selectedPlan!.price,
+          transactionId: extractedTxId,
+          whatsappNumber: whatsapp,
+          status: 'pending',
+          timestamp: new Date().toISOString(),
+          targetClass: (selectedPlan as any).class || null,
+          planType: (selectedPlan as any).type,
+          screenshotUrl: screenshotPreview
+        });
       }
 
     } catch (error) {

@@ -145,89 +145,100 @@ async function startServer() {
 
   // Webhook for Automated Payment Verification
   app.post("/api/webhooks/approve-payment", async (req, res) => {
-    const { transactionId, secret } = req.body;
-    const webhookSecret = process.env.WEBHOOK_SECRET;
+    const { transactionId, secret, userId, planId, planName, amount, whatsappNumber, planType, targetClass, screenshotUrl } = req.body;
+    const webhookSecret = process.env.WEBHOOK_SECRET || "notevix_ai_verify_2024_xyz";
 
-    if (!webhookSecret || secret !== webhookSecret) {
+    if (secret !== webhookSecret) {
       return res.status(401).json({ error: "Unauthorized. Invalid WEBHOOK_SECRET." });
     }
 
-    if (!transactionId) {
-      return res.status(400).json({ error: "Missing transactionId" });
+    if (!transactionId || !userId) {
+      return res.status(400).json({ error: "Missing required fields (transactionId or userId)" });
     }
 
     try {
-      console.log(`[Webhook] Approving payment for Transaction ID: ${transactionId}`);
+      console.log(`[Webhook] Auto-approving payment for user ${userId}, Tx: ${transactionId}`);
       
-      // 1. Find the purchase request
+      // 1. Create or Find the purchase request
+      // We check if it exists first to avoid duplicates
       const requestQuery = await dbAdmin.collection("purchase_requests")
         .where("transactionId", "==", transactionId)
-        .where("status", "==", "pending")
         .limit(1)
         .get();
 
-      if (requestQuery.empty) {
-        return res.status(404).json({ error: "Pending purchase request not found with this transaction ID" });
+      let requestRef;
+      if (!requestQuery.empty) {
+        requestRef = requestQuery.docs[0].ref;
+      } else {
+        requestRef = dbAdmin.collection("purchase_requests").doc();
       }
 
-      const requestDoc = requestQuery.docs[0];
-      const reqData = requestDoc.data();
-      const userId = reqData.userId;
-
-      // 2. Find and update the User
+      // 2. Map Plan Details if not provided
+      // If we're creating a new one, we need to ensure we have the data
+      
+      // 3. Find and update the User
       const userRef = dbAdmin.collection("users").doc(userId);
       const userSnap = await userRef.get();
 
       if (!userSnap.exists) {
-        return res.status(404).json({ error: "User document not found for this request" });
+        return res.status(404).json({ error: "User document not found" });
       }
 
       const userData = userSnap.data();
-
-      // 3. Apply Access Logic
       const batch = dbAdmin.batch();
 
-      if (reqData.planType === 'subscription') {
+      // 4. Update/Set Purchase Request
+      batch.set(requestRef, {
+        userId,
+        planId,
+        planName,
+        amount,
+        transactionId,
+        whatsappNumber,
+        planType,
+        targetClass: targetClass || null,
+        screenshotUrl: screenshotUrl || null,
+        status: 'approved',
+        verifiedAt: new Date().toISOString(),
+        verifiedBy: 'ai_system',
+        timestamp: new Date().toISOString()
+      }, { merge: true });
+
+      // 5. Apply Access Logic
+      if (planType === 'subscription') {
         batch.update(userRef, { 
           isPremium: true,
           subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
         });
-      } else if (reqData.planType === 'one-time' && reqData.targetClass) {
+      } else if (planType === 'one-time' && targetClass) {
         const currentUnlocked = (userData?.unlockedClasses || []) as string[];
-        if (!currentUnlocked.includes(reqData.targetClass)) {
+        if (!currentUnlocked.includes(targetClass)) {
           batch.update(userRef, { 
-            unlockedClasses: [...currentUnlocked, reqData.targetClass]
+            unlockedClasses: [...currentUnlocked, targetClass]
           });
         }
       } else {
         batch.update(userRef, { isPremium: true });
       }
 
-      // 4. Update Request Status
-      batch.update(requestDoc.ref, { 
-        status: 'approved',
-        verifiedAt: new Date().toISOString(),
-        verifiedBy: 'system/webhook'
-      });
-
-      // 5. Notify the User
+      // 6. Notify the User
       const notificationRef = dbAdmin.collection("notifications").doc();
       batch.set(notificationRef, {
         userId: userId,
         title: 'Premium Activated! 👑',
-        message: `Your payment for ${reqData.planName} has been automatically verified. Enjoy your premium access!`,
-        type: 'rank', // Use rank type for styling
+        message: `Your payment for ${planName} has been automatically verified by NoteVix AI. Enjoy your premium access!`,
+        type: 'rank',
         read: false,
         timestamp: new Date().toISOString()
       });
 
       await batch.commit();
       
-      console.log(`[Webhook] Payment approved successfully for user ${userId}`);
-      res.json({ success: true, message: "Payment verified and account upgraded." });
+      console.log(`[Webhook] Payment AUTO-approved successfully for user ${userId}`);
+      res.json({ success: true, message: "AI verified your payment. Access granted!" });
     } catch (error: any) {
-      console.error("[Webhook] Verification logic failed:", error);
-      res.status(500).json({ error: "Internal server error during verification process" });
+      console.error("[Webhook] Auto-approval logic failed:", error);
+      res.status(500).json({ error: "Internal server error during auto-approval" });
     }
   });
 
