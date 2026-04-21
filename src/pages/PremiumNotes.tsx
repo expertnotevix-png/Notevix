@@ -144,26 +144,38 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   };
 
   const verifyPaymentWithAI = async (base64Image: string): Promise<{ verified: boolean; reason: string; transactionId?: string }> => {
+    const now = new Date();
+    const today = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+    const time = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    
     const prompt = `
       Analyze this payment screenshot for "NoteVix" educational app.
       
+      CRITICAL CONTEXT:
+      - Current Date: ${today}
+      - Current Time: ${time} (India Standard Time)
+      - The user is in India.
+      
       Strict Requirements:
-      1. Recipient MUST be "Poonam devi" or the UPI ID must contain "9236489649@mbk".
-      2. Status MUST be "Success", "Completed", or "Paid".
-      3. Amount should be ₹${selectedPlan?.price}.
-      4. Authentication: Check if the screenshot looks like a real mobile UI screenshot from apps like PhonePe, Google Pay, MobiKwik, or Paytm. Detect if it looks AI-generated or obviously edited.
-      5. EXTRACT the Transaction ID, UTR number, or Reference number from the screenshot.
+      1. Recipient: The name must be "Poonam devi" (or similar like Poonam Devi) or the UPI ID must be "9236489649@mbk".
+      2. Status: The payment MUST be shown as "Success", "Completed", "Paid", or "Successful".
+      3. Amount: The amount shown should be exactly ₹${selectedPlan?.price}.
+      4. Date/Time: The transaction date should be ${today}. If the time in screenshot is ${time} or slightly before, it is VALID. DO NOT flag ${today} as a "future date" - it is the current date in India.
+      5. Authentication: Verify this is a real mobile UI screenshot from apps like PhonePe, Google Pay, MobiKwik, FamApp, or Paytm. 
+      6. Extraction: EXTRACT the Transaction ID, UTR number, or Reference number.
       
       Return your response in JSON format:
       {
         "verified": boolean,
-        "reason": "Detailed reason why it passed or failed",
+        "reason": "Detailed reason for pass/fail",
         "details": {
            "recipientName": "string",
            "upiId": "string",
            "amount": number,
            "isRealScreenshot": boolean,
-           "transactionId": "string (the extracted transaction ID or UTR)"
+           "transactionId": "string",
+           "transactionDate": "string",
+           "transactionTime": "string"
         }
       }
     `;
@@ -370,6 +382,20 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         ))}
       </div>
 
+      {/* Support Section */}
+      <div className="text-center pt-8 border-t border-white/5 space-y-4">
+        <div className="inline-flex items-center gap-3 px-6 py-3 bg-white/5 border border-white/10 rounded-2xl">
+          <Send className="w-4 h-4 text-purple-400 rotate-12" />
+          <div className="text-left">
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Support & Help</p>
+            <a href="mailto:expertnotevix@gmail.com" className="text-xs font-black text-white hover:text-purple-400 transition-colors tracking-tight">expertnotevix@gmail.com</a>
+          </div>
+        </div>
+        <p className="text-[9px] text-gray-600 font-bold uppercase tracking-[0.2em] leading-relaxed max-w-[200px] mx-auto">
+          Contact us for payment failures or verification delays.
+        </p>
+      </div>
+
       {/* Payment Modal */}
       <AnimatePresence>
         {selectedPlan && (
@@ -496,6 +522,11 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                         </>
                       )}
                     </button>
+
+                    <div className="pt-2 text-center">
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Facing issues?</p>
+                      <a href="mailto:expertnotevix@gmail.com" className="text-[10px] text-purple-400 font-black hover:underline tracking-widest">expertnotevix@gmail.com</a>
+                    </div>
                   </div>
                 </div>
               </div>
