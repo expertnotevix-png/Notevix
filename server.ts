@@ -143,13 +143,96 @@ async function startServer() {
     else res.status(500).json({ error: "Reset failed" });
   });
 
-  // Supporting all methods temporarily for debugging; should be POST
-  app.all("/api/ai/nvidia", async (req, res) => {
-    if (req.method !== "POST") {
-      console.warn(`NVIDIA Proxy: Received ${req.method} request. Expected POST.`);
-      return res.status(405).json({ error: "Method Not Allowed. This chatbot service requires a POST request." });
+  // Webhook for Automated Payment Verification
+  app.post("/api/webhooks/approve-payment", async (req, res) => {
+    const { transactionId, secret } = req.body;
+    const webhookSecret = process.env.WEBHOOK_SECRET;
+
+    if (!webhookSecret || secret !== webhookSecret) {
+      return res.status(401).json({ error: "Unauthorized. Invalid WEBHOOK_SECRET." });
     }
 
+    if (!transactionId) {
+      return res.status(400).json({ error: "Missing transactionId" });
+    }
+
+    try {
+      console.log(`[Webhook] Approving payment for Transaction ID: ${transactionId}`);
+      
+      // 1. Find the purchase request
+      const requestQuery = await dbAdmin.collection("purchase_requests")
+        .where("transactionId", "==", transactionId)
+        .where("status", "==", "pending")
+        .limit(1)
+        .get();
+
+      if (requestQuery.empty) {
+        return res.status(404).json({ error: "Pending purchase request not found with this transaction ID" });
+      }
+
+      const requestDoc = requestQuery.docs[0];
+      const reqData = requestDoc.data();
+      const userId = reqData.userId;
+
+      // 2. Find and update the User
+      const userRef = dbAdmin.collection("users").doc(userId);
+      const userSnap = await userRef.get();
+
+      if (!userSnap.exists) {
+        return res.status(404).json({ error: "User document not found for this request" });
+      }
+
+      const userData = userSnap.data();
+
+      // 3. Apply Access Logic
+      const batch = dbAdmin.batch();
+
+      if (reqData.planType === 'subscription') {
+        batch.update(userRef, { 
+          isPremium: true,
+          subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        });
+      } else if (reqData.planType === 'one-time' && reqData.targetClass) {
+        const currentUnlocked = (userData?.unlockedClasses || []) as string[];
+        if (!currentUnlocked.includes(reqData.targetClass)) {
+          batch.update(userRef, { 
+            unlockedClasses: [...currentUnlocked, reqData.targetClass]
+          });
+        }
+      } else {
+        batch.update(userRef, { isPremium: true });
+      }
+
+      // 4. Update Request Status
+      batch.update(requestDoc.ref, { 
+        status: 'approved',
+        verifiedAt: new Date().toISOString(),
+        verifiedBy: 'system/webhook'
+      });
+
+      // 5. Notify the User
+      const notificationRef = dbAdmin.collection("notifications").doc();
+      batch.set(notificationRef, {
+        userId: userId,
+        title: 'Premium Activated! 👑',
+        message: `Your payment for ${reqData.planName} has been automatically verified. Enjoy your premium access!`,
+        type: 'rank', // Use rank type for styling
+        read: false,
+        timestamp: new Date().toISOString()
+      });
+
+      await batch.commit();
+      
+      console.log(`[Webhook] Payment approved successfully for user ${userId}`);
+      res.json({ success: true, message: "Payment verified and account upgraded." });
+    } catch (error: any) {
+      console.error("[Webhook] Verification logic failed:", error);
+      res.status(500).json({ error: "Internal server error during verification process" });
+    }
+  });
+
+  // NVIDIA Proxy
+  app.post("/api/ai/nvidia", async (req, res) => {
     const nvidiaKey = process.env.VITE_NVIDIA_API_KEY;
     if (!nvidiaKey) {
       console.error("NVIDIA Proxy: Key missing in process.env");

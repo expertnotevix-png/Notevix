@@ -108,4 +108,5 @@ export interface PurchaseRequest {
   planType?: 'subscription' | 'one-time';
   targetClass?: string;
   instagramUsername?: string;
+  screenshotUrl?: string;
 }

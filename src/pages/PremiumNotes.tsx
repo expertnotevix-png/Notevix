@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Crown, Check, ShieldCheck, QrCode, Copy, ExternalLink, X, Send, CreditCard } from 'lucide-react';
+import { Sparkles, Crown, Check, ShieldCheck, QrCode, Copy, ExternalLink, X, Send, CreditCard, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { UserProfile, PurchaseRequest } from '../types';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, addDoc, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { toast } from 'sonner';
+import { GoogleGenAI } from "@google/genai";
 
 interface PremiumNotesProps {
   user: UserProfile;
@@ -55,10 +56,14 @@ const PREMIUM_PLANS = [
 
 export default function PremiumNotes({ user }: PremiumNotesProps) {
   const [selectedPlan, setSelectedPlan] = useState<typeof PREMIUM_PLANS[0] | null>(null);
-  const [transactionId, setTransactionId] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
+  const [screenshot, setScreenshot] = useState<File | null>(null);
+  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [aiVerifying, setAiVerifying] = useState(false);
   const [hasPendingRequest, setHasPendingRequest] = useState(false);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const upiId = (import.meta as any).env?.VITE_UPI_ID || '9236489649@mbk';
 
@@ -79,14 +84,150 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     return () => unsubscribe();
   }, [user.uid]);
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) { // 2MB limit
+        toast.error('Screenshot must be less than 2MB');
+        return;
+      }
+      setScreenshot(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setScreenshotPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const verifyWithNVIDIA = async (base64Image: string, prompt: string): Promise<{ verified: boolean; reason: string; transactionId?: string }> => {
+    try {
+      console.log("NVIDIA Fallback: Starting verification...");
+      const response = await fetch('/api/ai/nvidia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: "nvidia/llama-3.2-11b-vision-instruct",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: prompt },
+                { 
+                  type: "image_url", 
+                  image_url: { 
+                    url: base64Image // Send full data URL
+                  } 
+                }
+              ]
+            }
+          ],
+          response_format: { type: "json_object" }
+        })
+      });
+
+      if (!response.ok) throw new Error(`NVIDIA API Error: ${response.status}`);
+      
+      const data = await response.json();
+      const content = data.choices[0].message.content;
+      const result = JSON.parse(content);
+      
+      return {
+        verified: result.verified && result.details?.isRealScreenshot && !!result.details?.transactionId,
+        reason: result.reason,
+        transactionId: result.details?.transactionId
+      };
+    } catch (error) {
+      console.error("NVIDIA Verification Error:", error);
+      return { verified: false, reason: "Payment verification failed on all AI services. Please contact support." };
+    }
+  };
+
+  const verifyPaymentWithAI = async (base64Image: string): Promise<{ verified: boolean; reason: string; transactionId?: string }> => {
+    const prompt = `
+      Analyze this payment screenshot for "NoteVix" educational app.
+      
+      Strict Requirements:
+      1. Recipient MUST be "Poonam devi" or the UPI ID must contain "9236489649@mbk".
+      2. Status MUST be "Success", "Completed", or "Paid".
+      3. Amount should be ₹${selectedPlan?.price}.
+      4. Authentication: Check if the screenshot looks like a real mobile UI screenshot from apps like PhonePe, Google Pay, MobiKwik, or Paytm. Detect if it looks AI-generated or obviously edited.
+      5. EXTRACT the Transaction ID, UTR number, or Reference number from the screenshot.
+      
+      Return your response in JSON format:
+      {
+        "verified": boolean,
+        "reason": "Detailed reason why it passed or failed",
+        "details": {
+           "recipientName": "string",
+           "upiId": "string",
+           "amount": number,
+           "isRealScreenshot": boolean,
+           "transactionId": "string (the extracted transaction ID or UTR)"
+        }
+      }
+    `;
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY });
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: "image/jpeg",
+                  data: base64Image.split(',')[1] // Remove 'data:image/jpeg;base64,'
+                }
+              }
+            ]
+          }
+        ],
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+
+      const result = JSON.parse(response.text);
+      return {
+        verified: result.verified && result.details?.isRealScreenshot && !!result.details?.transactionId,
+        reason: result.reason,
+        transactionId: result.details?.transactionId
+      };
+    } catch (error: any) {
+      console.warn("Gemini Failed/Limited, switching to NVIDIA...", error.message);
+      // Fallback to NVIDIA if Gemini fails (limit reached or error)
+      return await verifyWithNVIDIA(base64Image, prompt);
+    }
+  };
+
   const handlePurchase = async () => {
-    if (!transactionId || !whatsapp) {
-      toast.error('Please enter Transaction ID and WhatsApp number');
+    if (!whatsapp || !screenshotPreview) {
+      toast.error('Please enter WhatsApp number and upload screenshot');
       return;
     }
 
     setIsSubmitting(true);
+    setAiVerifying(true);
+
     try {
+      // 1. AI Verification
+      const aiResult = await verifyPaymentWithAI(screenshotPreview);
+      
+      if (!aiResult.verified) {
+        toast.error(`Verification Failed: ${aiResult.reason}`);
+        setAiVerifying(false);
+        setIsSubmitting(false);
+        return;
+      }
+
+      const extractedTxId = aiResult.transactionId!;
+      toast.success(`AI Verified! Transaction ID: ${extractedTxId}`);
+
+      // 2. Submit Request to Firestore
       const request: Omit<PurchaseRequest, 'id'> = {
         userId: user.uid,
         userEmail: user.email,
@@ -94,30 +235,54 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         planId: selectedPlan!.id,
         planName: selectedPlan!.name,
         amount: selectedPlan!.price,
-        transactionId: transactionId,
+        transactionId: extractedTxId,
         whatsappNumber: whatsapp,
         status: 'pending',
         timestamp: new Date().toISOString()
       };
 
-      // Add plan specific meta
       const finalRequest = {
         ...request,
         targetClass: (selectedPlan as any).class || null,
         planType: (selectedPlan as any).type,
-        instagramUsername: user.instagramUsername || null
+        instagramUsername: user.instagramUsername || null,
+        screenshotUrl: screenshotPreview // Using base64 for now as placeholder for storage
       };
 
-      await addDoc(collection(db, 'purchase_requests'), finalRequest);
-      toast.success('Payment submitted! Admin will verify and activate your premium access.');
-      setSelectedPlan(null);
-      setHasPendingRequest(true);
+      const docRef = await addDoc(collection(db, 'purchase_requests'), finalRequest);
+      
+      // 3. Automated Approval via Server Webhook
+      try {
+        const secret = (import.meta as any).env.VITE_WEBHOOK_SECRET || "notevix_ai_verify_2024_xyz"; // Default for demo if not set
+        const response = await fetch('/api/webhooks/approve-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transactionId: extractedTxId,
+            secret: secret
+          })
+        });
+
+        const approveResult = await response.json();
+        if (approveResult.success) {
+          toast.success('System Approval: Your premium access is now LIVE!');
+          setSelectedPlan(null);
+          setScreenshotPreview(null);
+        } else {
+          toast.info('Request submitted. Manual verification may be required.');
+        }
+      } catch (webhookErr) {
+        console.warn("Automated approval failed, falling back to pending:", webhookErr);
+        toast.info('Request submitted for manual review.');
+      }
+
     } catch (error) {
       console.error(error);
       handleFirestoreError(error, OperationType.CREATE, 'purchase_requests');
       toast.error('Failed to submit request. Please try again.');
     } finally {
       setIsSubmitting(false);
+      setAiVerifying(false);
     }
   };
 
@@ -257,46 +422,77 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                     </div>
 
                     <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl text-[10px] text-yellow-500 font-bold uppercase tracking-widest text-center leading-normal">
-                      Pay ₹{selectedPlan.price} and copy the Transaction ID / Ref No.
+                      Pay ₹{selectedPlan.price} and upload the screenshot below.
                     </div>
                   </div>
 
                   {/* Submission Form */}
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest px-1">Transaction ID / Ref No.</label>
-                      <input 
-                        type="text" 
-                        value={transactionId}
-                        onChange={(e) => setTransactionId(e.target.value)}
-                        placeholder="Enter 12-digit number"
-                        className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:outline-none focus:border-purple-500 transition-colors"
-                      />
+                       <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest px-1">WhatsApp Number</label>
+                       <input 
+                         type="tel" 
+                         value={whatsapp}
+                         onChange={(e) => setWhatsapp(e.target.value)}
+                         placeholder="+91 XXXXX XXXXX"
+                         className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:outline-none focus:border-purple-500 transition-colors"
+                       />
                     </div>
+                    {/* Screenshot Upload */}
                     <div className="space-y-2">
-                      <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest px-1">WhatsApp Number</label>
+                      <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest px-1">Payment Screenshot</label>
                       <input 
-                        type="tel" 
-                        value={whatsapp}
-                        onChange={(e) => setWhatsapp(e.target.value)}
-                        placeholder="+91 XXXXX XXXXX"
-                        className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:outline-none focus:border-purple-500 transition-colors"
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileChange}
+                        accept="image/*"
+                        className="hidden"
                       />
+                      <div 
+                        onClick={() => fileInputRef.current?.click()}
+                        className={`w-full aspect-video rounded-2xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center gap-2 overflow-hidden relative ${
+                          screenshotPreview 
+                            ? 'border-purple-500/50 bg-purple-500/5' 
+                            : 'border-white/10 hover:border-purple-500/30 bg-white/5'
+                        }`}
+                      >
+                        {screenshotPreview ? (
+                          <>
+                            <img src={screenshotPreview} alt="Preview" className="w-full h-full object-contain" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <p className="text-white text-[10px] font-bold uppercase tracking-widest">Change Photo</p>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center">
+                              <Upload className="w-5 h-5 text-purple-400" />
+                            </div>
+                            <p className="text-[10px] text-gray-500 font-bold uppercase">Click to upload screenshot</p>
+                            <p className="text-[8px] text-gray-600 uppercase tracking-widest">Max 2MB • JPG, PNG</p>
+                          </>
+                        )}
+                      </div>
                     </div>
                     <button
                       onClick={handlePurchase}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || hasPendingRequest}
                       className="w-full py-5 purple-gradient rounded-3xl font-black text-lg shadow-xl shadow-purple-500/30 flex items-center justify-center gap-3 active:scale-95 transition-transform disabled:opacity-50"
                     >
-                      {isSubmitting ? (
+                      {aiVerifying ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Verifying with AI...
+                        </>
+                      ) : isSubmitting ? (
                         <>
                           <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                           Submitting...
                         </>
                       ) : (
                         <>
-                          <Send className="w-5 h-5" />
-                          Submit Payment
+                          <ShieldCheck className="w-5 h-5" />
+                          Verify & Activate
                         </>
                       )}
                     </button>
