@@ -223,6 +223,8 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   };
 
   const handlePurchase = async () => {
+    if (isSubmitting || aiVerifying) return;
+
     if (!whatsapp || !screenshotPreview) {
       toast.error('Please enter WhatsApp number and upload screenshot');
       return;
@@ -272,10 +274,12 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           })
         });
 
-        const approveResult = await response.json().catch(async () => {
-          const text = await response.text();
-          throw new Error(`Invalid JSON response from server (Status ${response.status}). Body: ${text.substring(0, 50)}`);
-        });
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => "Unknown error");
+          throw new Error(`Server error (${response.status}): ${errorText.substring(0, 50)}`);
+        }
+
+        const approveResult = await response.json();
 
         if (approveResult.success) {
           toast.success('👑 Premium Access Activated! Enjoy your notes.');
