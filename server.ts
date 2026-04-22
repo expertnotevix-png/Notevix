@@ -7,6 +7,7 @@ import helmet from "helmet";
 import cron from "node-cron";
 import { initializeApp, cert, getApp, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 
 // Read config safely for ESM
 const firebaseConfig = JSON.parse(
@@ -33,6 +34,7 @@ const getDbAdmin = () => {
 };
 
 const dbAdmin = getDbAdmin();
+const adminAuth = getAuth();
 
 async function startServer() {
   const app = express();
@@ -145,18 +147,28 @@ async function startServer() {
 
   // Webhook for Automated Payment Verification
   app.post("/api/webhooks/approve-payment", async (req, res) => {
-    const { transactionId, secret, userId, planId, planName, amount, whatsappNumber, planType, targetClass, screenshotUrl } = req.body;
-    const webhookSecret = process.env.WEBHOOK_SECRET || "notevix_ai_verify_2024_xyz";
+    const { transactionId, userId, planId, planName, amount, whatsappNumber, planType, targetClass, screenshotUrl } = req.body;
+    const authHeader = req.headers.authorization;
 
-    if (secret !== webhookSecret) {
-      return res.status(401).json({ error: "Unauthorized. Invalid WEBHOOK_SECRET." });
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: "Missing or invalid authorization header" });
     }
 
-    if (!transactionId || !userId) {
-      return res.status(400).json({ error: "Missing required fields (transactionId or userId)" });
-    }
+    const idToken = authHeader.split('Bearer ')[1];
 
     try {
+      // 0. Verify User Identity via Firebase Admin
+      const decodedToken = await adminAuth.verifyIdToken(idToken);
+      const authenticatedUserId = decodedToken.uid;
+
+      if (authenticatedUserId !== userId) {
+        return res.status(403).json({ error: "Forbidden. Token user does not match request user." });
+      }
+
+      if (!transactionId) {
+        return res.status(400).json({ error: "Missing required fields (transactionId)" });
+      }
+
       console.log(`[Webhook] Auto-approving payment for user ${userId}, Tx: ${transactionId}`);
       
       // 1. Create or Find the purchase request

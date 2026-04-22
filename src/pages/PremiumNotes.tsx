@@ -247,13 +247,15 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
       // 2. Automated Approval via Server Webhook (Creates record + Upgrades user)
       try {
-        const secret = (import.meta as any).env.VITE_WEBHOOK_SECRET || "notevix_ai_verify_2024_xyz"; 
+        const idToken = await user.getIdToken();
         const response = await fetch('/api/webhooks/approve-payment', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
           body: JSON.stringify({
             transactionId: extractedTxId,
-            secret: secret,
             userId: user.uid,
             planId: selectedPlan!.id,
             planName: selectedPlan!.name,
@@ -265,7 +267,11 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           })
         });
 
-        const approveResult = await response.json();
+        const approveResult = await response.json().catch(async () => {
+          const text = await response.text();
+          throw new Error(`Invalid JSON response from server (Status ${response.status}). Body: ${text.substring(0, 50)}`);
+        });
+
         if (approveResult.success) {
           toast.success('👑 Premium Access Activated! Enjoy your notes.');
           setSelectedPlan(null);
