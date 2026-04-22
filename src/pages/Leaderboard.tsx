@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { collection, query, orderBy, limit, doc, getDoc, getDocs } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
 import { UserProfile } from '../types';
 import { motion } from 'motion/react';
-import { Trophy, Medal, Crown, Timer, TrendingUp, Instagram, Star, History } from 'lucide-react';
+import { Trophy, Medal, Crown, Timer, TrendingUp, Instagram, Star, History, ShieldAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 
@@ -11,10 +11,13 @@ interface LeaderboardProps {
   user: UserProfile | null;
 }
 
+const CACHED_LEADERBOARD_KEY = 'notevix_cached_leaderboard';
+
 export default function Leaderboard({ user }: LeaderboardProps) {
   const [topUsers, setTopUsers] = useState<UserProfile[]>([]);
   const [lastReset, setLastReset] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isQuotaLimited, setIsQuotaLimited] = useState(false);
   const navigate = useNavigate();
   const isSunday = new Date().getDay() === 0;
 
@@ -22,6 +25,17 @@ export default function Leaderboard({ user }: LeaderboardProps) {
     const fetchLeaderboard = async () => {
       try {
         setLoading(true);
+
+        if (checkQuotaLock()) {
+          console.warn("Leaderboard: Quota lockout active. Using cache.");
+          setIsQuotaLimited(true);
+          const cached = localStorage.getItem(CACHED_LEADERBOARD_KEY);
+          if (cached) {
+            setTopUsers(JSON.parse(cached));
+          }
+          return;
+        }
+
         const q = query(
           collection(db, 'leaderboard'),
           orderBy('totalPoints', 'desc'),
@@ -33,6 +47,9 @@ export default function Leaderboard({ user }: LeaderboardProps) {
           .filter(u => u.email !== 'expertraj8@gmail.com');
         setTopUsers(users);
         
+        // Cache successful fetch
+        localStorage.setItem(CACHED_LEADERBOARD_KEY, JSON.stringify(users));
+        
         // Also fetch stats
         const statsDoc = await getDoc(doc(db, 'system_stats', 'leaderboard'));
         if (statsDoc.exists()) {
@@ -40,6 +57,12 @@ export default function Leaderboard({ user }: LeaderboardProps) {
         }
       } catch (error: any) {
         handleFirestoreError(error, OperationType.LIST, 'leaderboard');
+        setIsQuotaLimited(true);
+        // Try to load cache on error
+        const cached = localStorage.getItem(CACHED_LEADERBOARD_KEY);
+        if (cached) {
+          setTopUsers(JSON.parse(cached));
+        }
       } finally {
         setLoading(false);
       }
@@ -78,6 +101,12 @@ export default function Leaderboard({ user }: LeaderboardProps) {
               <h1 className="text-2xl font-bold">Leaderboard</h1>
               <div className="flex items-center gap-2 text-gray-400">
                 <p className="text-sm">Top students by study time</p>
+                {isQuotaLimited && (
+                  <div className="flex items-center gap-1 text-[10px] bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded-full border border-amber-500/20">
+                    <ShieldAlert className="w-3 h-3" />
+                    <span>Cached (Cloud Busy)</span>
+                  </div>
+                )}
                 {lastReset && (
                   <div className="flex items-center gap-1 text-[10px] bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
                     <History className="w-3 h-3" />

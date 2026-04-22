@@ -3,12 +3,14 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, Plus, Trash2, CheckCircle2, Circle, Calendar, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
 import { UserProfile, ScheduleTask } from '../types';
 
 interface ScheduleProps {
   user: UserProfile;
 }
+
+const CACHED_SCHEDULE_KEY = 'notevix_cached_schedule';
 
 export default function Schedule({ user }: ScheduleProps) {
   const navigate = useNavigate();
@@ -23,6 +25,20 @@ export default function Schedule({ user }: ScheduleProps) {
     const fetchTasks = async () => {
       try {
         setLoading(true);
+
+        if (checkQuotaLock()) {
+          console.warn("Schedule: Quota lockout active. Using cache.");
+          const cached = localStorage.getItem(CACHED_SCHEDULE_KEY);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed.date === today) {
+              setTasks(parsed.tasks);
+              setLoading(false);
+              return;
+            }
+          }
+        }
+
         const q = query(
           collection(db, 'schedule'),
           where('userId', '==', user.uid),
@@ -31,9 +47,22 @@ export default function Schedule({ user }: ScheduleProps) {
         
         const snapshot = await getDocs(q);
         const taskList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduleTask));
-        setTasks(taskList.sort((a, b) => a.time.localeCompare(b.time)));
+        const sortedTasks = taskList.sort((a, b) => a.time.localeCompare(b.time));
+        setTasks(sortedTasks);
+        
+        // Cache successful fetch
+        localStorage.setItem(CACHED_SCHEDULE_KEY, JSON.stringify({ date: today, tasks: sortedTasks }));
       } catch (error: any) {
         handleFirestoreError(error, OperationType.LIST, 'schedule');
+        
+        // Fallback to cache on error
+        const cached = localStorage.getItem(CACHED_SCHEDULE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed.date === today) {
+            setTasks(parsed.tasks);
+          }
+        }
       } finally {
         setLoading(false);
       }

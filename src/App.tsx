@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { onAuthStateChanged, getRedirectResult, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, query, collection, where, getDocs, addDoc, increment, orderBy, limit } from 'firebase/firestore';
 import { logEvent } from 'firebase/analytics';
-import { auth, db, handleFirestoreError, OperationType, analytics } from './lib/firebase';
+import { auth, db, handleFirestoreError, OperationType, analytics, checkQuotaLock, setQuotaLock } from './lib/firebase';
 import { UserProfile } from './types';
 
 const CACHED_USER_KEY = 'notevix_user_profile_v1';
@@ -52,15 +52,9 @@ export default function App() {
 
   useEffect(() => {
     // Check for existing quota lockout on mount
-    const lockout = localStorage.getItem('firestore_quota_lockout');
-    if (lockout) {
-      const lockTime = parseInt(lockout);
-      if (Date.now() - lockTime < 30 * 60 * 1000) { // 30 minute lockout
-        quotaLockRef.current = true;
-        console.warn("App: Quota lockout active. Using cache only.");
-      } else {
-        localStorage.removeItem('firestore_quota_lockout');
-      }
+    if (checkQuotaLock()) {
+      quotaLockRef.current = true;
+      console.warn("App: Quota lockout active. Using cache only.");
     }
   }, []);
 
@@ -198,7 +192,6 @@ export default function App() {
               console.error("App: Firestore error fetching profile:", docError);
             } else if (!quotaLockRef.current) {
               quotaLockRef.current = true;
-              localStorage.setItem('firestore_quota_lockout', Date.now().toString());
             }
 
             // Try to use cached version first

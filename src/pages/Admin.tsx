@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp, writeBatch, getCountFromServer } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
 import { geminiService } from '../services/geminiService';
 import { Chapter, Message, Notification, PurchaseRequest, UserProfile } from '../types';
 import { Plus, Trash2, Edit2, Save, X, ChevronLeft, Database, MessageSquare, Bell, Send, CheckCircle2, Clock, Shield, RefreshCw, CreditCard, Check, XCircle, Users, Instagram } from 'lucide-react';
@@ -23,6 +23,11 @@ export default function Admin() {
   const [notifData, setNotifData] = useState({ title: '', message: '', type: 'info' as const });
 
   useEffect(() => {
+    if (checkQuotaLock()) {
+      console.warn("Admin: Quota lockout active. Skipping data fetch.");
+      setLoading(false);
+      return;
+    }
     if (activeTab === 'chapters') fetchChapters();
     if (activeTab === 'messages') fetchMessages();
     if (activeTab === 'notifications') fetchNotifications();
@@ -60,11 +65,15 @@ export default function Admin() {
   }, []);
 
   const autoSeedResources = async () => {
-    const q = query(collection(db, 'subject_resources'), limit(1));
-    const snap = await getDocs(q);
-    if (snap.empty) {
-      console.log("Auto-seeding subject resources...");
-      await addSampleData();
+    try {
+      const q = query(collection(db, 'subject_resources'), limit(1));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        console.log("Auto-seeding subject resources...");
+        await addSampleData();
+      }
+    } catch (err) {
+      console.warn("Admin: Auto-seeding check failed (likely quota):", err);
     }
   };
 
@@ -527,6 +536,19 @@ export default function Admin() {
 
   return (
     <div className="p-6 space-y-8 pb-24">
+      {checkQuotaLock() && (
+        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-4 animate-pulse">
+          <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center shrink-0">
+            <Database className="w-5 h-5 text-red-500" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-sm font-bold text-red-500 uppercase tracking-wider">Cloud Quota Lockout Active</h4>
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-normal">
+              Firestore read limits have been exceeded. Admin dashboard is in restricted read mode to save remaining units for students.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="p-2 glass-card rounded-xl">

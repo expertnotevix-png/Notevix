@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, Crown, Check, ShieldCheck, QrCode, Copy, ExternalLink, X, Send, CreditCard, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { UserProfile, PurchaseRequest } from '../types';
-import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
 import { collection, addDoc, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { GoogleGenAI } from "@google/genai";
@@ -71,6 +71,11 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     // 1. Check for pending requests (One-time fetch to save quota)
     const checkPendingRequests = async () => {
       try {
+        if (checkQuotaLock()) {
+          console.warn("PremiumNotes: Quota lockout active. Skipping pending check.");
+          return;
+        }
+
         const q = query(
           collection(db, 'purchase_requests'),
           where('userId', '==', user.uid),

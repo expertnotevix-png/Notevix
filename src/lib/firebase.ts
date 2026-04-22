@@ -47,6 +47,26 @@ export enum OperationType {
   WRITE = 'write',
 }
 
+// System-wide quota lockout (30 minutes)
+const QUOTA_LOCK_KEY = 'firestore_quota_lockout';
+const QUOTA_LOCK_DURATION = 30 * 60 * 1000;
+
+export const checkQuotaLock = (): boolean => {
+  const lockout = localStorage.getItem(QUOTA_LOCK_KEY);
+  if (lockout) {
+    const lockTime = parseInt(lockout);
+    if (Date.now() - lockTime < QUOTA_LOCK_DURATION) {
+      return true;
+    }
+    localStorage.removeItem(QUOTA_LOCK_KEY);
+  }
+  return false;
+};
+
+export const setQuotaLock = () => {
+  localStorage.setItem(QUOTA_LOCK_KEY, Date.now().toString());
+};
+
 interface FirestoreErrorInfo {
   error: string;
   operationType: OperationType;
@@ -67,8 +87,17 @@ interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null, shouldThrow = false) {
+  const errorMsg = error instanceof Error ? error.message : String(error);
+  const isQuotaError = errorMsg.toLowerCase().includes('quota') || 
+                      (error as any)?.code === 'resource-exhausted';
+
+  if (isQuotaError) {
+    setQuotaLock();
+    console.warn("Firestore Quota hit. Lockout active.");
+  }
+
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errorMsg,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
