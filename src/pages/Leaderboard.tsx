@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, limit, onSnapshot, doc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, doc, getDoc, getDocs } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { UserProfile } from '../types';
 import { motion } from 'motion/react';
@@ -19,37 +19,33 @@ export default function Leaderboard({ user }: LeaderboardProps) {
   const isSunday = new Date().getDay() === 0;
 
   useEffect(() => {
-    // Listen for leaderboard reset stats
-    const statsUnsubscribe = onSnapshot(doc(db, 'system_stats', 'leaderboard'), (doc) => {
-      if (doc.exists()) {
-        setLastReset(doc.data().lastReset);
+    const fetchLeaderboard = async () => {
+      try {
+        setLoading(true);
+        const q = query(
+          collection(db, 'leaderboard'),
+          orderBy('totalPoints', 'desc'),
+          limit(30)
+        );
+        const snapshot = await getDocs(q);
+        const users = snapshot.docs
+          .map(doc => doc.data() as any)
+          .filter(u => u.email !== 'expertraj8@gmail.com');
+        setTopUsers(users);
+        
+        // Also fetch stats
+        const statsDoc = await getDoc(doc(db, 'system_stats', 'leaderboard'));
+        if (statsDoc.exists()) {
+          setLastReset(statsDoc.data().lastReset);
+        }
+      } catch (error: any) {
+        handleFirestoreError(error, OperationType.LIST, 'leaderboard');
+      } finally {
+        setLoading(false);
       }
-    }, (error) => {
-      console.error("Leaderboard stats listener error:", error);
-    });
-
-    const q = query(
-      collection(db, 'leaderboard'),
-      orderBy('totalPoints', 'desc'),
-      limit(30)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      // Filter out admin and map data
-      const users = snapshot.docs
-        .map(doc => doc.data() as any)
-        .filter(u => u.email !== 'expertraj8@gmail.com');
-      setTopUsers(users);
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'leaderboard');
-      setLoading(false);
-    });
-
-    return () => {
-      unsubscribe();
-      statsUnsubscribe();
     };
+
+    fetchLeaderboard();
   }, []);
 
   if (loading) {

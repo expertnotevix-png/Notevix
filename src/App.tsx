@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, getRedirectResult, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, query, collection, where, getDocs, addDoc, increment, orderBy, limit } from 'firebase/firestore';
@@ -166,20 +166,6 @@ export default function App() {
               if (docSnap.exists()) {
                 const data = docSnap.data() as UserProfile;
                 setUser(data);
-
-                // Sync with Leaderboard (Public Profile)
-                if (data.role !== 'admin') {
-                  const leaderboardRef = doc(db, 'leaderboard', data.uid);
-                  setDoc(leaderboardRef, {
-                    uid: data.uid,
-                    displayName: data.displayName,
-                    photoURL: data.photoURL,
-                    totalPoints: data.totalPoints || 0,
-                    totalFocusMinutes: data.totalFocusMinutes || 0,
-                    class: data.class || '',
-                    streakCount: data.streak?.currentCount || 0
-                  }, { merge: true }).catch(err => console.error("Leaderboard sync failed:", err));
-                }
               }
             }, (error) => {
               console.error("App: User profile listener error:", error);
@@ -284,7 +270,13 @@ export default function App() {
     };
   }, [user?.uid, user?.notificationsEnabled]);
 
-  // Global Time Tracking (1 min = 10 points) + Activity Tracking
+  // Keep user ref up to date for interval
+  const userRefForInterval = useRef(user);
+  useEffect(() => {
+    userRefForInterval.current = user;
+  }, [user]);
+
+  // Global Time Tracking (5 min = 50 points) + Activity Tracking
   useEffect(() => {
     if (!user) return;
 
@@ -298,19 +290,41 @@ export default function App() {
     // Initial update
     updateActivity();
 
-    const interval = setInterval(() => {
-      const userRef = doc(db, 'users', user.uid);
+    const interval = setInterval(async () => {
+      const currentUser = userRefForInterval.current;
+      if (!currentUser) return;
+
+      const userRef = doc(db, 'users', currentUser.uid);
       const updates: any = {
         lastActive: new Date().toISOString()
       };
 
-      if (user.role !== 'admin') {
-        updates.totalFocusMinutes = increment(1);
-        updates.totalPoints = increment(10);
+      if (currentUser.role !== 'admin') {
+        const newFocusMinutes = (currentUser.totalFocusMinutes || 0) + 5;
+        const newPoints = (currentUser.totalPoints || 0) + 50;
+        
+        updates.totalFocusMinutes = increment(5);
+        updates.totalPoints = increment(50);
+
+        // Sync with Leaderboard in the same periodic pulse
+        const leaderboardRef = doc(db, 'leaderboard', currentUser.uid);
+        setDoc(leaderboardRef, {
+          uid: currentUser.uid,
+          displayName: currentUser.displayName,
+          photoURL: currentUser.photoURL,
+          totalPoints: newPoints,
+          totalFocusMinutes: newFocusMinutes,
+          class: currentUser.class || '',
+          streakCount: currentUser.streak?.currentCount || 0
+        }, { merge: true }).catch(err => console.error("Leaderboard periodic sync failed:", err));
       }
 
-      updateDoc(userRef, updates).catch(err => console.error("Global tracking failed:", err));
-    }, 60000); // Every minute
+      try {
+        await updateDoc(userRef, updates);
+      } catch (err) {
+        console.error("Global tracking failed:", err);
+      }
+    }, 300000); // Every 5 minutes (saves quota)
 
     return () => clearInterval(interval);
   }, [user?.uid]);

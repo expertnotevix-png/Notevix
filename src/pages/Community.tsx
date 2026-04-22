@@ -74,8 +74,8 @@ export default function Community({ user }: { user: UserProfile | null }) {
   const [selectedGroup, setSelectedGroup] = useState<any | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // 1. Fetch Stats - Only once on mount
   useEffect(() => {
-    // Fetch Stats
     const statsUnsub = onSnapshot(doc(db, 'community_stats', 'global'), (docSnap) => {
       if (docSnap.exists()) {
         setStats(docSnap.data() as CommunityStats);
@@ -83,8 +83,11 @@ export default function Community({ user }: { user: UserProfile | null }) {
     }, (error) => {
       console.error("Community stats listener error:", error);
     });
+    return () => statsUnsub();
+  }, []);
 
-    // Fetch Global Chat Messages - Optimized to get LATEST
+  // 2. Fetch Global Chat Messages - Only when on chat tab or once
+  useEffect(() => {
     let chatUnsub: () => void = () => {};
     const chatQuery = query(
       collection(db, 'community_chat'),
@@ -93,7 +96,6 @@ export default function Community({ user }: { user: UserProfile | null }) {
     );
     chatUnsub = onSnapshot(chatQuery, (snapshot) => {
       const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ChatMessage[];
-      // Reverse for UI to show oldest at top, newest at bottom
       setMessages([...msgs].reverse());
       if (activeTab === 'chat') {
         setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
@@ -101,8 +103,12 @@ export default function Community({ user }: { user: UserProfile | null }) {
     }, (error) => {
       console.warn("Chat listener error:", error);
     });
+    return () => chatUnsub();
+  }, [activeTab]);
 
-    // Fetch Posts - Increased limit to prevent perceived deletion
+  // 3. Fetch Posts - Handle filters
+  useEffect(() => {
+    setLoading(true);
     let postsQuery = query(collection(db, 'posts'), where('status', '==', 'approved'), limit(50));
     if (filterSubject !== 'All') postsQuery = query(postsQuery, where('subject', '==', filterSubject));
     if (filterClass !== 'All') postsQuery = query(postsQuery, where('class', '==', filterClass));
@@ -118,12 +124,8 @@ export default function Community({ user }: { user: UserProfile | null }) {
       setLoading(false);
     });
 
-    return () => {
-      statsUnsub();
-      chatUnsub();
-      postsUnsub();
-    };
-  }, [sortBy, filterSubject, filterClass, activeTab, user?.uid]);
+    return () => postsUnsub();
+  }, [sortBy, filterSubject, filterClass]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
