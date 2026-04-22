@@ -154,28 +154,34 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       CRITICAL CONTEXT:
       - Current Date: ${today}
       - Current Time: ${time} (India Standard Time)
-      - The user is in India.
       
-      Strict Requirements:
-      1. Recipient: The name must be "Poonam devi" (or similar like Poonam Devi) or the UPI ID must be "9236489649@mbk".
-      2. Status: The payment MUST be shown as "Success", "Completed", "Paid", or "Successful".
-      3. Amount: The amount shown should be exactly ₹${selectedPlan?.price}.
-      4. Date/Time: The transaction date should be ${today}. If the time in screenshot is ${time} or slightly before, it is VALID. DO NOT flag ${today} as a "future date" - it is the current date in India.
-      5. Authentication: Verify this is a real mobile UI screenshot from apps like PhonePe, Google Pay, MobiKwik, FamApp, or Paytm. 
-      6. Extraction: EXTRACT the Transaction ID, UTR number, or Reference number.
+      STRICT AUTHENTICITY CHECK (ANTI-FRAUD):
+      You must be extremely skeptical. Reject if you see ANY of these signs of AI-generation or editing:
+      1. Blurry, wonky, or inconsistent text (especially in small transaction details).
+      2. Distorted or non-functional QR codes.
+      3. Clock/Battery icons that look hand-drawn or distorted.
+      4. Impossible timestamps (e.g., in the future or year inconsistent with ${today}).
+      5. UI elements that don't perfectly match official Indian payment apps (PhonePe, Google Pay, Navi, MobiKwik, FamApp, or Paytm).
+      6. Duplicate patterns or "mirroring" artifacts common in AI images.
       
-      Return your response in JSON format:
+      TRANSSACTION VALIDATION:
+      1. Recipient: Must be "Poonam devi" or "9236489649@mbk".
+      2. Status: Must be "Success", "Completed", "Paid", or "Successful".
+      3. Amount: MUST be exactly ₹${selectedPlan?.price}.
+      4. Date/Time: Transaction date must be ${today}.
+      5. Extraction: EXTRACT the Transaction ID/UTR/Reference number.
+      
+      Return your response in JSON:
       {
         "verified": boolean,
-        "reason": "Detailed reason for pass/fail",
+        "reason": "Detailed honest analysis specifically mentioning if it looks AI-generated",
         "details": {
            "recipientName": "string",
            "upiId": "string",
            "amount": number,
            "isRealScreenshot": boolean,
            "transactionId": "string",
-           "transactionDate": "string",
-           "transactionTime": "string"
+           "transactionDate": "string"
         }
       }
     `;
@@ -254,8 +260,8 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
             amount: selectedPlan!.price,
             whatsappNumber: whatsapp,
             planType: (selectedPlan as any).type,
-            targetClass: (selectedPlan as any).class || null,
-            screenshotUrl: screenshotPreview
+            targetClass: (selectedPlan as any).class || null
+            // Removed screenshotUrl payload to avoid "Payload Too Large" (1MB+ base64) errors in fetch
           })
         });
 
@@ -286,9 +292,9 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
             screenshotUrl: screenshotPreview
           });
         }
-      } catch (webhookErr) {
+      } catch (webhookErr: any) {
         console.warn("Automated approval failed, falling back to manual:", webhookErr);
-        toast.info('AI verified, but system sync failed. Admins will activate you manually.');
+        toast.error(`System Sync Error: ${webhookErr.message || 'Unknown network error'}. Admin will verify manually.`);
         
         // Safety fallback
         await addDoc(collection(db, 'purchase_requests'), {
