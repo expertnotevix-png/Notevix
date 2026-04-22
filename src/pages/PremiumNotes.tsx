@@ -126,7 +126,10 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         })
       });
 
-      if (!response.ok) throw new Error(`NVIDIA API Error: ${response.status}`);
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`NVIDIA Proxy Error (${response.status}): ${errText.substring(0, 50)}`);
+      }
       
       const data = await response.json();
       const content = data.choices[0].message.content;
@@ -168,7 +171,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       1. Recipient: Must be "Poonam devi" or "9236489649@mbk".
       2. Status: Must be "Success", "Completed", "Paid", or "Successful".
       3. Amount: MUST be exactly ₹${selectedPlan?.price}.
-      4. Date/Time: Transaction date must be ${today}.
+      4. Date/Time: Transaction date must be ${today} or the day immediately before it (accounting for midnight payments).
       5. Extraction: EXTRACT the Transaction ID/UTR/Reference number.
       
       Return your response in JSON:
@@ -187,29 +190,32 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     `;
 
     try {
-      const ai = new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY });
+      const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+      if (!apiKey) throw new Error("Gemini API Key missing in environment.");
+      
+      const ai = new GoogleGenAI({ apiKey });
       
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              {
-                inlineData: {
-                  mimeType: "image/jpeg",
-                  data: base64Image.split(',')[1] // Remove 'data:image/jpeg;base64,'
-                }
+        contents: {
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: "image/jpeg",
+                data: base64Image.split(',')[1] // Remove 'data:image/jpeg;base64,'
               }
-            ]
-          }
-        ],
+            }
+          ]
+        },
         config: {
           responseMimeType: "application/json"
         }
       });
 
-      const result = JSON.parse(response.text);
+      const result = JSON.parse(response.text || "{}");
+      console.log("Gemini AI Analysis:", result);
+
       return {
         verified: result.verified && result.details?.isRealScreenshot && !!result.details?.transactionId,
         reason: result.reason,
@@ -218,7 +224,17 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     } catch (error: any) {
       console.warn("Gemini Failed/Limited, switching to NVIDIA...", error.message);
       // Fallback to NVIDIA if Gemini fails (limit reached or error)
-      return await verifyWithNVIDIA(base64Image, prompt);
+      try {
+        return await verifyWithNVIDIA(base64Image, prompt);
+      } catch (nvidiaErr: any) {
+        console.error("Critical AI Failure:", nvidiaErr);
+        // Extract a helpful message from the error
+        const techMessage = error?.message || nvidiaErr?.message || "Unknown AI error";
+        return { 
+          verified: false, 
+          reason: `Verification tech error: ${techMessage}. Please try again later or contact support.` 
+        };
+      }
     }
   };
 
