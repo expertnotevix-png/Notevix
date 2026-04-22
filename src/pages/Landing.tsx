@@ -2,7 +2,6 @@ import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, FlaskConical, Globe, Languages, Shield, Zap, Trophy, Users, ChevronRight, Star } from 'lucide-react';
 import { Logo } from '../components/Logo';
-import { AdBanner } from '../components/AdBanner';
 
 const features = [
   {
@@ -224,11 +223,6 @@ export default function Landing() {
           </div>
         </div>
       </section>
-
-      {/* Ad Banner */}
-      <div className="max-w-7xl mx-auto px-6 py-12">
-        <AdBanner slot="landing_middle" />
-      </div>
 
       {/* Study Tips Section */}
       <section className="py-24 px-6">

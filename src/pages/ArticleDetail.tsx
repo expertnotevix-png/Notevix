@@ -3,7 +3,6 @@ import { ChevronLeft, Calendar, Clock, Share2, BookOpen } from 'lucide-react';
 import { motion } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import { articles } from './Articles';
-import { AdBanner } from '../components/AdBanner';
 
 export default function ArticleDetail() {
   const { id } = useParams();
@@ -79,7 +78,6 @@ export default function ArticleDetail() {
         </div>
 
         <div className="mt-16 pt-8 border-t border-white/10">
-          <AdBanner slot="article_footer" />
         </div>
 
         <div className="mt-12 p-8 glass-card rounded-[40px] border-purple-500/30 bg-purple-500/5 space-y-6">

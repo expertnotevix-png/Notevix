@@ -54,17 +54,11 @@ export default function PrivacyPolicy() {
 
         <section className="space-y-3">
           <div className="flex items-center gap-2 text-white">
-            <FileText className="w-5 h-5 text-purple-500" />
-            <h2 className="font-bold">Advertising & Cookies</h2>
+            <Shield className="w-5 h-5 text-purple-500" />
+            <h2 className="font-bold">Security & Cookies</h2>
           </div>
           <p>
-            We use Google AdSense to show advertisements. Google, as a third-party vendor, uses cookies to serve ads on our site. Google's use of the DART cookie enables it to serve ads to our users based on their visit to our site and other sites on the Internet.
-          </p>
-          <p>
-            Users may opt out of the use of the DART cookie by visiting the Google ad and content network privacy policy.
-          </p>
-          <p>
-            Some of our advertising partners may use cookies and web beacons on our site. Our advertising partners include Google AdSense. These third-party ad servers or ad networks use technology to the advertisements and links that appear on NoteVix send directly to your browsers. They automatically receive your IP address when this occurs.
+            We use functional cookies to ensure a seamless login experience and to remember your study preferences. We do not use tracking or advertising cookies.
           </p>
         </section>
 

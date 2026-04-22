@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
 import helmet from "helmet";
+import cors from "cors";
 import cron from "node-cron";
 import { initializeApp, cert, getApp, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
@@ -40,30 +41,38 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  app.use(cors());
   app.use(helmet({
+    frameguard: false, // Allow AI Studio Preview
     contentSecurityPolicy: {
       directives: {
         ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-        "script-src": ["'self'", "'unsafe-inline'", "https://www.googletagmanager.com", "https://pagead2.googlesyndication.com", "https://apis.google.com"],
-        "connect-src": ["'self'", "https://*.googleapis.com", "https://*.firebaseio.com", "https://*.firebaseapp.com", "https://www.google-analytics.com"],
+        "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://www.googletagmanager.com", "https://apis.google.com"],
+        "connect-src": ["'self'", "https://*.googleapis.com", "https://*.firebaseio.com", "https://*.firebaseapp.com", "https://www.google-analytics.com", "https://integrate.api.nvidia.com"],
         "img-src": ["'self'", "data:", "https:", "https://picsum.photos"],
-        "frame-src": ["'self'", "https://googleads.g.doubleclick.net", "https://tpc.googlesyndication.com", "https://*.firebaseapp.com"],
+        "frame-src": ["'self'", "https://*.firebaseapp.com"],
+        "frame-ancestors": ["'self'", "https://aistudio.google.com", "https://*.run.app"],
       },
     },
   }));
 
-  // Manually set critical security headers for AdSense approval
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    // res.setHeader('X-Frame-Options', 'SAMEORIGIN'); // Blocked AI Studio Preview
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://www.google-analytics.com; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://pagead2.googlesyndication.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: https://picsum.photos; frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://*.firebaseapp.com;");
+    // Removed redundant manual CSP to let Helmet handle it more cleanly
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     next();
   });
 
   app.use(express.json());
+
+  // Request logger for debugging
+  app.use((req, res, next) => {
+    console.log(`[Request] ${req.method} ${req.url}`);
+    next();
+  });
 
   // API routes go here
   app.get("/api/health", (req, res) => {
@@ -146,7 +155,15 @@ async function startServer() {
   });
 
   // Webhook for Automated Payment Verification
-  app.post("/api/webhooks/approve-payment", async (req, res) => {
+  app.all("/api/activate-premium", async (req, res) => {
+    if (req.method === 'GET') {
+      return res.json({ message: "Activation endpoint is active. Use POST to activate." });
+    }
+    
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: "Method Not Allowed. Use POST." });
+    }
+
     const { transactionId, userId, planId, planName, amount, whatsappNumber, planType, targetClass, screenshotUrl } = req.body;
     const authHeader = req.headers.authorization;
 
@@ -255,7 +272,10 @@ async function startServer() {
   });
 
   // NVIDIA Proxy
-  app.post("/api/ai/nvidia", async (req, res) => {
+  app.all("/api/ai/nvidia", async (req, res) => {
+    if (req.method === 'GET') return res.json({ status: "active" });
+    if (req.method !== 'POST') return res.status(405).json({ error: "Method Not Allowed" });
+
     const nvidiaKey = process.env.VITE_NVIDIA_API_KEY;
     if (!nvidiaKey) {
       console.error("NVIDIA Proxy: Key missing in process.env");

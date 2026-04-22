@@ -4,7 +4,6 @@ import { db } from '../lib/firebase';
 import { Chapter, UserProfile } from '../types';
 import { Bookmark, BookOpen, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { AdBanner } from '../components/AdBanner';
 
 interface SavedProps {
   user: UserProfile;
@@ -39,8 +38,6 @@ export default function Saved({ user }: SavedProps) {
         <h1 className="text-2xl font-bold">Saved Notes</h1>
         <p className="text-gray-500 text-sm">Your personal study collection.</p>
       </div>
-
-      <AdBanner slot="saved_banner" />
 
       <div className="space-y-4">
         {loading ? (

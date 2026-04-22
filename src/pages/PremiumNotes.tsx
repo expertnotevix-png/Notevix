@@ -271,7 +271,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         }
         
         const idToken = await authUser.getIdToken();
-        const response = await fetch('/api/webhooks/approve-payment', {
+        const response = await fetch('/api/activate-premium', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',

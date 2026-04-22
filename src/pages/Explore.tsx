@@ -4,7 +4,6 @@ import { db } from '../lib/firebase';
 import { Chapter } from '../types';
 import { Search, Filter, BookOpen, Lock, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { AdBanner } from '../components/AdBanner';
 
 export default function Explore() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -80,8 +79,6 @@ export default function Explore() {
           <Search className="w-6 h-6 text-white" />
         </button>
       </div>
-
-      <AdBanner slot="explore_banner" />
 
       <div className="space-y-4">
         {loading ? (
