@@ -156,6 +156,8 @@ async function startServer() {
 
   // Webhook for Automated Payment Verification
   app.all("/api/activate-premium", async (req, res) => {
+    console.log(`[Webhook] Received request: ${req.method} /api/activate-premium`);
+    
     if (req.method === 'GET') {
       return res.json({ message: "Activation endpoint is active. Use POST to activate." });
     }
@@ -168,6 +170,7 @@ async function startServer() {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.warn("[Webhook] Missing or invalid authorization header");
       return res.status(401).json({ error: "Missing or invalid authorization header" });
     }
 
@@ -175,21 +178,23 @@ async function startServer() {
 
     try {
       // 0. Verify User Identity via Firebase Admin
+      console.log(`[Webhook] Verifying ID token for user ${userId}...`);
       const decodedToken = await adminAuth.verifyIdToken(idToken);
       const authenticatedUserId = decodedToken.uid;
 
       if (authenticatedUserId !== userId) {
+        console.warn(`[Webhook] User ID mismatch: Token(${authenticatedUserId}) vs Request(${userId})`);
         return res.status(403).json({ error: "Forbidden. Token user does not match request user." });
       }
 
       if (!transactionId) {
+        console.warn("[Webhook] Missing transactionId in request body");
         return res.status(400).json({ error: "Missing required fields (transactionId)" });
       }
 
       console.log(`[Webhook] Auto-approving payment for user ${userId}, Tx: ${transactionId}`);
       
       // 1. Create or Find the purchase request
-      // We check if it exists first to avoid duplicates
       const requestQuery = await dbAdmin.collection("purchase_requests")
         .where("transactionId", "==", transactionId)
         .limit(1)
@@ -197,19 +202,19 @@ async function startServer() {
 
       let requestRef;
       if (!requestQuery.empty) {
+        console.log(`[Webhook] Found existing request for Tx ${transactionId}`);
         requestRef = requestQuery.docs[0].ref;
       } else {
+        console.log(`[Webhook] Creating new purchase request doc`);
         requestRef = dbAdmin.collection("purchase_requests").doc();
       }
 
-      // 2. Map Plan Details if not provided
-      // If we're creating a new one, we need to ensure we have the data
-      
       // 3. Find and update the User
       const userRef = dbAdmin.collection("users").doc(userId);
       const userSnap = await userRef.get();
 
       if (!userSnap.exists) {
+        console.warn(`[Webhook] User document ${userId} not found in Firestore`);
         return res.status(404).json({ error: "User document not found" });
       }
 
@@ -235,11 +240,13 @@ async function startServer() {
 
       // 5. Apply Access Logic
       if (planType === 'subscription') {
+        console.log(`[Webhook] Applying subscription for user ${userId}`);
         batch.update(userRef, { 
           isPremium: true,
           subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
         });
       } else if (planType === 'one-time' && targetClass) {
+        console.log(`[Webhook] Unlocking class ${targetClass} for user ${userId}`);
         const currentUnlocked = (userData?.unlockedClasses || []) as string[];
         if (!currentUnlocked.includes(targetClass)) {
           batch.update(userRef, { 
@@ -247,6 +254,7 @@ async function startServer() {
           });
         }
       } else {
+        console.log(`[Webhook] Applying general premium for user ${userId}`);
         batch.update(userRef, { isPremium: true });
       }
 
@@ -261,13 +269,17 @@ async function startServer() {
         timestamp: new Date().toISOString()
       });
 
+      console.log(`[Webhook] Committing batch for user ${userId}...`);
       await batch.commit();
       
       console.log(`[Webhook] Payment AUTO-approved successfully for user ${userId}`);
       res.json({ success: true, message: "AI verified your payment. Access granted!" });
     } catch (error: any) {
       console.error("[Webhook] Auto-approval logic failed:", error);
-      res.status(500).json({ error: "Internal server error during auto-approval" });
+      res.status(500).json({ 
+        error: "Internal server error during auto-approval",
+        details: error.message 
+      });
     }
   });
 

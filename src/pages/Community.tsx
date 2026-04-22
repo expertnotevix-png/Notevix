@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, where, limit, doc, getDoc, updateDoc, increment, addDoc, serverTimestamp, setDoc, getDocs } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { db, auth, checkQuotaLock, handleFirestoreError, OperationType } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   MessageSquare, 
@@ -51,6 +51,9 @@ interface ChatMessage {
   timestamp: any;
 }
 
+const CACHED_STATS_KEY = 'notevix_community_stats';
+const CACHED_POSTS_KEY = 'notevix_community_posts';
+
 export default function Community({ user }: { user: UserProfile | null }) {
   const navigate = useNavigate();
   const { isBanned, banReason } = useModeration(user);
@@ -80,12 +83,21 @@ export default function Community({ user }: { user: UserProfile | null }) {
   useEffect(() => {
     const fetchStats = async () => {
       try {
+        if (checkQuotaLock()) {
+          const cached = localStorage.getItem(CACHED_STATS_KEY);
+          if (cached) setStats(JSON.parse(cached));
+          return;
+        }
         const docSnap = await getDoc(doc(db, 'community_stats', 'global'));
         if (docSnap.exists()) {
-          setStats(docSnap.data() as CommunityStats);
+          const data = docSnap.data() as CommunityStats;
+          setStats(data);
+          localStorage.setItem(CACHED_STATS_KEY, JSON.stringify(data));
         }
       } catch (error) {
-        console.error("Community stats fetch error:", error);
+        handleFirestoreError(error, OperationType.GET, 'community_stats');
+        const cached = localStorage.getItem(CACHED_STATS_KEY);
+        if (cached) setStats(JSON.parse(cached));
       }
     };
     fetchStats();
@@ -94,6 +106,10 @@ export default function Community({ user }: { user: UserProfile | null }) {
   // 2. Fetch Global Chat Messages
   const fetchMessagesManual = async () => {
     try {
+      if (checkQuotaLock()) {
+        console.warn("Chat: Quota lockout active. Use refresh later.");
+        return;
+      }
       const chatQuery = query(
         collection(db, 'community_chat'),
         orderBy('timestamp', 'desc'),
@@ -104,7 +120,7 @@ export default function Community({ user }: { user: UserProfile | null }) {
       setMessages([...msgs].reverse());
       setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     } catch (error) {
-      console.warn("Manual chat fetch error:", error);
+      handleFirestoreError(error, OperationType.LIST, 'community_chat');
     }
   };
 
@@ -136,6 +152,13 @@ export default function Community({ user }: { user: UserProfile | null }) {
     const fetchPosts = async () => {
       setLoading(true);
       try {
+        if (checkQuotaLock()) {
+          const cached = localStorage.getItem(CACHED_POSTS_KEY);
+          if (cached) setPosts(JSON.parse(cached));
+          setLoading(false);
+          return;
+        }
+
         let postsQuery = query(collection(db, 'posts'), where('status', '==', 'approved'), limit(50));
         if (filterSubject !== 'All') postsQuery = query(postsQuery, where('subject', '==', filterSubject));
         if (filterClass !== 'All') postsQuery = query(postsQuery, where('class', '==', filterClass));
@@ -145,8 +168,11 @@ export default function Community({ user }: { user: UserProfile | null }) {
         const snapshot = await getDocs(postsQuery);
         const postsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
         setPosts(postsData);
+        localStorage.setItem(CACHED_POSTS_KEY, JSON.stringify(postsData));
       } catch (error: any) {
-        console.error("Posts fetch error:", error);
+        handleFirestoreError(error, OperationType.LIST, 'posts');
+        const cached = localStorage.getItem(CACHED_POSTS_KEY);
+        if (cached) setPosts(JSON.parse(cached));
       } finally {
         setLoading(false);
       }
@@ -235,118 +261,161 @@ export default function Community({ user }: { user: UserProfile | null }) {
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col">
-        {selectedGroup ? (
-          <GroupChat 
-            user={user} 
-            group={selectedGroup} 
-            onBack={() => setSelectedGroup(null)} 
-          />
-        ) : (
-          <div className="max-w-4xl mx-auto h-full flex flex-col w-full">
-            {activeTab === 'groups' && (
-              <StudyGroupList user={user} onSelectGroup={setSelectedGroup} />
-            )}
-            
-            {activeTab === 'chat' && (
-              <div className="flex-1 flex flex-col p-4 space-y-4">
-                <div className="bg-purple-500/5 border border-purple-500/20 p-4 rounded-3xl space-y-3 mb-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Sparkles size={16} className="text-purple-400" />
-                      <h3 className="text-[10px] font-black uppercase tracking-widest italic">Study Stream</h3>
-                    </div>
-                    <div className="flex items-center gap-2">
-                       <button 
-                         onClick={() => fetchMessagesManual()}
-                         className="p-1 px-2 hover:bg-white/5 rounded text-[8px] font-bold uppercase tracking-widest text-gray-500"
-                       >
-                         Refresh
-                       </button>
-                       <div className="flex items-center gap-2 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
-                          <span className="text-[8px] font-bold text-gray-500">LIVE</span>
-                          <button 
-                            onClick={() => setIsLiveChat(!isLiveChat)}
-                            className={`w-6 h-3 rounded-full relative transition-colors ${isLiveChat ? 'bg-purple-600' : 'bg-gray-700'}`}
-                          >
-                             <div className={`absolute top-0.5 w-2 h-2 rounded-full bg-white transition-all ${isLiveChat ? 'right-0.5' : 'left-0.5'}`} />
-                          </button>
-                       </div>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-gray-600 leading-tight">Public beam for quick questions. {isLiveChat ? 'Stream is live!' : 'Refresh to see latest.'}</p>
-                </div>
-
-                {messages.map((msg, idx) => (
-                  <div key={msg.id} className={`flex gap-3 ${msg.userId === user?.uid ? 'flex-row-reverse' : ''}`}>
-                    <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-white/10 mt-1">
-                      <img src={msg.userPhoto || 'https://img.icons8.com/fluency/96/user.png'} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    </div>
-                    <div className={`max-w-[80%] space-y-1 ${msg.userId === user?.uid ? 'items-end' : ''}`}>
-                      <div className="flex items-center gap-2 px-1">
-                        <span className="text-[9px] font-bold text-gray-500">{msg.userName}</span>
-                        <span className="text-[7px] text-gray-600 uppercase">
-                          {msg.timestamp?.toDate ? formatDistanceToNow(msg.timestamp.toDate(), { addSuffix: true }) : 'just now'}
-                        </span>
+        <AnimatePresence mode="wait">
+          {selectedGroup ? (
+            <motion.div
+              key="group-chat"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="flex-1 flex flex-col h-full"
+            >
+              <GroupChat 
+                user={user} 
+                group={selectedGroup} 
+                onBack={() => setSelectedGroup(null)} 
+              />
+            </motion.div>
+          ) : (
+            <motion.div 
+              key={activeTab}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="max-w-4xl mx-auto h-full flex flex-col w-full"
+            >
+              {activeTab === 'groups' && (
+                <StudyGroupList user={user} onSelectGroup={setSelectedGroup} />
+              )}
+              
+              {activeTab === 'chat' && (
+                <div className="flex-1 flex flex-col p-4 space-y-4">
+                  <div className="bg-purple-500/5 border border-purple-500/20 p-4 rounded-3xl space-y-3 mb-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sparkles size={16} className="text-purple-400" />
+                        <h3 className="text-[10px] font-black uppercase tracking-widest italic">Study Stream</h3>
                       </div>
-                      <div className={`p-3 rounded-2xl text-sm leading-relaxed ${msg.userId === user?.uid ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-white/5 border border-white/10 rounded-tl-none'}`}>
-                        {msg.content}
+                      <div className="flex items-center gap-2">
+                         <button 
+                           onClick={() => fetchMessagesManual()}
+                           className="p-1 px-2 hover:bg-white/5 rounded text-[8px] font-bold uppercase tracking-widest text-gray-500"
+                         >
+                           Refresh
+                         </button>
+                         <div className="flex items-center gap-2 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+                            <span className="text-[8px] font-bold text-gray-500">LIVE</span>
+                            <button 
+                              onClick={() => setIsLiveChat(!isLiveChat)}
+                              className={`w-6 h-3 rounded-full relative transition-colors ${isLiveChat ? 'bg-purple-600' : 'bg-gray-700'}`}
+                            >
+                               <div className={`absolute top-0.5 w-2 h-2 rounded-full bg-white transition-all ${isLiveChat ? 'right-0.5' : 'left-0.5'}`} />
+                            </button>
+                         </div>
                       </div>
                     </div>
+                    <p className="text-[10px] text-gray-600 leading-tight">Public beam for quick questions. {isLiveChat ? 'Stream is live!' : 'Refresh to see latest.'}</p>
                   </div>
-                ))}
-                <div ref={scrollRef} />
-              </div>
-            )}
 
-            {activeTab === 'discussions' && (
-              <div className="p-4 space-y-6">
-                {/* Search & Filters for Discussions */}
-                <div className="space-y-4 mb-6">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                    <input
-                      type="text"
-                      placeholder="Search questions asked by peers..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-purple-500 transition-colors"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
-                    <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
-                      <button onClick={() => setSortBy('latest')} className={`px-4 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-all ${sortBy === 'latest' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-white'}`}>Latest</button>
-                      <button onClick={() => setSortBy('upvoted')} className={`px-4 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-all ${sortBy === 'upvoted' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-white'}`}>Trending</button>
-                    </div>
-                    <select value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-[9px] font-bold uppercase tracking-widest focus:outline-none">
-                      <option value="All">All Subjects</option>
-                      <option value="Science">Science</option>
-                      <option value="Maths">Maths</option>
-                      <option value="SST">SST</option>
-                    </select>
-                  </div>
+                  <AnimatePresence>
+                    {messages.map((msg) => (
+                      <motion.div 
+                        key={msg.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`flex gap-3 ${msg.userId === user?.uid ? 'flex-row-reverse' : ''}`}
+                      >
+                        <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-white/10 mt-1 bg-white/5">
+                          <img 
+                            src={msg.userPhoto || 'https://img.icons8.com/fluency/96/user.png'} 
+                            alt="" 
+                            className="w-full h-full object-cover" 
+                            referrerPolicy="no-referrer"
+                            loading="lazy"
+                          />
+                        </div>
+                        <div className={`max-w-[80%] space-y-1 ${msg.userId === user?.uid ? 'items-end' : ''}`}>
+                          <div className="flex items-center gap-2 px-1">
+                            <span className="text-[9px] font-bold text-gray-500">{msg.userName}</span>
+                            <span className="text-[7px] text-gray-600 uppercase">
+                              {msg.timestamp?.toDate ? formatDistanceToNow(msg.timestamp.toDate(), { addSuffix: true }) : 'just now'}
+                            </span>
+                          </div>
+                          <div className={`p-3 rounded-2xl text-sm leading-relaxed ${msg.userId === user?.uid ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-white/5 border border-white/10 rounded-tl-none'}`}>
+                            {msg.content}
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                  <div ref={scrollRef} />
                 </div>
+              )}
 
-                {/* Posts List */}
-                {loading ? (
-                  <div className="space-y-4">
-                    {[1, 2, 3].map(i => <div key={i} className="h-32 bg-white/5 rounded-3xl animate-pulse" />)}
+              {activeTab === 'discussions' && (
+                <div className="p-4 space-y-6">
+                  {/* Search & Filters for Discussions */}
+                  <div className="space-y-4 mb-6">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                      <input
+                        type="text"
+                        placeholder="Search questions asked by peers..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-purple-500 transition-colors"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
+                      <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+                        <button onClick={() => setSortBy('latest')} className={`px-4 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-all ${sortBy === 'latest' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-white'}`}>Latest</button>
+                        <button onClick={() => setSortBy('upvoted')} className={`px-4 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-all ${sortBy === 'upvoted' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-white'}`}>Trending</button>
+                      </div>
+                      <select value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-[9px] font-bold uppercase tracking-widest focus:outline-none">
+                        <option value="All">All Subjects</option>
+                        <option value="Science">Science</option>
+                        <option value="Maths">Maths</option>
+                        <option value="SST">SST</option>
+                      </select>
+                    </div>
                   </div>
-                ) : filteredPosts.length > 0 ? (
-                  <div className="space-y-4">
-                    {filteredPosts.map(post => <PostCard key={post.id} post={post} currentUser={user} />)}
-                  </div>
-                ) : (
-                  <div className="text-center py-20 bg-white/5 rounded-3xl border border-dashed border-white/10">
-                    <MessageSquare size={40} className="text-gray-700 mx-auto mb-4" />
-                    <h3 className="text-lg font-bold text-gray-400">No discussions yet</h3>
-                    <p className="text-xs text-gray-600 mt-1">Be the study leader and ask the first question!</p>
-                    <button onClick={() => setIsCreateModalOpen(true)} className="mt-6 px-8 py-3 bg-purple-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-purple-700 transition-all active:scale-95">Start Discussion</button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+
+                  {/* Posts List */}
+                  {loading ? (
+                    <div className="grid grid-cols-1 gap-4">
+                      {[1, 2, 3].map(i => (
+                        <div key={i} className="bg-white/5 rounded-3xl p-6 border border-white/5 space-y-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-white/10 animate-pulse" />
+                            <div className="space-y-2">
+                              <div className="h-2 w-24 bg-white/10 rounded animate-pulse" />
+                              <div className="h-2 w-16 bg-white/10 rounded animate-pulse" />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="h-4 w-full bg-white/10 rounded animate-pulse" />
+                            <div className="h-4 w-2/3 bg-white/10 rounded animate-pulse" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : filteredPosts.length > 0 ? (
+                    <div className="space-y-4">
+                      {filteredPosts.map(post => <PostCard key={post.id} post={post} currentUser={user} />)}
+                    </div>
+                  ) : (
+                    <div className="text-center py-20 bg-white/5 rounded-3xl border border-dashed border-white/10">
+                      <MessageSquare size={40} className="text-gray-700 mx-auto mb-4" />
+                      <h3 className="text-lg font-bold text-gray-400">No discussions yet</h3>
+                      <p className="text-xs text-gray-600 mt-1">Be the study leader and ask the first question!</p>
+                      <button onClick={() => setIsCreateModalOpen(true)} className="mt-6 px-8 py-3 bg-purple-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-purple-700 transition-all active:scale-95">Start Discussion</button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Footer Input Area */}

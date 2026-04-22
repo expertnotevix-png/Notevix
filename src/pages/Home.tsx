@@ -256,8 +256,14 @@ export default function Home({ user }: HomeProps) {
             <Bell className="w-6 h-6 text-gray-400" />
             <div className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-black" />
           </button>
-          <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-purple-500">
-            <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+          <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-purple-500 bg-white/5">
+            <img 
+              src={user.photoURL} 
+              alt="Profile" 
+              className="w-full h-full object-cover" 
+              referrerPolicy="no-referrer"
+              loading="lazy"
+            />
           </div>
         </div>
       </div>
@@ -265,6 +271,8 @@ export default function Home({ user }: HomeProps) {
       {/* Streak & Focus Dashboard */}
       <div className="grid grid-cols-2 gap-4">
         <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
           whileHover={{ scale: 1.02 }}
           className="purple-gradient p-5 rounded-3xl relative overflow-hidden shadow-xl shadow-purple-500/20"
         >
@@ -281,6 +289,8 @@ export default function Home({ user }: HomeProps) {
         </motion.div>
 
         <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
           whileHover={{ scale: 1.02 }}
           className="bg-[#1a1635] p-5 rounded-3xl relative overflow-hidden border border-white/5 shadow-xl"
         >
@@ -307,6 +317,8 @@ export default function Home({ user }: HomeProps) {
         </div>
         <div className="grid grid-cols-1 gap-3">
           <motion.button
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => navigate('/ai-doubts')}
             className="glass-card p-5 rounded-3xl border-purple-500/30 bg-purple-500/5 flex items-center justify-between group"
@@ -325,6 +337,9 @@ export default function Home({ user }: HomeProps) {
 
           <div className="grid grid-cols-2 gap-3">
             <motion.button
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => navigate('/ai-quiz')}
               className="glass-card p-5 rounded-3xl border-blue-500/30 bg-blue-500/5 flex flex-col gap-3 group"
@@ -339,6 +354,9 @@ export default function Home({ user }: HomeProps) {
             </motion.button>
 
             <motion.button
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => navigate('/ai-summarizer')}
               className="glass-card p-5 rounded-3xl border-pink-500/30 bg-pink-500/5 flex flex-col gap-3 group"
@@ -357,6 +375,8 @@ export default function Home({ user }: HomeProps) {
 
       {/* Community Teaser */}
       <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
         whileTap={{ scale: 0.98 }}
         onClick={() => navigate('/community')}
         className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-white/10 rounded-3xl p-6 relative overflow-hidden group cursor-pointer"
@@ -371,7 +391,13 @@ export default function Home({ user }: HomeProps) {
             <div className="flex items-center gap-2 mt-3">
               <div className="flex -space-x-2">
                 {[1, 2, 3].map(i => (
-                  <img key={i} src={`https://i.pravatar.cc/100?img=${i + 10}`} className="w-6 h-6 rounded-full border-2 border-black" alt="" />
+                  <img 
+                    key={i} 
+                    src={`https://i.pravatar.cc/100?img=${i + 10}`} 
+                    className="w-6 h-6 rounded-full border-2 border-black bg-white/5" 
+                    alt="" 
+                    loading="lazy"
+                  />
                 ))}
               </div>
               <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Join Now</span>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, checkQuotaLock, handleFirestoreError, OperationType } from '../lib/firebase';
 import { SubjectResource } from '../types';
 import { motion } from 'motion/react';
 import { ChevronLeft, FileText, Book, HelpCircle, Calculator, History, ChevronRight, RefreshCw } from 'lucide-react';
@@ -16,6 +16,15 @@ export default function ChapterList() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      if (checkQuotaLock()) {
+        const cached = localStorage.getItem(`notevix_resource_${classId}_${subjectId}`);
+        if (cached) {
+          setResource(JSON.parse(cached));
+          setLoading(false);
+          return;
+        }
+      }
+
       const qResources = query(
         collection(db, 'subject_resources'),
         where('class', '==', classId),
@@ -23,10 +32,15 @@ export default function ChapterList() {
       );
       const resourceSnapshot = await getDocs(qResources);
       if (!resourceSnapshot.empty) {
-        setResource({ id: resourceSnapshot.docs[0].id, ...resourceSnapshot.docs[0].data() } as SubjectResource);
+        const data = { id: resourceSnapshot.docs[0].id, ...resourceSnapshot.docs[0].data() } as SubjectResource;
+        setResource(data);
+        localStorage.setItem(`notevix_resource_${classId}_${subjectId}`, JSON.stringify(data));
       }
     } catch (error) {
-      console.error("Error fetching resources:", error);
+      handleFirestoreError(error, OperationType.LIST, 'subject_resources');
+      // Look for cache on error
+      const cached = localStorage.getItem(`notevix_resource_${classId}_${subjectId}`);
+      if (cached) setResource(JSON.parse(cached));
     }
     setLoading(false);
   };

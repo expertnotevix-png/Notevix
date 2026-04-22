@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, getRedirectResult, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, query, collection, where, getDocs, addDoc, increment, orderBy, limit } from 'firebase/firestore';
@@ -8,33 +8,33 @@ import { UserProfile } from './types';
 
 const CACHED_USER_KEY = 'notevix_user_profile_v1';
 
-import Articles from './pages/Articles';
-import ArticleDetail from './pages/ArticleDetail';
-import Disclaimer from './pages/Disclaimer';
+// Pages - Lazy loaded for performance
+const Articles = lazy(() => import('./pages/Articles'));
+const ArticleDetail = lazy(() => import('./pages/ArticleDetail'));
+const Disclaimer = lazy(() => import('./pages/Disclaimer'));
 
-// Pages
-import Home from './pages/Home';
-import Explore from './pages/Explore';
-import Saved from './pages/Saved';
-import Profile from './pages/Profile';
-import Login from './pages/Login';
-import ChapterList from './pages/ChapterList';
-import NoteView from './pages/NoteView';
-import Admin from './pages/Admin';
-import Leaderboard from './pages/Leaderboard';
-import Schedule from './pages/Schedule';
-import Notifications from './pages/Notifications';
-import PremiumNotes from './pages/PremiumNotes';
-import PrivacyPolicy from './pages/PrivacyPolicy';
-import AboutUs from './pages/AboutUs';
-import Contact from './pages/Contact';
-import TermsOfService from './pages/TermsOfService';
-import Landing from './pages/Landing';
-import AIDoubtSolver from './pages/AIDoubtSolver';
-import QuizGenerator from './pages/QuizGenerator';
-import Summarizer from './pages/Summarizer';
-import Community from './pages/Community';
-import PostDetail from './pages/PostDetail';
+const Home = lazy(() => import('./pages/Home'));
+const Explore = lazy(() => import('./pages/Explore'));
+const Saved = lazy(() => import('./pages/Saved'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Login = lazy(() => import('./pages/Login'));
+const ChapterList = lazy(() => import('./pages/ChapterList'));
+const NoteView = lazy(() => import('./pages/NoteView'));
+const Admin = lazy(() => import('./pages/Admin'));
+const Leaderboard = lazy(() => import('./pages/Leaderboard'));
+const Schedule = lazy(() => import('./pages/Schedule'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const PremiumNotes = lazy(() => import('./pages/PremiumNotes'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const AboutUs = lazy(() => import('./pages/AboutUs'));
+const Contact = lazy(() => import('./pages/Contact'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
+const Landing = lazy(() => import('./pages/Landing'));
+const AIDoubtSolver = lazy(() => import('./pages/AIDoubtSolver'));
+const QuizGenerator = lazy(() => import('./pages/QuizGenerator'));
+const Summarizer = lazy(() => import('./pages/Summarizer'));
+const Community = lazy(() => import('./pages/Community'));
+const PostDetail = lazy(() => import('./pages/PostDetail'));
 
 // Components
 import BottomNav from './components/BottomNav';
@@ -286,6 +286,11 @@ export default function App() {
       const currentUser = userRefForInterval.current;
       if (!currentUser) return;
 
+      if (checkQuotaLock()) {
+        console.warn("App: Quota lockout active. Skipping activity tracking sync.");
+        return;
+      }
+
       const userRef = doc(db, 'users', currentUser.uid);
       const updates: any = {
         lastActive: new Date().toISOString()
@@ -387,9 +392,10 @@ export default function App() {
   return (
     <Router>
       <div className="min-h-screen bg-black text-white pb-20">
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {isOffline && (
             <motion.div
+              key="offline-banner"
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
@@ -399,37 +405,51 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
-        <Routes>
-          <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
-          
-          <Route path="/" element={user ? <Home user={user} /> : <Landing />} />
-          <Route path="/explore" element={<Explore />} />
-          <Route path="/leaderboard" element={<Leaderboard user={user} />} />
-          <Route path="/schedule" element={user ? <Schedule user={user} /> : <Navigate to="/login" />} />
-          <Route path="/notifications" element={user ? <Notifications user={user} /> : <Navigate to="/login" />} />
-          <Route path="/saved" element={user ? <Saved user={user} /> : <Navigate to="/login" />} />
-          <Route path="/profile" element={user ? <Profile user={user} /> : <Navigate to="/login" />} />
-          
-          <Route path="/class/:classId/:subjectId" element={<ChapterList />} />
-          <Route path="/note/:noteId" element={<NoteView user={user} />} />
-          <Route path="/premium-notes" element={user ? <PremiumNotes user={user} /> : <Navigate to="/login" />} />
-          <Route path="/privacy" element={<PrivacyPolicy />} />
-          <Route path="/about" element={<AboutUs />} />
-          <Route path="/contact" element={<Contact user={user} />} />
-          <Route path="/terms" element={<TermsOfService />} />
-          <Route path="/disclaimer" element={<Disclaimer />} />
-          <Route path="/articles" element={<Articles />} />
-          <Route path="/article/:id" element={<ArticleDetail />} />
-          
-          <Route path="/ai-doubts" element={user ? <AIDoubtSolver /> : <Navigate to="/login" />} />
-          <Route path="/ai-quiz" element={user ? <QuizGenerator /> : <Navigate to="/login" />} />
-          <Route path="/ai-summarizer" element={user ? <Summarizer /> : <Navigate to="/login" />} />
-          
-          <Route path="/community" element={<Community user={user} />} />
-          <Route path="/community/post/:postId" element={<PostDetail user={user} />} />
-          
-          <Route path="/admin" element={user?.role === 'admin' ? <Admin /> : <Navigate to="/" />} />
-        </Routes>
+
+        <Suspense fallback={
+          <div className="min-h-[80vh] flex flex-col items-center justify-center p-6 bg-black">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex flex-col items-center"
+            >
+              <div className="w-10 h-10 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin mb-4" />
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Synchronizing...</p>
+            </motion.div>
+          </div>
+        }>
+          <Routes>
+            <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
+            
+            <Route path="/" element={user ? <Home user={user} /> : <Landing />} />
+            <Route path="/explore" element={<Explore />} />
+            <Route path="/leaderboard" element={<Leaderboard user={user} />} />
+            <Route path="/schedule" element={user ? <Schedule user={user} /> : <Navigate to="/login" />} />
+            <Route path="/notifications" element={user ? <Notifications user={user} /> : <Navigate to="/login" />} />
+            <Route path="/saved" element={user ? <Saved user={user} /> : <Navigate to="/login" />} />
+            <Route path="/profile" element={user ? <Profile user={user} /> : <Navigate to="/login" />} />
+            
+            <Route path="/class/:classId/:subjectId" element={<ChapterList />} />
+            <Route path="/note/:noteId" element={<NoteView user={user} />} />
+            <Route path="/premium-notes" element={user ? <PremiumNotes user={user} /> : <Navigate to="/login" />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/about" element={<AboutUs />} />
+            <Route path="/contact" element={<Contact user={user} />} />
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/disclaimer" element={<Disclaimer />} />
+            <Route path="/articles" element={<Articles />} />
+            <Route path="/article/:id" element={<ArticleDetail />} />
+            
+            <Route path="/ai-doubts" element={user ? <AIDoubtSolver /> : <Navigate to="/login" />} />
+            <Route path="/ai-quiz" element={user ? <QuizGenerator /> : <Navigate to="/login" />} />
+            <Route path="/ai-summarizer" element={user ? <Summarizer /> : <Navigate to="/login" />} />
+            
+            <Route path="/community" element={<Community user={user} />} />
+            <Route path="/community/post/:postId" element={<PostDetail user={user} />} />
+            
+            <Route path="/admin" element={user?.role === 'admin' ? <Admin /> : <Navigate to="/" />} />
+          </Routes>
+        </Suspense>
         
         <BottomNav user={user} />
         <FloatingChatbot />

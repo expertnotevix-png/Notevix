@@ -278,7 +278,10 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         }
         
         const idToken = await authUser.getIdToken();
-        const response = await fetch('/api/activate-premium', {
+        const apiEndpoint = `${window.location.origin}/api/activate-premium`;
+        console.log("PremiumNotes: Syncing verification to server...");
+        
+        const response = await fetch(apiEndpoint, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -293,13 +296,12 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
             whatsappNumber: whatsapp,
             planType: (selectedPlan as any).type,
             targetClass: (selectedPlan as any).class || null
-            // Removed screenshotUrl payload to avoid "Payload Too Large" (1MB+ base64) errors in fetch
           })
         });
 
         if (!response.ok) {
-          const errorText = await response.text().catch(() => "Unknown error");
-          throw new Error(`Server error (${response.status}): ${errorText.substring(0, 50)}`);
+          const errorData = await response.json().catch(() => ({ error: "Unknown server error" }));
+          throw new Error(errorData.details || errorData.error || `Server status ${response.status}`);
         }
 
         const approveResult = await response.json();
