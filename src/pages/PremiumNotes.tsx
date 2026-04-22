@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, Crown, Check, ShieldCheck, QrCode, Copy, ExternalLink, X, Send, CreditCard, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { UserProfile, PurchaseRequest } from '../types';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, addDoc, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { GoogleGenAI } from "@google/genai";
@@ -247,7 +247,12 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
       // 2. Automated Approval via Server Webhook (Creates record + Upgrades user)
       try {
-        const idToken = await user.getIdToken();
+        const authUser = auth.currentUser;
+        if (!authUser) {
+          throw new Error("You must be logged in to activate premium.");
+        }
+        
+        const idToken = await authUser.getIdToken();
         const response = await fetch('/api/webhooks/approve-payment', {
           method: 'POST',
           headers: { 
