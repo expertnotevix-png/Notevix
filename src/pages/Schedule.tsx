@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, Plus, Trash2, CheckCircle2, Circle, Calendar, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { UserProfile, ScheduleTask } from '../types';
 
@@ -20,22 +20,26 @@ export default function Schedule({ user }: ScheduleProps) {
   const today = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
-    const q = query(
-      collection(db, 'schedule'),
-      where('userId', '==', user.uid),
-      where('date', '==', today)
-    );
+    const fetchTasks = async () => {
+      try {
+        setLoading(true);
+        const q = query(
+          collection(db, 'schedule'),
+          where('userId', '==', user.uid),
+          where('date', '==', today)
+        );
+        
+        const snapshot = await getDocs(q);
+        const taskList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduleTask));
+        setTasks(taskList.sort((a, b) => a.time.localeCompare(b.time)));
+      } catch (error: any) {
+        handleFirestoreError(error, OperationType.LIST, 'schedule');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const taskList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduleTask));
-      setTasks(taskList.sort((a, b) => a.time.localeCompare(b.time)));
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'schedule');
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    fetchTasks();
   }, [user.uid, today]);
 
   const addTask = async (e: React.FormEvent) => {

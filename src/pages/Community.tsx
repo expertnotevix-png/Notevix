@@ -74,57 +74,85 @@ export default function Community({ user }: { user: UserProfile | null }) {
   const [selectedGroup, setSelectedGroup] = useState<any | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const [isLiveChat, setIsLiveChat] = useState(false);
+
   // 1. Fetch Stats - Only once on mount
   useEffect(() => {
-    const statsUnsub = onSnapshot(doc(db, 'community_stats', 'global'), (docSnap) => {
-      if (docSnap.exists()) {
-        setStats(docSnap.data() as CommunityStats);
+    const fetchStats = async () => {
+      try {
+        const docSnap = await getDoc(doc(db, 'community_stats', 'global'));
+        if (docSnap.exists()) {
+          setStats(docSnap.data() as CommunityStats);
+        }
+      } catch (error) {
+        console.error("Community stats fetch error:", error);
       }
-    }, (error) => {
-      console.error("Community stats listener error:", error);
-    });
-    return () => statsUnsub();
+    };
+    fetchStats();
   }, []);
 
-  // 2. Fetch Global Chat Messages - Only when on chat tab or once
-  useEffect(() => {
-    let chatUnsub: () => void = () => {};
-    const chatQuery = query(
-      collection(db, 'community_chat'),
-      orderBy('timestamp', 'desc'),
-      limit(50)
-    );
-    chatUnsub = onSnapshot(chatQuery, (snapshot) => {
+  // 2. Fetch Global Chat Messages
+  const fetchMessagesManual = async () => {
+    try {
+      const chatQuery = query(
+        collection(db, 'community_chat'),
+        orderBy('timestamp', 'desc'),
+        limit(50)
+      );
+      const snapshot = await getDocs(chatQuery);
       const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ChatMessage[];
       setMessages([...msgs].reverse());
-      if (activeTab === 'chat') {
-        setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-      }
-    }, (error) => {
-      console.warn("Chat listener error:", error);
-    });
-    return () => chatUnsub();
-  }, [activeTab]);
+      setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    } catch (error) {
+      console.warn("Manual chat fetch error:", error);
+    }
+  };
 
-  // 3. Fetch Posts - Handle filters
   useEffect(() => {
-    setLoading(true);
-    let postsQuery = query(collection(db, 'posts'), where('status', '==', 'approved'), limit(50));
-    if (filterSubject !== 'All') postsQuery = query(postsQuery, where('subject', '==', filterSubject));
-    if (filterClass !== 'All') postsQuery = query(postsQuery, where('class', '==', filterClass));
-    if (sortBy === 'latest') postsQuery = query(postsQuery, orderBy('createdAt', 'desc'));
-    else if (sortBy === 'upvoted') postsQuery = query(postsQuery, orderBy('upvotesCount', 'desc'));
+    if (activeTab !== 'chat') return;
+    
+    if (isLiveChat) {
+      const chatQuery = query(
+        collection(db, 'community_chat'),
+        orderBy('timestamp', 'desc'),
+        limit(50)
+      );
+      const chatUnsub = onSnapshot(chatQuery, (snapshot) => {
+        const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ChatMessage[];
+        setMessages([...msgs].reverse());
+        setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      }, (error) => {
+        console.warn("Chat listener error:", error);
+        setIsLiveChat(false);
+      });
+      return () => chatUnsub();
+    } else {
+      fetchMessagesManual();
+    }
+  }, [activeTab, isLiveChat]);
 
-    const postsUnsub = onSnapshot(postsQuery, (snapshot) => {
-      const postsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-      setPosts(postsData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Posts listener error:", error);
-      setLoading(false);
-    });
+  // 3. Fetch Posts - Handle filters (Manual fetch to save quota)
+  useEffect(() => {
+    const fetchPosts = async () => {
+      setLoading(true);
+      try {
+        let postsQuery = query(collection(db, 'posts'), where('status', '==', 'approved'), limit(50));
+        if (filterSubject !== 'All') postsQuery = query(postsQuery, where('subject', '==', filterSubject));
+        if (filterClass !== 'All') postsQuery = query(postsQuery, where('class', '==', filterClass));
+        if (sortBy === 'latest') postsQuery = query(postsQuery, orderBy('createdAt', 'desc'));
+        else if (sortBy === 'upvoted') postsQuery = query(postsQuery, orderBy('upvotesCount', 'desc'));
 
-    return () => postsUnsub();
+        const snapshot = await getDocs(postsQuery);
+        const postsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+        setPosts(postsData);
+      } catch (error: any) {
+        console.error("Posts fetch error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPosts();
   }, [sortBy, filterSubject, filterClass]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -221,10 +249,31 @@ export default function Community({ user }: { user: UserProfile | null }) {
             
             {activeTab === 'chat' && (
               <div className="flex-1 flex flex-col p-4 space-y-4">
-                <div className="bg-purple-500/5 border border-purple-500/20 p-4 rounded-3xl text-center space-y-2 mb-4">
-                  <Sparkles size={20} className="mx-auto text-purple-400" />
-                  <h3 className="text-sm font-bold uppercase tracking-tight italic">Public Study Stream</h3>
-                  <p className="text-xs text-gray-500">Ask small doubts or say hi! For detailed questions, use the Q&A section.</p>
+                <div className="bg-purple-500/5 border border-purple-500/20 p-4 rounded-3xl space-y-3 mb-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={16} className="text-purple-400" />
+                      <h3 className="text-[10px] font-black uppercase tracking-widest italic">Study Stream</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                       <button 
+                         onClick={() => fetchMessagesManual()}
+                         className="p-1 px-2 hover:bg-white/5 rounded text-[8px] font-bold uppercase tracking-widest text-gray-500"
+                       >
+                         Refresh
+                       </button>
+                       <div className="flex items-center gap-2 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+                          <span className="text-[8px] font-bold text-gray-500">LIVE</span>
+                          <button 
+                            onClick={() => setIsLiveChat(!isLiveChat)}
+                            className={`w-6 h-3 rounded-full relative transition-colors ${isLiveChat ? 'bg-purple-600' : 'bg-gray-700'}`}
+                          >
+                             <div className={`absolute top-0.5 w-2 h-2 rounded-full bg-white transition-all ${isLiveChat ? 'right-0.5' : 'left-0.5'}`} />
+                          </button>
+                       </div>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-gray-600 leading-tight">Public beam for quick questions. {isLiveChat ? 'Stream is live!' : 'Refresh to see latest.'}</p>
                 </div>
 
                 {messages.map((msg, idx) => (

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Chapter } from '../types';
 import { Search, Filter, BookOpen, Lock, X } from 'lucide-react';
@@ -18,7 +18,7 @@ export default function Explore() {
     }
     setLoading(true);
     try {
-      const q = query(collection(db, 'chapters'));
+      const q = query(collection(db, 'chapters'), limit(30));
       const querySnapshot = await getDocs(q);
       const allChapters = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Chapter));
       const filtered = allChapters.filter(c => 

@@ -45,174 +45,178 @@ export default function Home({ user }: HomeProps) {
   };
 
   const autoSeedData = async () => {
-    const q = query(collection(db, 'subject_resources'), limit(1));
-    const snap = await getDocs(q);
-    if (snap.empty) {
-      console.log("Auto-seeding data...");
-      
-      // Community Stats
-      await setDoc(doc(db, 'community_stats', 'global'), {
-        totalQuestions: 0,
-        totalAnswers: 0,
-        totalStudents: 1,
-        solvedToday: 0,
-        lastResetDate: new Date().toISOString().split('T')[0]
-      }, { merge: true });
+    try {
+      const q = query(collection(db, 'subject_resources'), limit(1));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        console.log("Auto-seeding data...");
+        
+        // Community Stats
+        await setDoc(doc(db, 'community_stats', 'global'), {
+          totalQuestions: 0,
+          totalAnswers: 0,
+          totalStudents: 1,
+          solvedToday: 0,
+          lastResetDate: new Date().toISOString().split('T')[0]
+        }, { merge: true });
 
-      // Subject Resources
-      const subjectResources = [
-        {
-          class: '8', subject: 'science',
-          onePageNotesUrl: 'https://drive.google.com/file/d/1ka-QeoholdXB3xaX7jX2QNXO-kP2n-ES/view?usp=drivesdk',
-          fullNotesUrl: 'https://drive.google.com/file/d/1wCuBo0YApmkqef-UnT29CtRd1tOcrb9v/view?usp=drivesdk',
-          importantQuestionsUrl: 'https://drive.google.com/file/d/1UB0-QptnzsAOEU5lKwA60HtVfFo5_P_g/view?usp=drivesdk',
-          examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1F5OA8aK6ncJLD0iVYTIR_etSDjBqKheB/view?usp=drivesdk'
-        },
-        {
-          class: '8', subject: 'sst',
-          onePageNotesUrl: 'https://drive.google.com/file/d/1mV5bcLIz8j3IEE61Ijwdo2RDrq-j05yG/view?usp=drivesdk',
-          fullNotesUrl: 'https://drive.google.com/file/d/1USJWh6tDlRH7ATYRrsHC_HgESYHAzb8D/view?usp=drivesdk',
-          importantQuestionsUrl: 'https://drive.google.com/file/d/1TCAEGb4e9s1bd6ttGmHiDVYsimaH3_Pd/view?usp=drivesdk',
-          examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1cVOUmI7StT61OlrZC16oE0mE1pV8YnNk/view?usp=drivesdk'
-        },
-        {
-          class: '8', subject: 'maths',
-          onePageNotesUrl: 'https://drive.google.com/file/d/1GcVbFswV7OB3dutymQjdHbOXheuK9Ysn/view?usp=drivesdk',
-          fullNotesUrl: 'https://drive.google.com/file/d/1K64QsZT9lNwS_12r5HioULIHVXFDm_oB/view?usp=drivesdk',
-          importantQuestionsUrl: 'https://drive.google.com/file/d/1d1-V1u8oWALR49tKMKBWe1Dtnz3nnOBH/view?usp=drivesdk',
-          examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1z-cvLUQQAT02csfWiM03_b8dcPFObtE0/view?usp=drivesdk'
-        },
-        {
-          class: '8', subject: 'english',
-          onePageNotesUrl: 'https://drive.google.com/file/d/1CCK6uzH1ma5I0E5sWWW57_BbUo9PrlHX/view?usp=drivesdk',
-          fullNotesUrl: 'https://drive.google.com/file/d/1IXSc8wcjttmkOVpVY7ocKZkTuRVI0iTZ/view?usp=drivesdk',
-          importantQuestionsUrl: 'https://drive.google.com/file/d/1Cr_fvccNKi-PBWTRb6CF6DB27qz73r3z/view?usp=drivesdk',
-          examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1nuGRofcxb9LKD7d0-7ngBU1mmrhCSjgX/view?usp=drivesdk'
-        },
-        {
-          class: '9', subject: 'science',
-          onePageNotesUrl: 'https://drive.google.com/file/d/16J3l5x2tiNwhtG1YUH6Xpc1VyhlbEhaU/view?usp=drivesdk',
-          fullNotesUrl: 'https://drive.google.com/file/d/19KV_y1pdj4TN9mSg1pnymrjF7RVpghGH/view?usp=drivesdk',
-          importantQuestionsUrl: 'https://drive.google.com/file/d/1_Nr1VeZX7a3g9HM3j6nhzZ5xe9XXA-3_/view?usp=drivesdk',
-          examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1IGo5ErM6jnmJ1KrM60o-XjAt1XgEj5sc/view?usp=drivesdk'
-        },
-        {
-          class: '9', subject: 'sst',
-          onePageNotesUrl: 'https://drive.google.com/file/d/1Nhof272xWczHbg7hX_ageR4NvXPJNrJP/view?usp=drivesdk',
-          fullNotesUrl: 'https://drive.google.com/file/d/1Ig18ncXDHEQ0Mxu-sM7akb_01Ab3H02j/view?usp=drivesdk',
-          importantQuestionsUrl: 'https://drive.google.com/file/d/1rig4ZYP8nk22Kfr35OR9VLxv7WQy7n9a/view?usp=drivesdk',
-          examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1lDAxdI-_b7JcYkWPdt6uegR4LdQuxQ3h/view?usp=drivesdk'
-        },
-        {
-          class: '9', subject: 'maths',
-          onePageNotesUrl: 'https://drive.google.com/file/d/1aIa3PGgzZu8K1p9NY5yejDcgzMPHZ2ZP/view?usp=drivesdk',
-          fullNotesUrl: 'https://drive.google.com/file/d/1iW1BUO46koPSud20WlGPAf1VMNlXUNyI/view?usp=drivesdk',
-          importantQuestionsUrl: 'https://drive.google.com/file/d/1DJEF8yHKGWDnsJt7tGGTkH0DgGbn9yRp/view?usp=drivesdk'
-        },
-        {
-          class: '9', subject: 'english',
-          onePageNotesUrl: 'https://drive.google.com/file/d/1k_7qp8KYIyIvYME5sfO1Oq-nt7LjxyOL/view?usp=drivesdk',
-          fullNotesUrl: 'https://drive.google.com/file/d/1B81cuGvF5-jJnhUA1n-Yy6nAk-H9W-B3/view?usp=drivesdk',
-          importantQuestionsUrl: 'https://drive.google.com/file/d/10X16DY-AxnxyXrIDwbNqJSt_Y8NRZyv7/view?usp=drivesdk',
-          examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1n4_HnHrShSzIMkfiVQYDtuJSWPnkqqO2/view?usp=drivesdk'
-        },
-        {
-          class: '10', subject: 'science',
-          onePageNotesUrl: 'https://drive.google.com/file/d/1vVRXXenGoaFzn1R2cEs_es5gDzzEzO9J/view?usp=drivesdk',
-          fullNotesUrl: 'https://drive.google.com/file/d/1Rer-yq5_lUAx79ziwtXDR0AXgaoB10Eh/view?usp=drivesdk',
-          importantQuestionsUrl: 'https://drive.google.com/file/d/17gHE4BBgTcFbq6Z1jUMEaooPuDhSxrFR/view?usp=drivesdk',
-          examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1lGG-l-89veqwwbEIltxRtXql1Xhb1uVT/view?usp=drivesdk'
-        },
-        {
-          class: '10', subject: 'sst',
-          onePageNotesUrl: 'https://drive.google.com/file/d/1C5HNfr4u_8vQ9eArzdZRSUhE_Owy4h8c/view?usp=drivesdk',
-          fullNotesUrl: 'https://drive.google.com/file/d/1hUk1u-XnJb47lAFvU3qvWUK_kTMHwVc6/view?usp=drivesdk',
-          importantQuestionsUrl: 'https://drive.google.com/file/d/1B_s9nxd9df3uR2Zas-sna9S5sthtt-1w/view?usp=drivesdk',
-          examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1Bo5ON7oLLp_uhra5dOx5vVk82x07WGCJ/view?usp=drivesdk'
-        },
-        {
-          class: '10', subject: 'maths',
-          onePageNotesUrl: 'https://drive.google.com/file/d/1oa2WBPNO4ChJrAp-aP7uyvVCn2SPI6w1/view?usp=drivesdk',
-          fullNotesUrl: 'https://drive.google.com/file/d/1wNNhEXC06_qpsom2lzfAoOAjxZtfzc2f/view?usp=drivesdk',
-          importantQuestionsUrl: 'https://drive.google.com/file/d/1jUpfYzuNwiE6b6CTYTE--Gk8ttqZ5b26/view?usp=drivesdk',
-          examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1nWLsptC9vEV7egT8rbapiRi_gBm7SeTW/view?usp=drivesdk'
-        },
-        {
-          class: '10', subject: 'english',
-          onePageNotesUrl: 'https://drive.google.com/file/d/161HIkuYtIOD5esDsmjwnI5lq6PPltOZG/view?usp=drivesdk',
-          fullNotesUrl: 'https://drive.google.com/file/d/158isO5zrYWgdKafIiRdzOXLHJaYEeu35/view?usp=drivesdk',
-          importantQuestionsUrl: 'https://drive.google.com/file/d/1ELq7c3bOUDaVFAsu2OcDtuwYiOikTm74/view?usp=drivesdk',
-          examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1DcvYECk1QfqhAu2isR3PHnolvcMtx4n5/view?usp=drivesdk'
+        // Subject Resources
+        const subjectResources = [
+          {
+            class: '8', subject: 'science',
+            onePageNotesUrl: 'https://drive.google.com/file/d/1ka-QeoholdXB3xaX7jX2QNXO-kP2n-ES/view?usp=drivesdk',
+            fullNotesUrl: 'https://drive.google.com/file/d/1wCuBo0YApmkqef-UnT29CtRd1tOcrb9v/view?usp=drivesdk',
+            importantQuestionsUrl: 'https://drive.google.com/file/d/1UB0-QptnzsAOEU5lKwA60HtVfFo5_P_g/view?usp=drivesdk',
+            examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1F5OA8aK6ncJLD0iVYTIR_etSDjBqKheB/view?usp=drivesdk'
+          },
+          {
+            class: '8', subject: 'sst',
+            onePageNotesUrl: 'https://drive.google.com/file/d/1mV5bcLIz8j3IEE61Ijwdo2RDrq-j05yG/view?usp=drivesdk',
+            fullNotesUrl: 'https://drive.google.com/file/d/1USJWh6tDlRH7ATYRrsHC_HgESYHAzb8D/view?usp=drivesdk',
+            importantQuestionsUrl: 'https://drive.google.com/file/d/1TCAEGb4e9s1bd6ttGmHiDVYsimaH3_Pd/view?usp=drivesdk',
+            examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1cVOUmI7StT61OlrZC16oE0mE1pV8YnNk/view?usp=drivesdk'
+          },
+          {
+            class: '8', subject: 'maths',
+            onePageNotesUrl: 'https://drive.google.com/file/d/1GcVbFswV7OB3dutymQjdHbOXheuK9Ysn/view?usp=drivesdk',
+            fullNotesUrl: 'https://drive.google.com/file/d/1K64QsZT9lNwS_12r5HioULIHVXFDm_oB/view?usp=drivesdk',
+            importantQuestionsUrl: 'https://drive.google.com/file/d/1d1-V1u8oWALR49tKMKBWe1Dtnz3nnOBH/view?usp=drivesdk',
+            examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1z-cvLUQQAT02csfWiM03_b8dcPFObtE0/view?usp=drivesdk'
+          },
+          {
+            class: '8', subject: 'english',
+            onePageNotesUrl: 'https://drive.google.com/file/d/1CCK6uzH1ma5I0E5sWWW57_BbUo9PrlHX/view?usp=drivesdk',
+            fullNotesUrl: 'https://drive.google.com/file/d/1IXSc8wcjttmkOVpVY7ocKZkTuRVI0iTZ/view?usp=drivesdk',
+            importantQuestionsUrl: 'https://drive.google.com/file/d/1Cr_fvccNKi-PBWTRb6CF6DB27qz73r3z/view?usp=drivesdk',
+            examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1nuGRofcxb9LKD7d0-7ngBU1mmrhCSjgX/view?usp=drivesdk'
+          },
+          {
+            class: '9', subject: 'science',
+            onePageNotesUrl: 'https://drive.google.com/file/d/16J3l5x2tiNwhtG1YUH6Xpc1VyhlbEhaU/view?usp=drivesdk',
+            fullNotesUrl: 'https://drive.google.com/file/d/19KV_y1pdj4TN9mSg1pnymrjF7RVpghGH/view?usp=drivesdk',
+            importantQuestionsUrl: 'https://drive.google.com/file/d/1_Nr1VeZX7a3g9HM3j6nhzZ5xe9XXA-3_/view?usp=drivesdk',
+            examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1IGo5ErM6jnmJ1KrM60o-XjAt1XgEj5sc/view?usp=drivesdk'
+          },
+          {
+            class: '9', subject: 'sst',
+            onePageNotesUrl: 'https://drive.google.com/file/d/1Nhof272xWczHbg7hX_ageR4NvXPJNrJP/view?usp=drivesdk',
+            fullNotesUrl: 'https://drive.google.com/file/d/1Ig18ncXDHEQ0Mxu-sM7akb_01Ab3H02j/view?usp=drivesdk',
+            importantQuestionsUrl: 'https://drive.google.com/file/d/1rig4ZYP8nk22Kfr35OR9VLxv7WQy7n9a/view?usp=drivesdk',
+            examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1lDAxdI-_b7JcYkWPdt6uegR4LdQuxQ3h/view?usp=drivesdk'
+          },
+          {
+            class: '9', subject: 'maths',
+            onePageNotesUrl: 'https://drive.google.com/file/d/1aIa3PGgzZu8K1p9NY5yejDcgzMPHZ2ZP/view?usp=drivesdk',
+            fullNotesUrl: 'https://drive.google.com/file/d/1iW1BUO46koPSud20WlGPAf1VMNlXUNyI/view?usp=drivesdk',
+            importantQuestionsUrl: 'https://drive.google.com/file/d/1DJEF8yHKGWDnsJt7tGGTkH0DgGbn9yRp/view?usp=drivesdk'
+          },
+          {
+            class: '9', subject: 'english',
+            onePageNotesUrl: 'https://drive.google.com/file/d/1k_7qp8KYIyIvYME5sfO1Oq-nt7LjxyOL/view?usp=drivesdk',
+            fullNotesUrl: 'https://drive.google.com/file/d/1B81cuGvF5-jJnhUA1n-Yy6nAk-H9W-B3/view?usp=drivesdk',
+            importantQuestionsUrl: 'https://drive.google.com/file/d/10X16DY-AxnxyXrIDwbNqJSt_Y8NRZyv7/view?usp=drivesdk',
+            examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1n4_HnHrShSzIMkfiVQYDtuJSWPnkqqO2/view?usp=drivesdk'
+          },
+          {
+            class: '10', subject: 'science',
+            onePageNotesUrl: 'https://drive.google.com/file/d/1vVRXXenGoaFzn1R2cEs_es5gDzzEzO9J/view?usp=drivesdk',
+            fullNotesUrl: 'https://drive.google.com/file/d/1Rer-yq5_lUAx79ziwtXDR0AXgaoB10Eh/view?usp=drivesdk',
+            importantQuestionsUrl: 'https://drive.google.com/file/d/17gHE4BBgTcFbq6Z1jUMEaooPuDhSxrFR/view?usp=drivesdk',
+            examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1lGG-l-89veqwwbEIltxRtXql1Xhb1uVT/view?usp=drivesdk'
+          },
+          {
+            class: '10', subject: 'sst',
+            onePageNotesUrl: 'https://drive.google.com/file/d/1C5HNfr4u_8vQ9eArzdZRSUhE_Owy4h8c/view?usp=drivesdk',
+            fullNotesUrl: 'https://drive.google.com/file/d/1hUk1u-XnJb47lAFvU3qvWUK_kTMHwVc6/view?usp=drivesdk',
+            importantQuestionsUrl: 'https://drive.google.com/file/d/1B_s9nxd9df3uR2Zas-sna9S5sthtt-1w/view?usp=drivesdk',
+            examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1Bo5ON7oLLp_uhra5dOx5vVk82x07WGCJ/view?usp=drivesdk'
+          },
+          {
+            class: '10', subject: 'maths',
+            onePageNotesUrl: 'https://drive.google.com/file/d/1oa2WBPNO4ChJrAp-aP7uyvVCn2SPI6w1/view?usp=drivesdk',
+            fullNotesUrl: 'https://drive.google.com/file/d/1wNNhEXC06_qpsom2lzfAoOAjxZtfzc2f/view?usp=drivesdk',
+            importantQuestionsUrl: 'https://drive.google.com/file/d/1jUpfYzuNwiE6b6CTYTE--Gk8ttqZ5b26/view?usp=drivesdk',
+            examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1nWLsptC9vEV7egT8rbapiRi_gBm7SeTW/view?usp=drivesdk'
+          },
+          {
+            class: '10', subject: 'english',
+            onePageNotesUrl: 'https://drive.google.com/file/d/161HIkuYtIOD5esDsmjwnI5lq6PPltOZG/view?usp=drivesdk',
+            fullNotesUrl: 'https://drive.google.com/file/d/158isO5zrYWgdKafIiRdzOXLHJaYEeu35/view?usp=drivesdk',
+            importantQuestionsUrl: 'https://drive.google.com/file/d/1ELq7c3bOUDaVFAsu2OcDtuwYiOikTm74/view?usp=drivesdk',
+            examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1DcvYECk1QfqhAu2isR3PHnolvcMtx4n5/view?usp=drivesdk'
+          }
+        ];
+
+        for (const res of subjectResources) {
+          await addDoc(collection(db, 'subject_resources'), res);
         }
-      ];
 
-      for (const res of subjectResources) {
-        await addDoc(collection(db, 'subject_resources'), res);
-      }
+        // Sample Chapters for Class 8
+        const chapterSamples = [
+          {
+            class: '8', subject: 'maths', title: 'Rational Numbers',
+            summary: 'Numbers that can be expressed in p/q form.',
+            keyPoints: ['Closure property', 'Commutativity', 'Associativity'],
+            formulas: ['p/q + r/s = (ps + rq)/qs'],
+            importantQuestions: [{ question: 'What is additive inverse?', answer: 'Negative of the number.' }],
+            isPremium: false
+          },
+          {
+            class: '8', subject: 'maths', title: 'Linear Equations',
+            summary: 'Equations with degree 1.',
+            keyPoints: ['Variable', 'Constant', 'LHS = RHS'],
+            formulas: ['ax + b = c'],
+            importantQuestions: [{ question: 'Solve 2x + 3 = 7', answer: 'x = 2' }],
+            isPremium: false
+          },
+          {
+            class: '8', subject: 'science', title: 'Crop Production',
+            summary: 'Management of crops for food production.',
+            keyPoints: ['Sowing', 'Irrigation', 'Harvesting'],
+            formulas: [],
+            importantQuestions: [{ question: 'What is Kharif crop?', answer: 'Sown in rainy season.' }],
+            isPremium: false
+          },
+          {
+            class: '8', subject: 'science', title: 'Microorganisms',
+            summary: 'Tiny organisms visible only under microscope.',
+            keyPoints: ['Bacteria', 'Fungi', 'Protozoa', 'Algae'],
+            formulas: [],
+            importantQuestions: [{ question: 'What is fermentation?', answer: 'Conversion of sugar into alcohol.' }],
+            isPremium: false
+          },
+          {
+            class: '8', subject: 'sst', title: 'How, When and Where',
+            summary: 'Introduction to modern Indian history.',
+            keyPoints: ['Periodisation', 'Colonialism', 'Official records'],
+            formulas: [],
+            importantQuestions: [{ question: 'Who was James Mill?', answer: 'Scottish economist and political philosopher.' }],
+            isPremium: false
+          },
+          {
+            class: '8', subject: 'english', title: 'The Best Christmas Present',
+            summary: 'A story about a letter from a soldier.',
+            keyPoints: ['Jim Macpherson', 'Connie', 'Christmas truce'],
+            formulas: [],
+            importantQuestions: [{ question: 'Who was Connie?', answer: 'Jim Macpherson\'s wife.' }],
+            isPremium: false
+          },
+          {
+            class: '9', subject: 'maths', title: 'Number Systems',
+            summary: 'Introduction to real numbers.',
+            keyPoints: ['Rational numbers', 'Irrational numbers', 'Real numbers'],
+            formulas: [],
+            importantQuestions: [{ question: 'Is zero a rational number?', answer: 'Yes.' }],
+            isPremium: false
+          }
+        ];
 
-      // Sample Chapters for Class 8
-      const chapterSamples = [
-        {
-          class: '8', subject: 'maths', title: 'Rational Numbers',
-          summary: 'Numbers that can be expressed in p/q form.',
-          keyPoints: ['Closure property', 'Commutativity', 'Associativity'],
-          formulas: ['p/q + r/s = (ps + rq)/qs'],
-          importantQuestions: [{ question: 'What is additive inverse?', answer: 'Negative of the number.' }],
-          isPremium: false
-        },
-        {
-          class: '8', subject: 'maths', title: 'Linear Equations',
-          summary: 'Equations with degree 1.',
-          keyPoints: ['Variable', 'Constant', 'LHS = RHS'],
-          formulas: ['ax + b = c'],
-          importantQuestions: [{ question: 'Solve 2x + 3 = 7', answer: 'x = 2' }],
-          isPremium: false
-        },
-        {
-          class: '8', subject: 'science', title: 'Crop Production',
-          summary: 'Management of crops for food production.',
-          keyPoints: ['Sowing', 'Irrigation', 'Harvesting'],
-          formulas: [],
-          importantQuestions: [{ question: 'What is Kharif crop?', answer: 'Sown in rainy season.' }],
-          isPremium: false
-        },
-        {
-          class: '8', subject: 'science', title: 'Microorganisms',
-          summary: 'Tiny organisms visible only under microscope.',
-          keyPoints: ['Bacteria', 'Fungi', 'Protozoa', 'Algae'],
-          formulas: [],
-          importantQuestions: [{ question: 'What is fermentation?', answer: 'Conversion of sugar into alcohol.' }],
-          isPremium: false
-        },
-        {
-          class: '8', subject: 'sst', title: 'How, When and Where',
-          summary: 'Introduction to modern Indian history.',
-          keyPoints: ['Periodisation', 'Colonialism', 'Official records'],
-          formulas: [],
-          importantQuestions: [{ question: 'Who was James Mill?', answer: 'Scottish economist and political philosopher.' }],
-          isPremium: false
-        },
-        {
-          class: '8', subject: 'english', title: 'The Best Christmas Present',
-          summary: 'A story about a letter from a soldier.',
-          keyPoints: ['Jim Macpherson', 'Connie', 'Christmas truce'],
-          formulas: [],
-          importantQuestions: [{ question: 'Who was Connie?', answer: 'Jim Macpherson\'s wife.' }],
-          isPremium: false
-        },
-        {
-          class: '9', subject: 'maths', title: 'Number Systems',
-          summary: 'Introduction to real numbers.',
-          keyPoints: ['Rational numbers', 'Irrational numbers', 'Real numbers'],
-          formulas: [],
-          importantQuestions: [{ question: 'Is zero a rational number?', answer: 'Yes.' }],
-          isPremium: false
+        for (const chapter of chapterSamples) {
+          await addDoc(collection(db, 'chapters'), chapter);
         }
-      ];
-
-      for (const chapter of chapterSamples) {
-        await addDoc(collection(db, 'chapters'), chapter);
       }
+    } catch (err) {
+      console.warn("Home: Auto-seeding failed (likely quota):", err);
     }
   };
 

@@ -6,6 +6,8 @@ import { logEvent } from 'firebase/analytics';
 import { auth, db, handleFirestoreError, OperationType, analytics } from './lib/firebase';
 import { UserProfile } from './types';
 
+const CACHED_USER_KEY = 'notevix_user_profile_v1';
+
 import Articles from './pages/Articles';
 import ArticleDetail from './pages/ArticleDetail';
 import Disclaimer from './pages/Disclaimer';
@@ -46,6 +48,21 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const quotaLockRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    // Check for existing quota lockout on mount
+    const lockout = localStorage.getItem('firestore_quota_lockout');
+    if (lockout) {
+      const lockTime = parseInt(lockout);
+      if (Date.now() - lockTime < 30 * 60 * 1000) { // 30 minute lockout
+        quotaLockRef.current = true;
+        console.warn("App: Quota lockout active. Using cache only.");
+      } else {
+        localStorage.removeItem('firestore_quota_lockout');
+      }
+    }
+  }, []);
 
   useEffect(() => {
     // Safety timeout for loading state
@@ -94,18 +111,33 @@ export default function App() {
         }
       }
 
-      // 3. Listen for auth state
+        // 3. Listen for auth state
       const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
         if (!isMounted) return;
         console.log("App: Auth state changed:", firebaseUser ? "User present" : "No user");
         
+        if (!firebaseUser) {
+          setUser(null);
+          if (unsubscribeUser) unsubscribeUser();
+          setIsAuthReady(true);
+          setLoading(false);
+          return;
+        }
+
         try {
-          if (firebaseUser) {
-            const userRef = doc(db, 'users', firebaseUser.uid);
+          const userRef = doc(db, 'users', firebaseUser.uid);
+          let userData: UserProfile | null = null;
+          
+          try {
+            if (quotaLockRef.current) {
+              throw new Error("Quota exceeded lockout active");
+            }
             const userDoc = await getDoc(userRef);
             
             if (userDoc.exists()) {
-              const userData = userDoc.data() as UserProfile;
+              userData = userDoc.data() as UserProfile;
+              // Cache for quota protection
+              localStorage.setItem(CACHED_USER_KEY, JSON.stringify(userData));
               
               // Streak Logic: Update if it's a new day
               const today = new Date().toISOString().split('T')[0];
@@ -126,19 +158,17 @@ export default function App() {
                 await updateDoc(userRef, {
                   'streak.currentCount': newCount,
                   'streak.lastUpdateDate': today
-                });
+                }).catch(e => console.warn("Streak update failed:", e));
                 userData.streak = { currentCount: newCount, lastUpdateDate: today };
                 toast.success(`Welcome back! Your streak is now ${newCount} days! 🔥`);
+                localStorage.setItem(CACHED_USER_KEY, JSON.stringify(userData));
               }
-
-              setUser(userData);
-              console.log("App: User profile loaded and streak updated");
             } else {
               console.log("App: Creating new user document...");
               const referredBy = localStorage.getItem('referredBy');
               const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
-              const newUser: UserProfile = {
+              userData = {
                 uid: firebaseUser.uid,
                 email: firebaseUser.email || '',
                 displayName: firebaseUser.displayName || 'Student',
@@ -157,24 +187,61 @@ export default function App() {
                 ...(referredBy ? { referredBy } : {}),
               };
 
-              await setDoc(userRef, newUser);
-              setUser(newUser);
+              await setDoc(userRef, userData);
+              localStorage.setItem(CACHED_USER_KEY, JSON.stringify(userData));
+            }
+          } catch (docError: any) {
+            const isQuotaError = docError.message?.toLowerCase().includes('quota') || 
+                                docError.message?.toLowerCase().includes('lockout active');
+            
+            if (!isQuotaError) {
+              console.error("App: Firestore error fetching profile:", docError);
+            } else if (!quotaLockRef.current) {
+              quotaLockRef.current = true;
+              localStorage.setItem('firestore_quota_lockout', Date.now().toString());
             }
 
-            if (unsubscribeUser) unsubscribeUser();
-            unsubscribeUser = onSnapshot(userRef, (docSnap) => {
-              if (docSnap.exists()) {
-                const data = docSnap.data() as UserProfile;
-                setUser(data);
+            // Try to use cached version first
+            const cached = localStorage.getItem(CACHED_USER_KEY);
+            if (cached) {
+              userData = JSON.parse(cached);
+              if (isMounted) {
+                toast.info("Using cached profile (Cloud limits reached)");
               }
-            }, (error) => {
-              console.error("App: User profile listener error:", error);
-            });
-
-          } else {
-            setUser(null);
-            if (unsubscribeUser) unsubscribeUser();
+            } else {
+              if (isQuotaError) {
+                toast.error("Cloud Quota Met: Some features may be limited until tomorrow, but you can still study!", {
+                  duration: 6000,
+                  id: 'quota-error'
+                });
+              }
+              
+              // Fallback user to break login loop and allow access in "Degraded Mode"
+              userData = {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email || '',
+                displayName: firebaseUser.displayName || 'Student',
+                photoURL: firebaseUser.photoURL || '',
+                role: firebaseUser.email === 'expertraj8@gmail.com' ? 'admin' : 'student',
+                savedNotes: [],
+                notificationsEnabled: true,
+                totalFocusMinutes: 0,
+                totalPoints: 0,
+                referralCode: 'TEMP',
+                referralCount: 0,
+                isPremium: false,
+                createdAt: new Date().toISOString(),
+                streak: { currentCount: 0, lastUpdateDate: '' }
+              };
+            }
           }
+
+          if (userData) {
+            setUser(userData);
+            // We removed the real-time user profile listener (onSnapshot) to save quota.
+            // Local state updates in intervals handle UI sync.
+          }
+
         } catch (err: any) {
           console.error("App: Auth processing error:", err);
         } finally {
@@ -195,80 +262,12 @@ export default function App() {
     };
   }, []);
 
-  // Real-time Community Notifications
+  // Real-time Community Notifications (Disabled to save quota)
   useEffect(() => {
-    if (!user || user.notificationsEnabled === false) return;
-
-    // Listen for new chat messages
-    const chatQuery = query(
-      collection(db, 'community_chat'),
-      orderBy('timestamp', 'desc'),
-      limit(1)
-    );
-
-    let initialChatLoad = true;
-    const unsubscribeChat = onSnapshot(chatQuery, (snapshot) => {
-      if (initialChatLoad) {
-        initialChatLoad = false;
-        return;
-      }
-      
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') {
-          const msg = change.doc.data();
-          if (msg.userId !== user.uid) {
-            toast.message('New Group Message', {
-              description: `${msg.userName}: ${msg.content.substring(0, 50)}${msg.content.length > 50 ? '...' : ''}`,
-              action: {
-                label: 'View',
-                onClick: () => window.location.href = '/community'
-              },
-            });
-          }
-        }
-      });
-    }, (error) => {
-      console.warn("App chat notification listener error:", error);
-    });
-
-    // Listen for new questions
-    const postsQuery = query(
-      collection(db, 'posts'),
-      where('status', '==', 'approved'),
-      orderBy('createdAt', 'desc'),
-      limit(1)
-    );
-
-    let initialPostsLoad = true;
-    const unsubscribePosts = onSnapshot(postsQuery, (snapshot) => {
-      if (initialPostsLoad) {
-        initialPostsLoad = false;
-        return;
-      }
-
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') {
-          const post = change.doc.data();
-          if (post.userId !== user.uid) {
-            toast.message('New Question Asked', {
-              description: `${post.title}`,
-              action: {
-                label: 'Help',
-                onClick: () => window.location.href = `/community/post/${change.doc.id}`
-              },
-            });
-          }
-        }
-      });
-    }, (error) => {
-      console.warn("App posts notification listener error:", error);
-    });
-
-    return () => {
-      unsubscribeChat();
-      unsubscribePosts();
-    };
-  }, [user?.uid, user?.notificationsEnabled]);
+    // We removed global listeners for chat/posts to minimize read units.
+    // Students can check for updates by visiting the Community tab.
+    return () => {};
+  }, [user?.uid]);
 
   // Keep user ref up to date for interval
   const userRefForInterval = useRef(user);
@@ -305,6 +304,16 @@ export default function App() {
         
         updates.totalFocusMinutes = increment(5);
         updates.totalPoints = increment(50);
+
+        // Update local state immediately since we disabled the real-time listener
+        setUser(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            totalFocusMinutes: newFocusMinutes,
+            totalPoints: newPoints
+          };
+        });
 
         // Sync with Leaderboard in the same periodic pulse
         const leaderboardRef = doc(db, 'leaderboard', currentUser.uid);

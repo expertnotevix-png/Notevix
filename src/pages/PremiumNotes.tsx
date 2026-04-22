@@ -68,20 +68,22 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   const upiId = (import.meta as any).env?.VITE_UPI_ID || '9236489649@mbk';
 
   useEffect(() => {
-    // 1. Check for pending requests in real-time
-    const q = query(
-      collection(db, 'purchase_requests'),
-      where('userId', '==', user.uid),
-      where('status', '==', 'pending')
-    );
+    // 1. Check for pending requests (One-time fetch to save quota)
+    const checkPendingRequests = async () => {
+      try {
+        const q = query(
+          collection(db, 'purchase_requests'),
+          where('userId', '==', user.uid),
+          where('status', '==', 'pending')
+        );
+        const snap = await getDocs(q);
+        setHasPendingRequest(!snap.empty);
+      } catch (error) {
+        console.error("Error checking pending requests:", error);
+      }
+    };
 
-    const unsubscribe = onSnapshot(q, (snap) => {
-      setHasPendingRequest(!snap.empty);
-    }, (error) => {
-      console.error("Error monitoring purchase requests:", error);
-    });
-
-    return () => unsubscribe();
+    checkPendingRequests();
   }, [user.uid]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

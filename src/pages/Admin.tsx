@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp, writeBatch, getCountFromServer } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { geminiService } from '../services/geminiService';
 import { Chapter, Message, Notification, PurchaseRequest, UserProfile } from '../types';
@@ -23,19 +23,11 @@ export default function Admin() {
   const [notifData, setNotifData] = useState({ title: '', message: '', type: 'info' as const });
 
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-
     if (activeTab === 'chapters') fetchChapters();
-    if (activeTab === 'messages') unsubscribe = fetchMessages();
-    if (activeTab === 'notifications') unsubscribe = fetchNotifications();
-    if (activeTab === 'payments') unsubscribe = fetchPurchaseRequests();
+    if (activeTab === 'messages') fetchMessages();
+    if (activeTab === 'notifications') fetchNotifications();
+    if (activeTab === 'payments') fetchPurchaseRequests();
     if (activeTab === 'users') fetchUsers();
-
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
   }, [activeTab]);
 
   const fetchUsers = async () => {
@@ -80,20 +72,25 @@ export default function Admin() {
   const [aiStatus, setAiStatus] = useState<{ status: 'checking' | 'ok' | 'error', message?: string }>({ status: 'checking' });
 
   useEffect(() => {
-    // Real-time Active Users (Active in last 5 minutes)
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    const q = query(
-      collection(db, 'users'),
-      where('lastActive', '>=', fiveMinutesAgo)
-    );
+    // Check for active users (One-time fetch to save quota)
+    const checkActiveUsers = async () => {
+      try {
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+        const q = query(
+          collection(db, 'users'),
+          where('lastActive', '>=', fiveMinutesAgo)
+        );
+        const snapshot = await getCountFromServer(q);
+        setActiveUsers(snapshot.data().count);
+      } catch (error) {
+        console.warn("Active users check error:", error);
+      }
+    };
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setActiveUsers(snapshot.size);
-    }, (error) => {
-      console.warn("Active users listener error:", error);
-    });
-
-    return () => unsubscribe();
+    checkActiveUsers();
+    // Re-check every 5 minutes if tab is active
+    const interval = setInterval(checkActiveUsers, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -279,45 +276,46 @@ export default function Admin() {
     alert("All resources synced successfully with new links!");
   };
 
-  const fetchMessages = () => {
+  const fetchMessages = async () => {
     setLoading(true);
-    const q = query(collection(db, 'messages'), orderBy('timestamp', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    try {
+      const q = query(collection(db, 'messages'), orderBy('timestamp', 'desc'), limit(50));
+      const snapshot = await getDocs(q);
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
       setMessages(data);
-      setLoading(false);
-    }, (error) => {
+    } catch (error: any) {
       handleFirestoreError(error, OperationType.LIST, 'messages');
+    } finally {
       setLoading(false);
-    });
-    return unsubscribe;
+    }
   };
 
-  const fetchNotifications = () => {
+  const fetchNotifications = async () => {
     setLoading(true);
-    const q = query(collection(db, 'notifications'), orderBy('timestamp', 'desc'), limit(50));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    try {
+      const q = query(collection(db, 'notifications'), orderBy('timestamp', 'desc'), limit(50));
+      const snapshot = await getDocs(q);
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
       setNotifications(data);
-      setLoading(false);
-    }, (error) => {
+    } catch (error: any) {
       handleFirestoreError(error, OperationType.LIST, 'notifications');
+    } finally {
       setLoading(false);
-    });
-    return unsubscribe;
+    }
   };
 
-  const fetchPurchaseRequests = () => {
+  const fetchPurchaseRequests = async () => {
     setLoading(true);
-    const q = query(collection(db, 'purchase_requests'), orderBy('timestamp', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    try {
+      const q = query(collection(db, 'purchase_requests'), orderBy('timestamp', 'desc'), limit(100));
+      const snapshot = await getDocs(q);
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PurchaseRequest));
       setPurchaseRequests(data);
-      setLoading(false);
-    }, (error) => {
+    } catch (error: any) {
       handleFirestoreError(error, OperationType.LIST, 'purchase_requests');
-    });
-    return unsubscribe;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleApprovePurchase = async (req: PurchaseRequest) => {

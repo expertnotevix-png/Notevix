@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, onSnapshot, collection, query, orderBy, addDoc, updateDoc, increment, arrayUnion, arrayRemove, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, orderBy, addDoc, updateDoc, increment, arrayUnion, arrayRemove, deleteDoc, setDoc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -41,34 +41,34 @@ export default function PostDetail({ user }: { user: UserProfile | null }) {
   useEffect(() => {
     if (!postId) return;
 
-    const postUnsub = onSnapshot(doc(db, 'posts', postId), (docSnap) => {
-      if (docSnap.exists()) {
-        setPost({ id: docSnap.id, ...docSnap.data() });
-      } else {
-        navigate('/community');
+    const fetchPostData = async () => {
+      try {
+        setLoading(true);
+        // Fetch Main Post
+        const docSnap = await getDoc(doc(db, 'posts', postId));
+        if (docSnap.exists()) {
+          setPost({ id: docSnap.id, ...docSnap.data() });
+        } else {
+          navigate('/community');
+          return;
+        }
+
+        // Fetch Replies
+        const repliesQuery = query(
+          collection(db, 'posts', postId, 'replies'),
+          orderBy('isBest', 'desc'),
+          orderBy('createdAt', 'asc')
+        );
+        const repliesSnap = await getDocs(repliesQuery);
+        setReplies(repliesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (error: any) {
+        console.error("Post detail fetch error:", error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    }, (error) => {
-      console.error("Post detail listener error:", error);
-      setLoading(false);
-    });
-
-    const repliesQuery = query(
-      collection(db, 'posts', postId, 'replies'),
-      orderBy('isBest', 'desc'),
-      orderBy('createdAt', 'asc')
-    );
-
-    const repliesUnsub = onSnapshot(repliesQuery, (snapshot) => {
-      setReplies(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      console.error("Replies listener error:", error);
-    });
-
-    return () => {
-      postUnsub();
-      repliesUnsub();
     };
+
+    fetchPostData();
   }, [postId]);
 
   const handleReply = async (e: React.FormEvent) => {

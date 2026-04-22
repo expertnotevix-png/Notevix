@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, limit } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, limit, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Smile, Info, ChevronLeft, MapPin, Sparkles, Hash } from 'lucide-react';
@@ -30,28 +30,49 @@ export default function GroupChat({
   const [showEmoji, setShowEmoji] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isBanned, setIsBanned] = useState(false);
+  const [isLive, setIsLive] = useState(false);
+
+  const fetchMessagesManual = async () => {
+    if (!group?.id) return;
+    try {
+      const q = query(
+        collection(db, 'study_groups', group.id, 'messages'),
+        orderBy('timestamp', 'desc'),
+        limit(100)
+      );
+      const snapshot = await getDocs(q);
+      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as GroupMessage[];
+      setMessages([...msgs].reverse());
+      setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    } catch (err) {
+      console.error("Manual fetch error:", err);
+    }
+  };
 
   useEffect(() => {
     if (!group?.id) return;
     
-    // Performance Optimization: Fetch LATEST messages
-    const q = query(
-      collection(db, 'study_groups', group.id, 'messages'),
-      orderBy('timestamp', 'desc'),
-      limit(100)
-    );
+    if (isLive) {
+      const q = query(
+        collection(db, 'study_groups', group.id, 'messages'),
+        orderBy('timestamp', 'desc'),
+        limit(100)
+      );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as GroupMessage[];
-      // Reverse to show oldest at top for natural chat flow
-      setMessages([...msgs].reverse());
-      setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-    }, (error) => {
-      console.error("Group chat listener error:", error);
-    });
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as GroupMessage[];
+        setMessages([...msgs].reverse());
+        setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      }, (error) => {
+        console.error("Group chat listener error:", error);
+        setIsLive(false);
+      });
 
-    return () => unsubscribe();
-  }, [group?.id]);
+      return () => unsubscribe();
+    } else {
+      fetchMessagesManual();
+    }
+  }, [group?.id, isLive]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,10 +115,22 @@ export default function GroupChat({
               <h2 className="font-black text-sm uppercase tracking-tight italic">{group.name}</h2>
             </div>
             <div className="flex items-center gap-2 text-[8px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">
-              <span className="flex items-center gap-1">
-                <div className="w-1 h-1 rounded-full bg-green-500 animate-pulse" />
-                Live Chat
-              </span>
+              <div className="flex items-center gap-1.5 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+                <span className={isLive ? "text-green-500" : "text-gray-500"}>LIVE</span>
+                <button 
+                  onClick={() => setIsLive(!isLive)}
+                  className={`w-6 h-3 rounded-full relative transition-colors ${isLive ? 'bg-green-600' : 'bg-gray-700'}`}
+                >
+                   <div className={`absolute top-0.5 w-2 h-2 rounded-full bg-white transition-all ${isLive ? 'right-0.5' : 'left-0.5'}`} />
+                </button>
+              </div>
+              <span>•</span>
+              <button 
+                onClick={fetchMessagesManual}
+                className="hover:text-white transition-colors"
+              >
+                Refresh
+              </button>
               <span>•</span>
               <span>{group.subject}</span>
             </div>

@@ -91,20 +91,4 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   }
 }
 
-// Test connection to Firestore
-async function testConnection() {
-  // Wait a bit for network to stabilize
-  await new Promise(r => setTimeout(r, 2000));
-  try {
-    console.log("Testing Firestore connection...");
-    await getDocFromServer(doc(db, 'test', 'connection'));
-    console.log("Firestore connection test completed (document may not exist, but connection is reached)");
-  } catch (error: any) {
-    if (error?.code === 'unavailable') {
-      console.error("Firestore is UNAVAILABLE. This often means the Database ID is wrong or your network is blocking the connection.");
-    } else {
-      console.log("Firestore connection test reached server, responded with:", error?.code || error?.message);
-    }
-  }
-}
-testConnection();
+// Removed testConnection to save quota (1 read per load)

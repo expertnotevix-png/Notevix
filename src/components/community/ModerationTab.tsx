@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc, addDoc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { motion } from 'motion/react';
 import { Trash2, Shield, ShieldAlert, ShieldCheck, UserX, UserCheck, MessageSquare, AlertTriangle } from 'lucide-react';
@@ -10,15 +10,20 @@ export default function ModerationTab() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
-    }, (error) => {
-      console.error("Moderation listener error:", error);
-      setLoading(false);
-    });
-    return unsubscribe;
+    const fetchPosts = async () => {
+      try {
+        setLoading(true);
+        const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+        setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (error) {
+        console.error("Moderation fetch error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPosts();
   }, []);
 
   const handleDeletePost = async (postId: string) => {
