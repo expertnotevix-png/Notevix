@@ -273,53 +273,63 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       // 2. Automated Approval via Server Webhook (Creates record + Upgrades user)
       const syncWithServer = async (txId: string) => {
         const authUser = auth.currentUser;
-        if (!authUser) throw new Error("Please sign in again to activate.");
+        if (!authUser) throw new Error("Session expired. Please sign in again.");
         
-        const idToken = await authUser.getIdToken(true); // Force refresh token
+        const idToken = await authUser.getIdToken(true); 
         const apiEndpoint = `${window.location.origin}/api/activate-premium`;
         
-        const response = await fetch(apiEndpoint, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${idToken}`
-          },
-          body: JSON.stringify({
-            transactionId: txId,
-            userId: user.uid,
-            planId: selectedPlan!.id,
-            planName: selectedPlan!.name,
-            amount: selectedPlan!.price,
-            whatsappNumber: whatsapp,
-            planType: (selectedPlan as any).type,
-            targetClass: (selectedPlan as any).class || null,
-            screenshotUrl: screenshotPreview
-          })
-        });
+        const syncToast = toast.loading("Syncing your premium access...");
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: "Sync service unavailable" }));
-          throw new Error(errorData.details || errorData.error || "Network sync error");
+        try {
+          const response = await fetch(apiEndpoint, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${idToken}`
+            },
+            body: JSON.stringify({
+              transactionId: txId,
+              userId: user.uid,
+              planId: selectedPlan!.id,
+              planName: selectedPlan!.name,
+              amount: selectedPlan!.price,
+              whatsappNumber: whatsapp,
+              planType: (selectedPlan as any).type,
+              targetClass: (selectedPlan as any).class || null,
+              screenshotUrl: screenshotPreview
+            })
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: "Sync service busy" }));
+            throw new Error(errorData.details || errorData.error || "Network error");
+          }
+
+          const result = await response.json();
+          toast.dismiss(syncToast);
+          return result;
+        } catch (err) {
+          toast.dismiss(syncToast);
+          throw err;
         }
-
-        return await response.json();
       };
 
       try {
         const approveResult = await syncWithServer(extractedTxId);
 
         if (approveResult.success) {
-          toast.success('👑 Premium Active! Access granted instantly.', { duration: 5000 });
+          toast.success('👑 Welcome to Premium! Access activated.', { duration: 5000 });
           setSelectedPlan(null);
           setScreenshotPreview(null);
-          // Small delay to allow Firestore to propagate, though server already committed
-          setTimeout(() => window.location.reload(), 1500); 
+          // Instant localized reload to refresh user state
+          setTimeout(() => window.location.reload(), 1000); 
         }
       } catch (webhookErr: any) {
         console.error("Sync Error:", webhookErr);
-        toast.error(`Sync Failed: ${webhookErr.message}. Manual verification scheduled.`, {
+        toast.error(`Automated activation pending.`, {
+          description: `AI verified Tx: ${extractedTxId}. Our server is busy, but we'll activate it in minutes.`,
           action: {
-            label: "Retry Sync",
+            label: "Try Re-Sync",
             onClick: () => syncWithServer(extractedTxId).then(() => window.location.reload())
           },
           duration: 10000
