@@ -297,13 +297,16 @@ export default function App() {
       };
 
       if (currentUser.role !== 'admin') {
-        const newFocusMinutes = (currentUser.totalFocusMinutes || 0) + 5;
-        const newPoints = (currentUser.totalPoints || 0) + 50;
-        
-        updates.totalFocusMinutes = increment(5);
-        updates.totalPoints = increment(50);
+        const pointGain = 10;
+        const minuteGain = 1;
 
-        // Update local state immediately since we disabled the real-time listener
+        const newFocusMinutes = (currentUser.totalFocusMinutes || 0) + minuteGain;
+        const newPoints = (currentUser.totalPoints || 0) + pointGain;
+        
+        updates.totalFocusMinutes = increment(minuteGain);
+        updates.totalPoints = increment(pointGain);
+
+        // Update local state immediately
         setUser(prev => {
           if (!prev) return prev;
           return {
@@ -313,14 +316,14 @@ export default function App() {
           };
         });
 
-        // Sync with Leaderboard in the same periodic pulse
+        // Sync with Leaderboard - Use increment here too for multi-tab safety
         const leaderboardRef = doc(db, 'leaderboard', currentUser.uid);
         setDoc(leaderboardRef, {
           uid: currentUser.uid,
           displayName: currentUser.displayName,
           photoURL: currentUser.photoURL,
-          totalPoints: newPoints,
-          totalFocusMinutes: newFocusMinutes,
+          totalPoints: increment(pointGain),
+          totalFocusMinutes: increment(minuteGain),
           class: currentUser.class || '',
           streakCount: currentUser.streak?.currentCount || 0
         }, { merge: true }).catch(err => console.error("Leaderboard periodic sync failed:", err));
@@ -331,7 +334,7 @@ export default function App() {
       } catch (err) {
         console.error("Global tracking failed:", err);
       }
-    }, 300000); // Every 5 minutes (saves quota)
+    }, 60000); // Now every 1 minute for better feedback (10 pts/min)
 
     return () => clearInterval(interval);
   }, [user?.uid]);
@@ -440,7 +443,7 @@ export default function App() {
             <Route path="/articles" element={<Articles />} />
             <Route path="/article/:id" element={<ArticleDetail />} />
             
-            <Route path="/ai-doubts" element={user ? <AIDoubtSolver /> : <Navigate to="/login" />} />
+            <Route path="/ai-doubts" element={user ? <AIDoubtSolver user={user} setUser={setUser} /> : <Navigate to="/login" />} />
             <Route path="/ai-quiz" element={user ? <QuizGenerator /> : <Navigate to="/login" />} />
             <Route path="/ai-summarizer" element={user ? <Summarizer /> : <Navigate to="/login" />} />
             

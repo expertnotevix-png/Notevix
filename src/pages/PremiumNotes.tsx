@@ -143,7 +143,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       const result = JSON.parse(content);
       
       return {
-        verified: result.verified && !!result.details?.transactionId,
+        verified: result.verified && result.details?.isRealScreenshot && !!result.details?.transactionId,
         reason: result.reason,
         transactionId: result.details?.transactionId
       };
@@ -158,25 +158,30 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     const today = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
     const time = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     
-    // RELAXED PROMPT
+    // HIGH-STRICTNESS PROMPT: AI-generated detection + Strict Dates
     const prompt = `
-      EXTRACT payment details from this screenshot for "NoteVix" educational app.
+      Analyze this payment proof for "NoteVix" educational app.
+      
+      FRAUD DETECTION (CRITICAL):
+      - REJECT if identifying AI-generated artifacts (warped text, illogical shadows, inconsistent fonts).
+      - REJECT if the screenshot is a duplicate of a common template.
+      - ENFORCE DATE: Current server date is ${today}. REJECT if the payment date is in the future relative to ${today}.
       
       VALIDATION:
-      1. Recipient: Check for "Poonam devi" or "9236489649@mbk".
-      2. Status: Must be successful payment.
-      3. Amount: Target is ₹${selectedPlan?.price}.
-      4. ID: Extract the Transaction ID/UTR/Reference.
+      1. Recipient: Must be "Poonam devi" or "9236489649@mbk".
+      2. Status: Must be a definitively SUCCESSFUL transaction.
+      3. Amount: Must be exactly ₹${selectedPlan?.price}.
+      4. ID: Extract the UNIQUE Transaction ID/UTR/Reference.
       
-      Return JSON:
+      Return STRICT JSON:
       {
         "verified": boolean,
-        "reason": "Clear explanation",
+        "reason": "Detailed evidence for approval or rejection (mention AI/Date analysis)",
         "details": {
            "recipientName": "string",
            "upiId": "string",
            "amount": number,
-           "isRealScreenshot": true,
+           "isRealScreenshot": boolean,
            "transactionId": "string",
            "transactionDate": "string"
         }
@@ -214,7 +219,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       console.log("Gemini AI Analysis:", result);
 
       return {
-        verified: result.verified && !!result.details?.transactionId,
+        verified: result.verified && result.details?.isRealScreenshot && !!result.details?.transactionId,
         reason: result.reason,
         transactionId: result.details?.transactionId
       };
@@ -253,9 +258,26 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         return;
       }
 
-      const extractedTxId = aiResult.transactionId!;
+      const extractedTxId = aiResult.transactionId!.trim();
       
-      // 2. AI-ADMIN INSTANT APPROVAL (No Server Needed for Access)
+      // 2. DUPLICATE CHECK (Anti-Cheat)
+      const duplicateQuery = query(
+        collection(db, 'purchase_requests'),
+        where('transactionId', '==', extractedTxId),
+        where('status', '==', 'approved')
+      );
+      const duplicateSnap = await getDocs(duplicateQuery);
+      
+      if (!duplicateSnap.empty) {
+        toast.error("FRAUD DETECTED: This transaction ID has already been used for a subscription.", {
+          duration: 6000
+        });
+        setIsSubmitting(false);
+        setAiVerifying(false);
+        return;
+      }
+
+      // 3. AI-ADMIN INSTANT APPROVAL (No Server Needed for Access)
       try {
         const userRef = doc(db, 'users', user.uid);
         const purchaseRef = doc(collection(db, 'purchase_requests'));

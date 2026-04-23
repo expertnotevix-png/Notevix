@@ -4,11 +4,15 @@ import { Send, Loader2, User, Bot, ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { geminiService } from '../services/geminiService';
+import { db, auth } from '../lib/firebase';
+import { doc, updateDoc, increment, setDoc } from 'firebase/firestore';
+import { UserProfile } from '../types';
 
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
+import { toast } from 'sonner';
 
 interface Message {
   id: string;
@@ -17,7 +21,12 @@ interface Message {
   timestamp: Date;
 }
 
-export default function AIDoubtSolver() {
+interface AIDoubtSolverProps {
+  user: UserProfile | null;
+  setUser: React.Dispatch<React.SetStateAction<UserProfile | null>>;
+}
+
+export default function AIDoubtSolver({ user, setUser }: AIDoubtSolverProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,7 +43,7 @@ export default function AIDoubtSolver() {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim() || loading) return;
+    if (!input.trim() || loading || !user) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -57,6 +66,38 @@ export default function AIDoubtSolver() {
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, aiMessage]);
+
+      // Award points for using AI Doubt Solver
+      const pointsReward = 20;
+      const userRef = doc(db, 'users', user.uid);
+      const leaderboardRef = doc(db, 'leaderboard', user.uid);
+
+      // Local update for instant feedback
+      const newPoints = (user.totalPoints || 0) + pointsReward;
+      setUser(prev => {
+        if (!prev) return prev;
+        return { ...prev, totalPoints: newPoints };
+      });
+
+      // Firebase updates
+      updateDoc(userRef, {
+        totalPoints: increment(pointsReward)
+      }).catch(e => console.error("Failed to update user points:", e));
+
+      setDoc(leaderboardRef, {
+        uid: user.uid,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        totalPoints: newPoints,
+        totalFocusMinutes: user.totalFocusMinutes || 0,
+        streakCount: user.streak?.currentCount || 0
+      }, { merge: true }).catch(e => console.error("Failed to sync leaderboard:", e));
+      
+      toast.success(`+${pointsReward} points for solving a doubt! 🧠`, { 
+        id: 'points-toast',
+        duration: 2000
+      });
+
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'Failed to get response. Please try again.');

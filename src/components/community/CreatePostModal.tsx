@@ -60,6 +60,26 @@ export default function CreatePostModal({ isOpen, onClose, user }: CreatePostMod
         totalQuestions: increment(1)
       }, { merge: true });
 
+      // Award 50 points to the author for contributing
+      const userRef = doc(db, 'users', user.uid);
+      const leaderboardRef = doc(db, 'leaderboard', user.uid);
+      
+      await updateDoc(userRef, {
+        totalPoints: increment(50)
+      }).catch(e => console.error("Failed to reward post creator:", e));
+
+      // Sync leaderboard with the potential new points
+      // We don't have the absolute total here easily without a fetch, 
+      // but we can use increment on setDoc too
+      await setDoc(leaderboardRef, {
+        uid: user.uid,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        totalPoints: increment(50),
+        class: user.class || '',
+        streakCount: user.streak?.currentCount || 0
+      }, { merge: true }).catch(e => console.error("Leaderboard sync failed:", e));
+
       // Add AI Reply if generated
       if (result.aiAnswer && !result.isNotes) {
         await addDoc(collection(db, 'posts', postRef.id, 'replies'), {
