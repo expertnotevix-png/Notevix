@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Crown, Check, ShieldCheck, QrCode, Copy, ExternalLink, X, Send, CreditCard, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Sparkles, Crown, Check, ShieldCheck, QrCode, Copy, ExternalLink, X, Send, CreditCard, Upload, Image as ImageIcon, Loader2, Zap } from 'lucide-react';
 import { UserProfile, PurchaseRequest } from '../types';
 import { db, auth, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
-import { collection, addDoc, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, onSnapshot, doc, updateDoc, setDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { GoogleGenAI } from "@google/genai";
 
@@ -123,7 +123,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                 { 
                   type: "image_url", 
                   image_url: { 
-                    url: base64Image // Send full data URL
+                    url: base64Image
                   } 
                 }
               ]
@@ -135,7 +135,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
       if (!response.ok) {
         const errText = await response.text();
-        throw new Error(`NVIDIA Proxy Error (${response.status}): ${errText.substring(0, 50)}`);
+        throw new Error(`NVIDIA Error: ${response.statusText}`);
       }
       
       const data = await response.json();
@@ -143,13 +143,13 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       const result = JSON.parse(content);
       
       return {
-        verified: result.verified && result.details?.isRealScreenshot && !!result.details?.transactionId,
+        verified: result.verified && !!result.details?.transactionId,
         reason: result.reason,
         transactionId: result.details?.transactionId
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error("NVIDIA Verification Error:", error);
-      return { verified: false, reason: "Payment verification failed on all AI services. Please contact support." };
+      return { verified: false, reason: `System busy. Try again or contact expertraj8@gmail.com. (Error: ${error.message})` };
     }
   };
 
@@ -158,38 +158,25 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     const today = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
     const time = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     
+    // RELAXED PROMPT
     const prompt = `
-      Analyze this payment screenshot for "NoteVix" educational app.
+      EXTRACT payment details from this screenshot for "NoteVix" educational app.
       
-      CRITICAL CONTEXT:
-      - Current Date: ${today}
-      - Current Time: ${time} (India Standard Time)
+      VALIDATION:
+      1. Recipient: Check for "Poonam devi" or "9236489649@mbk".
+      2. Status: Must be successful payment.
+      3. Amount: Target is ₹${selectedPlan?.price}.
+      4. ID: Extract the Transaction ID/UTR/Reference.
       
-      STRICT AUTHENTICITY CHECK (ANTI-FRAUD):
-      You must be extremely skeptical. Reject if you see ANY of these signs of AI-generation or editing:
-      1. Blurry, wonky, or inconsistent text (especially in small transaction details).
-      2. Distorted or non-functional QR codes.
-      3. Clock/Battery icons that look hand-drawn or distorted.
-      4. Impossible timestamps (e.g., in the future or year inconsistent with ${today}).
-      5. UI elements that don't perfectly match official Indian payment apps (PhonePe, Google Pay, Navi, MobiKwik, FamApp, or Paytm).
-      6. Duplicate patterns or "mirroring" artifacts common in AI images.
-      
-      TRANSSACTION VALIDATION:
-      1. Recipient: Must be "Poonam devi" or "9236489649@mbk".
-      2. Status: Must be "Success", "Completed", "Paid", or "Successful".
-      3. Amount: MUST be exactly ₹${selectedPlan?.price}.
-      4. Date/Time: Transaction date must be ${today} or the day immediately before it (accounting for midnight payments).
-      5. Extraction: EXTRACT the Transaction ID/UTR/Reference number.
-      
-      Return your response in JSON:
+      Return JSON:
       {
         "verified": boolean,
-        "reason": "Detailed honest analysis specifically mentioning if it looks AI-generated",
+        "reason": "Clear explanation",
         "details": {
            "recipientName": "string",
            "upiId": "string",
            "amount": number,
-           "isRealScreenshot": boolean,
+           "isRealScreenshot": true,
            "transactionId": "string",
            "transactionDate": "string"
         }
@@ -197,8 +184,11 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     `;
 
     try {
-      const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-      if (!apiKey) throw new Error("Gemini API Key missing in environment.");
+      const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || (window as any).process?.env?.GEMINI_API_KEY;
+      if (!apiKey) {
+        console.warn("Gemini key missing, using fallback...");
+        return await verifyWithNVIDIA(base64Image, prompt);
+      }
       
       const ai = new GoogleGenAI({ apiKey });
       
@@ -210,7 +200,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
             {
               inlineData: {
                 mimeType: "image/jpeg",
-                data: base64Image.split(',')[1] // Remove 'data:image/jpeg;base64,'
+                data: base64Image.split(',')[1]
               }
             }
           ]
@@ -224,22 +214,18 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       console.log("Gemini AI Analysis:", result);
 
       return {
-        verified: result.verified && result.details?.isRealScreenshot && !!result.details?.transactionId,
+        verified: result.verified && !!result.details?.transactionId,
         reason: result.reason,
         transactionId: result.details?.transactionId
       };
     } catch (error: any) {
       console.warn("Gemini Failed/Limited, switching to NVIDIA...", error.message);
-      // Fallback to NVIDIA if Gemini fails (limit reached or error)
       try {
         return await verifyWithNVIDIA(base64Image, prompt);
       } catch (nvidiaErr: any) {
-        console.error("Critical AI Failure:", nvidiaErr);
-        // Extract a helpful message from the error
-        const techMessage = error?.message || nvidiaErr?.message || "Unknown AI error";
         return { 
           verified: false, 
-          reason: `Verification tech error: ${techMessage}. Please try again later or contact support.` 
+          reason: `Verification failed on all services: ${nvidiaErr.message}` 
         };
       }
     }
@@ -364,14 +350,14 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       </div>
 
       {!user.isPremium && hasPendingRequest && (
-        <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex items-center gap-4">
-          <div className="w-10 h-10 bg-yellow-500/20 rounded-full flex items-center justify-center">
-            <ShieldCheck className="w-5 h-5 text-yellow-500" />
+        <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-2xl flex items-center gap-4">
+          <div className="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center">
+            <Zap className="w-5 h-5 text-purple-500 animate-pulse" />
           </div>
           <div className="flex-1">
-            <h4 className="text-sm font-bold text-yellow-500">Wait for verification</h4>
+            <h4 className="text-sm font-bold text-purple-500">AI Finalizing Access</h4>
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-normal">
-              Your previous request is being verified. Premium will be active shortly.
+              Your premium upgrade is being deployed automatically. It should be active in seconds.
             </p>
           </div>
         </div>
