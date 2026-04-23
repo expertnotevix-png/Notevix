@@ -268,14 +268,13 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       }
 
       const extractedTxId = aiResult.transactionId!;
-      toast.success(`AI Verified Tx: ${extractedTxId}`);
-
-      // 2. Direct AI-Admin Approval (Instant Activation)
-      // NoteVix AI acts as the authoritative admin to unlock access immediately.
+      
+      // 2. AI-ADMIN INSTANT APPROVAL (No Server Needed for Access)
       try {
         const userRef = doc(db, 'users', user.uid);
         const purchaseRef = doc(collection(db, 'purchase_requests'));
         
+        // Prepare instant upgrade package
         const upgradeData: any = {
           isPremium: true,
           premiumActivatedAt: new Date().toISOString(),
@@ -292,10 +291,10 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           }
         }
 
-        // Direct Firestore Upgrade
+        // STEP 1: Update your account status DIRECTLY (User has permission)
         await updateDoc(userRef, upgradeData);
         
-        // Log "Approved" entry in Admin Database
+        // STEP 2: Log the approved payment for your records
         await setDoc(purchaseRef, {
           userId: user.uid,
           userEmail: user.email,
@@ -309,41 +308,30 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           timestamp: new Date().toISOString(),
           targetClass: (selectedPlan as any).class || null,
           planType: (selectedPlan as any).type,
-          screenshotUrl: screenshotPreview,
           ai_verified: true,
           verifiedAt: new Date().toISOString(),
-          verifiedBy: 'NoteVix_AI_Admin'
+          verifiedBy: 'NoteVix_AI_Admin_V2'
         });
 
-        toast.success(`👑 NoteVix AI has approved your access instantly!`, { duration: 6000 });
+        // STEP 3: CELEBRATION - Instant Feedback
+        toast.success(`👑 AI ADMIN APPROVED!`, {
+          description: "Transaction verified and access granted automatically.",
+          duration: 8000
+        });
+
+        // Clear UI states
         setSelectedPlan(null);
         setScreenshotPreview(null);
         
-        // Background sync for server-side events
-        fetch('/api/activate-premium', {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`
-          },
-          body: JSON.stringify({
-            transactionId: extractedTxId,
-            userId: user.uid,
-            planId: selectedPlan!.id,
-            planName: selectedPlan!.name,
-            amount: selectedPlan!.price,
-            whatsappNumber: whatsapp,
-            planType: (selectedPlan as any).type,
-            targetClass: (selectedPlan as any).class || null
-          })
-        }).catch(() => {});
-
-        setTimeout(() => window.location.reload(), 1500);
+        // FORCE RELOAD to see new Premium status immediately across all tabs
+        setTimeout(() => {
+          localStorage.removeItem('notevix_user_profile_v1'); // Clear cache
+          window.location.href = '/'; // Go home to see the crown!
+        }, 1200);
 
       } catch (directErr: any) {
         console.error("Direct Action Error:", directErr);
-        toast.error("AI verified but system busy. Refresh in 1 min.");
-      }
+        toast.error("AI verified but database was busy. Please refresh to check your status.");
       }
 
     } catch (error) {
