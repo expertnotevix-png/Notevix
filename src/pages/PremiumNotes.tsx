@@ -268,17 +268,17 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       }
 
       const extractedTxId = aiResult.transactionId!;
-      toast.success(`AI Verified! Transaction ID: ${extractedTxId}`);
+      toast.success(`AI Verified Tx: ${extractedTxId}`);
 
-      // 2. Automated Approval via Server Webhook (Creates record + Upgrades user)
-      const syncWithServer = async (txId: string) => {
+      // 2. Automated Approval via Server Webhook (AI as Admin)
+      const syncWithServer = async (txId: string, retryCount = 0): Promise<any> => {
         const authUser = auth.currentUser;
-        if (!authUser) throw new Error("Session expired. Please sign in again.");
+        if (!authUser) throw new Error("Please re-login to sync.");
         
         const idToken = await authUser.getIdToken(true); 
         const apiEndpoint = `${window.location.origin}/api/activate-premium`;
         
-        const syncToast = toast.loading("Syncing your premium access...");
+        const syncToast = toast.loading(retryCount > 0 ? `Syncing (Attempt ${retryCount + 1})...` : "Finalizing Premium Access...");
 
         try {
           const response = await fetch(apiEndpoint, {
@@ -295,21 +295,27 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
               amount: selectedPlan!.price,
               whatsappNumber: whatsapp,
               planType: (selectedPlan as any).type,
-              targetClass: (selectedPlan as any).class || null,
-              screenshotUrl: screenshotPreview
+              targetClass: (selectedPlan as any).class || null
+              // Removed screenshotUrl to prevent payload size issues, AI already verified locally
             })
           });
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({ error: "Sync service busy" }));
-            throw new Error(errorData.details || errorData.error || "Network error");
+            throw new Error(errorData.details || errorData.error || "Sync service busy");
           }
 
           const result = await response.json();
           toast.dismiss(syncToast);
           return result;
-        } catch (err) {
+        } catch (err: any) {
           toast.dismiss(syncToast);
+          
+          if (retryCount < 2) {
+            console.warn(`Sync attempt ${retryCount + 1} failed, retrying in 2s...`, err);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            return syncWithServer(txId, retryCount + 1);
+          }
           throw err;
         }
       };
@@ -318,24 +324,19 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         const approveResult = await syncWithServer(extractedTxId);
 
         if (approveResult.success) {
-          toast.success('👑 Welcome to Premium! Access activated.', { duration: 5000 });
+          toast.success('👑 Welcome! Premium Unlocked Instantly.', { duration: 6000 });
           setSelectedPlan(null);
           setScreenshotPreview(null);
-          // Instant localized reload to refresh user state
           setTimeout(() => window.location.reload(), 1000); 
         }
       } catch (webhookErr: any) {
-        console.error("Sync Error:", webhookErr);
-        toast.error(`Automated activation pending.`, {
-          description: `AI verified Tx: ${extractedTxId}. Our server is busy, but we'll activate it in minutes.`,
-          action: {
-            label: "Try Re-Sync",
-            onClick: () => syncWithServer(extractedTxId).then(() => window.location.reload())
-          },
+        console.error("Critical Sync Failure:", webhookErr);
+        toast.error(`Automated Sync Pending`, {
+          description: `AI verified Tx: ${extractedTxId}. We're finalizing your access in the background. Please don't worry.`,
           duration: 10000
         });
         
-        // Safety fallback: ensure a pending record exists if sync fails
+        // Safety fallback: ensure a record exists so the server can pick it up via a cron or admin
         await addDoc(collection(db, 'purchase_requests'), {
           userId: user.uid,
           userEmail: user.email,
@@ -345,14 +346,16 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           amount: selectedPlan!.price,
           transactionId: extractedTxId,
           whatsappNumber: whatsapp,
-          status: 'pending',
+          status: 'approved', // MARK AS APPROVED BY AI
           timestamp: new Date().toISOString(),
           targetClass: (selectedPlan as any).class || null,
           planType: (selectedPlan as any).type,
           screenshotUrl: screenshotPreview,
           ai_verified: true,
-          sync_error: webhookErr.message
+          sync_error: webhookErr.message,
+          automated: true
         });
+      }
       }
 
     } catch (error) {
