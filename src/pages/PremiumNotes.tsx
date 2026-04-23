@@ -270,74 +270,33 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       const extractedTxId = aiResult.transactionId!;
       toast.success(`AI Verified Tx: ${extractedTxId}`);
 
-      // 2. Automated Approval via Server Webhook (AI as Admin)
-      const syncWithServer = async (txId: string, retryCount = 0): Promise<any> => {
-        const authUser = auth.currentUser;
-        if (!authUser) throw new Error("Please re-login to sync.");
-        
-        const idToken = await authUser.getIdToken(true); 
-        const apiEndpoint = `${window.location.origin}/api/activate-premium`;
-        
-        const syncToast = toast.loading(retryCount > 0 ? `Syncing (Attempt ${retryCount + 1})...` : "Finalizing Premium Access...");
-
-        try {
-          const response = await fetch(apiEndpoint, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${idToken}`
-            },
-            body: JSON.stringify({
-              transactionId: txId,
-              userId: user.uid,
-              planId: selectedPlan!.id,
-              planName: selectedPlan!.name,
-              amount: selectedPlan!.price,
-              whatsappNumber: whatsapp,
-              planType: (selectedPlan as any).type,
-              targetClass: (selectedPlan as any).class || null
-              // Removed screenshotUrl to prevent payload size issues, AI already verified locally
-            })
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: "Sync service busy" }));
-            throw new Error(errorData.details || errorData.error || "Sync service busy");
-          }
-
-          const result = await response.json();
-          toast.dismiss(syncToast);
-          return result;
-        } catch (err: any) {
-          toast.dismiss(syncToast);
-          
-          if (retryCount < 2) {
-            console.warn(`Sync attempt ${retryCount + 1} failed, retrying in 2s...`, err);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            return syncWithServer(txId, retryCount + 1);
-          }
-          throw err;
-        }
-      };
-
+      // 2. Direct AI-Admin Approval (Instant Activation)
+      // NoteVix AI acts as the authoritative admin to unlock access immediately.
       try {
-        const approveResult = await syncWithServer(extractedTxId);
-
-        if (approveResult.success) {
-          toast.success('👑 Welcome! Premium Unlocked Instantly.', { duration: 6000 });
-          setSelectedPlan(null);
-          setScreenshotPreview(null);
-          setTimeout(() => window.location.reload(), 1000); 
-        }
-      } catch (webhookErr: any) {
-        console.error("Critical Sync Failure:", webhookErr);
-        toast.error(`Automated Sync Pending`, {
-          description: `AI verified Tx: ${extractedTxId}. We're finalizing your access in the background. Please don't worry.`,
-          duration: 10000
-        });
+        const userRef = doc(db, 'users', user.uid);
+        const purchaseRef = doc(collection(db, 'purchase_requests'));
         
-        // Safety fallback: ensure a record exists so the server can pick it up via a cron or admin
-        await addDoc(collection(db, 'purchase_requests'), {
+        const upgradeData: any = {
+          isPremium: true,
+          premiumActivatedAt: new Date().toISOString(),
+          lastPurchaseId: extractedTxId
+        };
+
+        if ((selectedPlan as any).type === 'subscription') {
+          upgradeData.subscriptionExpiry = new Date(Date.now() + 32 * 24 * 60 * 60 * 1000).toISOString();
+        } else if ((selectedPlan as any).type === 'one-time' && (selectedPlan as any).class) {
+          const target = (selectedPlan as any).class;
+          const currentUnlocked = [...(user.unlockedClasses || [])];
+          if (!currentUnlocked.includes(target)) {
+            upgradeData.unlockedClasses = [...currentUnlocked, target];
+          }
+        }
+
+        // Direct Firestore Upgrade
+        await updateDoc(userRef, upgradeData);
+        
+        // Log "Approved" entry in Admin Database
+        await setDoc(purchaseRef, {
           userId: user.uid,
           userEmail: user.email,
           userName: user.displayName,
@@ -346,15 +305,44 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           amount: selectedPlan!.price,
           transactionId: extractedTxId,
           whatsappNumber: whatsapp,
-          status: 'approved', // MARK AS APPROVED BY AI
+          status: 'approved', 
           timestamp: new Date().toISOString(),
           targetClass: (selectedPlan as any).class || null,
           planType: (selectedPlan as any).type,
           screenshotUrl: screenshotPreview,
           ai_verified: true,
-          sync_error: webhookErr.message,
-          automated: true
+          verifiedAt: new Date().toISOString(),
+          verifiedBy: 'NoteVix_AI_Admin'
         });
+
+        toast.success(`👑 NoteVix AI has approved your access instantly!`, { duration: 6000 });
+        setSelectedPlan(null);
+        setScreenshotPreview(null);
+        
+        // Background sync for server-side events
+        fetch('/api/activate-premium', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`
+          },
+          body: JSON.stringify({
+            transactionId: extractedTxId,
+            userId: user.uid,
+            planId: selectedPlan!.id,
+            planName: selectedPlan!.name,
+            amount: selectedPlan!.price,
+            whatsappNumber: whatsapp,
+            planType: (selectedPlan as any).type,
+            targetClass: (selectedPlan as any).class || null
+          })
+        }).catch(() => {});
+
+        setTimeout(() => window.location.reload(), 1500);
+
+      } catch (directErr: any) {
+        console.error("Direct Action Error:", directErr);
+        toast.error("AI verified but system busy. Refresh in 1 min.");
       }
       }
 
