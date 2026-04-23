@@ -156,72 +156,61 @@ async function startServer() {
 
   // Webhook for Automated Payment Verification
   app.all("/api/activate-premium", async (req, res) => {
-    console.log(`[Webhook] Received request: ${req.method} /api/activate-premium`);
+    const correlationId = Math.random().toString(36).substring(7);
+    console.log(`[Webhook][${correlationId}] Received ${req.method} /api/activate-premium`);
     
-    if (req.method === 'GET') {
-      return res.json({ message: "Activation endpoint is active. Use POST to activate." });
-    }
-    
-    if (req.method !== 'POST') {
-      return res.status(405).json({ error: "Method Not Allowed. Use POST." });
-    }
+    if (req.method === 'GET') return res.json({ message: "Activation active." });
+    if (req.method !== 'POST') return res.status(405).json({ error: "Method Not Allowed" });
 
     const { transactionId, userId, planId, planName, amount, whatsappNumber, planType, targetClass, screenshotUrl } = req.body;
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.warn("[Webhook] Missing or invalid authorization header");
-      return res.status(401).json({ error: "Missing or invalid authorization header" });
+      return res.status(401).json({ error: "Authorization required" });
     }
 
     const idToken = authHeader.split('Bearer ')[1];
 
     try {
-      // 0. Verify User Identity via Firebase Admin
-      console.log(`[Webhook] Verifying ID token for user ${userId}...`);
+      // 0. Verify Auth
       const decodedToken = await adminAuth.verifyIdToken(idToken);
       const authenticatedUserId = decodedToken.uid;
 
       if (authenticatedUserId !== userId) {
-        console.warn(`[Webhook] User ID mismatch: Token(${authenticatedUserId}) vs Request(${userId})`);
-        return res.status(403).json({ error: "Forbidden. Token user does not match request user." });
+        return res.status(403).json({ error: "Identity verify failed" });
       }
 
       if (!transactionId) {
-        console.warn("[Webhook] Missing transactionId in request body");
-        return res.status(400).json({ error: "Missing required fields (transactionId)" });
+        return res.status(400).json({ error: "Transaction ID missing" });
       }
 
-      console.log(`[Webhook] Auto-approving payment for user ${userId}, Tx: ${transactionId}`);
+      console.log(`[Webhook][${correlationId}] Processing Tx: ${transactionId} for User: ${userId}`);
       
-      // 1. Create or Find the purchase request
-      const requestQuery = await dbAdmin.collection("purchase_requests")
+      // 1. Transaction Dead-lock Check (Prevent multi-use)
+      const existingTx = await dbAdmin.collection("purchase_requests")
         .where("transactionId", "==", transactionId)
+        .where("status", "==", "approved")
         .limit(1)
         .get();
 
-      let requestRef;
-      if (!requestQuery.empty) {
-        console.log(`[Webhook] Found existing request for Tx ${transactionId}`);
-        requestRef = requestQuery.docs[0].ref;
-      } else {
-        console.log(`[Webhook] Creating new purchase request doc`);
-        requestRef = dbAdmin.collection("purchase_requests").doc();
+      if (!existingTx.empty) {
+        console.warn(`[Webhook][${correlationId}] Duplicate Tx ID detected: ${transactionId}`);
+        return res.status(409).json({ error: "This transaction ID has already been used for activation." });
       }
 
-      // 3. Find and update the User
+      // 2. User Check
       const userRef = dbAdmin.collection("users").doc(userId);
       const userSnap = await userRef.get();
 
       if (!userSnap.exists) {
-        console.warn(`[Webhook] User document ${userId} not found in Firestore`);
-        return res.status(404).json({ error: "User document not found" });
+        return res.status(404).json({ error: "User profile not found. Please sign in again." });
       }
 
       const userData = userSnap.data();
       const batch = dbAdmin.batch();
+      const requestRef = dbAdmin.collection("purchase_requests").doc();
 
-      // 4. Update/Set Purchase Request
+      // 3. Update Doc
       batch.set(requestRef, {
         userId,
         planId,
@@ -235,51 +224,44 @@ async function startServer() {
         status: 'approved',
         verifiedAt: new Date().toISOString(),
         verifiedBy: 'ai_system',
-        timestamp: new Date().toISOString()
-      }, { merge: true });
+        timestamp: new Date().toISOString(),
+        correlationId
+      });
 
-      // 5. Apply Access Logic
+      // 4. Upgrade Logic
+      const updates: any = { 
+        isPremium: true,
+        premiumActivatedAt: new Date().toISOString()
+      };
+
       if (planType === 'subscription') {
-        console.log(`[Webhook] Applying subscription for user ${userId}`);
-        batch.update(userRef, { 
-          isPremium: true,
-          subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-        });
+        updates.subscriptionExpiry = new Date(Date.now() + 32 * 24 * 60 * 60 * 1000).toISOString(); // 32 days grace
       } else if (planType === 'one-time' && targetClass) {
-        console.log(`[Webhook] Unlocking class ${targetClass} for user ${userId}`);
         const currentUnlocked = (userData?.unlockedClasses || []) as string[];
         if (!currentUnlocked.includes(targetClass)) {
-          batch.update(userRef, { 
-            unlockedClasses: [...currentUnlocked, targetClass]
-          });
+          updates.unlockedClasses = [...currentUnlocked, targetClass];
         }
-      } else {
-        console.log(`[Webhook] Applying general premium for user ${userId}`);
-        batch.update(userRef, { isPremium: true });
       }
 
-      // 6. Notify the User
+      batch.update(userRef, updates);
+
+      // 5. Notification
       const notificationRef = dbAdmin.collection("notifications").doc();
       batch.set(notificationRef, {
         userId: userId,
-        title: 'Premium Activated! 👑',
-        message: `Your payment for ${planName} has been automatically verified by NoteVix AI. Enjoy your premium access!`,
+        title: 'Premium Unlocked! ⚡',
+        message: `Your ${planName} is now active. AI has verified Tx: ${transactionId}.`,
         type: 'rank',
         read: false,
         timestamp: new Date().toISOString()
       });
 
-      console.log(`[Webhook] Committing batch for user ${userId}...`);
       await batch.commit();
-      
-      console.log(`[Webhook] Payment AUTO-approved successfully for user ${userId}`);
-      res.json({ success: true, message: "AI verified your payment. Access granted!" });
+      console.log(`[Webhook][${correlationId}] SUCCESS: Access granted to ${userId}`);
+      res.json({ success: true, message: "Activated!" });
     } catch (error: any) {
-      console.error("[Webhook] Auto-approval logic failed:", error);
-      res.status(500).json({ 
-        error: "Internal server error during auto-approval",
-        details: error.message 
-      });
+      console.error(`[Webhook][${correlationId}] FATAL:`, error);
+      res.status(500).json({ error: "Sync failed", details: error.message });
     }
   });
 

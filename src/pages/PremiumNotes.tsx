@@ -271,15 +271,12 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       toast.success(`AI Verified! Transaction ID: ${extractedTxId}`);
 
       // 2. Automated Approval via Server Webhook (Creates record + Upgrades user)
-      try {
+      const syncWithServer = async (txId: string) => {
         const authUser = auth.currentUser;
-        if (!authUser) {
-          throw new Error("You must be logged in to activate premium.");
-        }
+        if (!authUser) throw new Error("Please sign in again to activate.");
         
-        const idToken = await authUser.getIdToken();
+        const idToken = await authUser.getIdToken(true); // Force refresh token
         const apiEndpoint = `${window.location.origin}/api/activate-premium`;
-        console.log("PremiumNotes: Syncing verification to server...");
         
         const response = await fetch(apiEndpoint, {
           method: 'POST',
@@ -288,55 +285,47 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
             'Authorization': `Bearer ${idToken}`
           },
           body: JSON.stringify({
-            transactionId: extractedTxId,
+            transactionId: txId,
             userId: user.uid,
             planId: selectedPlan!.id,
             planName: selectedPlan!.name,
             amount: selectedPlan!.price,
             whatsappNumber: whatsapp,
             planType: (selectedPlan as any).type,
-            targetClass: (selectedPlan as any).class || null
+            targetClass: (selectedPlan as any).class || null,
+            screenshotUrl: screenshotPreview
           })
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: "Unknown server error" }));
-          throw new Error(errorData.details || errorData.error || `Server status ${response.status}`);
+          const errorData = await response.json().catch(() => ({ error: "Sync service unavailable" }));
+          throw new Error(errorData.details || errorData.error || "Network sync error");
         }
 
-        const approveResult = await response.json();
+        return await response.json();
+      };
+
+      try {
+        const approveResult = await syncWithServer(extractedTxId);
 
         if (approveResult.success) {
-          toast.success('👑 Premium Access Activated! Enjoy your notes.');
+          toast.success('👑 Premium Active! Access granted instantly.', { duration: 5000 });
           setSelectedPlan(null);
           setScreenshotPreview(null);
-        } else {
-          // If webhook fails but AI passed, we should still record the intent in Firestore for safety as backup
-          console.error("Webhook failed after AI success:", approveResult.error);
-          toast.info('Verification semi-successful. Please refresh or contact support.');
-          
-          // Safety fallback: manual entry to Firestore if the server failed for some reason
-          await addDoc(collection(db, 'purchase_requests'), {
-            userId: user.uid,
-            userEmail: user.email,
-            userName: user.displayName,
-            planId: selectedPlan!.id,
-            planName: selectedPlan!.name,
-            amount: selectedPlan!.price,
-            transactionId: extractedTxId,
-            whatsappNumber: whatsapp,
-            status: 'pending',
-            timestamp: new Date().toISOString(),
-            targetClass: (selectedPlan as any).class || null,
-            planType: (selectedPlan as any).type,
-            screenshotUrl: screenshotPreview
-          });
+          // Small delay to allow Firestore to propagate, though server already committed
+          setTimeout(() => window.location.reload(), 1500); 
         }
       } catch (webhookErr: any) {
-        console.warn("Automated approval failed, falling back to manual:", webhookErr);
-        toast.error(`System Sync Error: ${webhookErr.message || 'Unknown network error'}. Admin will verify manually.`);
+        console.error("Sync Error:", webhookErr);
+        toast.error(`Sync Failed: ${webhookErr.message}. Manual verification scheduled.`, {
+          action: {
+            label: "Retry Sync",
+            onClick: () => syncWithServer(extractedTxId).then(() => window.location.reload())
+          },
+          duration: 10000
+        });
         
-        // Safety fallback
+        // Safety fallback: ensure a pending record exists if sync fails
         await addDoc(collection(db, 'purchase_requests'), {
           userId: user.uid,
           userEmail: user.email,
@@ -350,7 +339,9 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           timestamp: new Date().toISOString(),
           targetClass: (selectedPlan as any).class || null,
           planType: (selectedPlan as any).type,
-          screenshotUrl: screenshotPreview
+          screenshotUrl: screenshotPreview,
+          ai_verified: true,
+          sync_error: webhookErr.message
         });
       }
 

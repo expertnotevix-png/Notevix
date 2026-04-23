@@ -110,92 +110,65 @@ export default function Login() {
         </div>
 
         <div className="space-y-6">
-          <div className="flex items-start gap-3 text-left px-2">
-            <button 
-              onClick={() => setAgreed(!agreed)}
-              className={`mt-0.5 w-5 h-5 rounded-md border transition-all flex items-center justify-center flex-shrink-0 ${
-                agreed ? 'bg-purple-600 border-purple-600' : 'border-white/20 bg-white/5'
-              }`}
-            >
-              {agreed && <Check className="w-3.5 h-3.5 text-white" />}
-            </button>
-            <p className="text-xs text-gray-400 leading-relaxed">
-              I agree to the <Link to="/terms" className="text-purple-400 hover:underline">Terms of Service</Link> and <Link to="/privacy" className="text-purple-400 hover:underline">Privacy Policy</Link>.
-            </p>
-          </div>
-
-            <div className="space-y-4">
               {error && (
-                <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl text-red-400 text-[11px] text-left space-y-3">
-                  <div className="flex items-center gap-2 font-bold">
-                    <Info size={14} />
-                    <span>Login Issue Detected</span>
-                  </div>
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl text-red-400 text-[10px] text-left space-y-2"
+                >
+                  <p className="font-bold flex items-center gap-2 uppercase tracking-widest"><Info size={12}/> Connection Failed</p>
                   <p>{error}</p>
-                  
-                  <div className="pt-2 border-t border-red-500/10 space-y-2">
-                    <p className="font-bold text-white/90">Common Fixes:</p>
-                    <ul className="list-disc list-inside space-y-1 opacity-80">
-                      <li>Enable "Third-party cookies" in Chrome settings</li>
-                      <li>Open in Chrome/Safari (not Instagram/Telegram)</li>
-                      <li>Try the "Redirect Method" below</li>
-                    </ul>
-                  </div>
-
-                  <button 
-                    onClick={checkStatus}
-                    className="w-full bg-purple-500/20 text-purple-400 py-2 rounded-xl font-bold hover:bg-purple-500/30 transition-all"
-                  >
-                    Already signed in? Check Status
-                  </button>
-                </div>
+                </motion.div>
               )}
 
               {isInAppBrowser && (
-                <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-2xl text-blue-400 text-[11px] text-left space-y-3">
-                  <p className="font-bold">Instagram/Telegram detected! 📱</p>
-                  <p>These apps often block login. For a smooth experience, please open NoteVix in your real browser (Chrome/Safari).</p>
+                <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-2xl text-blue-400 text-[10px] text-left space-y-3">
+                  <p className="font-bold uppercase tracking-widest">Mobile Browser Detected 📱</p>
+                  <p>In-app browsers (Instagram/Telegram) often block sign-in. For the fastest experience, use Chrome or Safari.</p>
                   <button 
                     onClick={copyLink}
-                    className="w-full bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 py-3 rounded-xl flex items-center justify-center gap-2 font-bold transition-all border border-blue-500/30"
+                    className="w-full bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 py-3 rounded-xl flex items-center justify-center gap-2 font-black uppercase tracking-widest transition-all border border-blue-500/30 text-[10px]"
                   >
                     {copied ? <Check size={14} /> : <Copy size={14} />}
-                    {copied ? 'Link Copied!' : 'Copy Link to Open in Chrome'}
+                    {copied ? 'Link Copied!' : 'Copy Link for Chrome'}
                   </button>
                 </div>
               )}
 
               <button
                 onClick={() => handleLogin(false)}
-                disabled={loading || !agreed}
-                className="w-full purple-gradient text-white font-bold py-4 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-purple-500/30 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={loading}
+                className="w-full purple-gradient text-white font-black py-4 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-xl shadow-purple-500/40 active:scale-95 transition-all text-sm uppercase tracking-widest disabled:opacity-50"
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
-                Continue with Google
+                Sign In with Google
               </button>
 
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10"></div></div>
-                <div className="relative flex justify-center text-[10px] uppercase tracking-widest text-gray-500"><span className="bg-black px-2">Troubleshooting</span></div>
+              <p className="text-[10px] text-gray-500 leading-relaxed px-4">
+                By continuing, you agree to NoteVix's <Link to="/terms" className="text-purple-400 hover:underline">Terms</Link> and <Link to="/privacy" className="text-purple-400 hover:underline">Privacy Policy</Link>.
+              </p>
+
+              <div className="relative pt-4">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/5"></div></div>
+                <div className="relative flex justify-center text-[9px] uppercase tracking-[0.2em] text-gray-600"><span className="bg-[#050505] px-4">Problem Signing In?</span></div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => handleLogin(true)}
-                  disabled={loading || !agreed}
-                  className="flex-1 bg-white/5 text-gray-400 font-medium py-3 px-4 rounded-xl flex items-center justify-center gap-2 border border-white/10 active:scale-95 transition-transform hover:bg-white/10 text-[11px] disabled:opacity-50"
+                  disabled={loading}
+                  className="flex-1 bg-white/5 text-gray-400 font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 border border-white/5 active:scale-95 transition-transform hover:bg-white/10 text-[10px] uppercase tracking-widest disabled:opacity-50"
                 >
-                  Redirect Method
+                  Redirect
                 </button>
                 <button
                   onClick={checkStatus}
                   disabled={loading}
-                  className="flex-1 bg-white/5 text-gray-400 font-medium py-3 px-4 rounded-xl flex items-center justify-center gap-2 border border-white/10 active:scale-95 transition-transform hover:bg-white/10 text-[11px] disabled:opacity-50"
+                  className="flex-1 bg-white/5 text-gray-400 font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 border border-white/5 active:scale-95 transition-transform hover:bg-white/10 text-[10px] uppercase tracking-widest disabled:opacity-50"
                 >
-                  Check Status
+                  Status
                 </button>
               </div>
-            </div>
         </div>
 
         <div className="grid grid-cols-3 gap-4 pt-8">
