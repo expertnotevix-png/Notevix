@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, Crown, Check, ShieldCheck, QrCode, Copy, ExternalLink, X, Send, CreditCard, Upload, Image as ImageIcon, Loader2, Zap } from 'lucide-react';
 import { UserProfile, PurchaseRequest } from '../types';
 import { db, auth, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
-import { collection, addDoc, query, where, getDocs, onSnapshot, doc, updateDoc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, onSnapshot, doc, updateDoc, setDoc, getDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { GoogleGenAI } from "@google/genai";
 
@@ -134,8 +134,14 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       });
 
       if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`NVIDIA Error: ${response.statusText}`);
+        let errMessage = response.statusText;
+        try {
+          const errData = await response.json();
+          errMessage = errData.error || errData.message || response.statusText;
+        } catch (e) {
+          // fallback to text if not JSON
+        }
+        throw new Error(`NVIDIA Error (${response.status}): ${errMessage}`);
       }
       
       const data = await response.json();
@@ -143,7 +149,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       const result = JSON.parse(content);
       
       return {
-        verified: result.verified && result.details?.isRealScreenshot && !!result.details?.transactionId,
+        verified: result.verified && !!result.details?.transactionId,
         reason: result.reason,
         transactionId: result.details?.transactionId
       };
@@ -158,30 +164,24 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     const today = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
     const time = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     
-    // ENHANCED PROMPT: Authentic & Accurate
+    // SIMPLIFIED PROMPT: Focus on 3 key points for instant access
     const prompt = `
-      Analyze this UPI payment proof for "NoteVix" educational app.
+      UPI Payment Analysis for "NoteVix" App.
+      Current Date/Time: ${today} ${time}.
       
-      FRAUD DETECTION:
-      - Artifacts: Check for warped text, illogical shadows, or inconsistent fonts.
-      - Realistic: Confirm it looks like a genuine payment app screen (PhonePe, GPay, Paytm, etc.).
-      - Timestamp: Today is ${today}. Payment must be recent (today or yesterday).
-      
-      VALIDATION:
-      1. Recipient: Must be "Poonam devi" or include "9236489649".
-      2. Status: Must be a definitively SUCCESSFUL transaction.
-      3. Amount: Target is ₹${selectedPlan?.price}.
-      4. ID: Extract the Transaction ID/UTR/UPI Ref.
+      CRITERIA FOR INSTANT APPROVAL:
+      1. AMOUNT: Should be ₹${selectedPlan?.price}.
+      2. RECIPIENT: Check for Name "Poonam devi" or VPA "9236489649".
+      3. TRANSACTION ID: Extract the unique UTR/Transaction ID/Reference No.
       
       Return JSON:
       {
         "verified": boolean,
-        "reason": "Detailed evidence (AI/Date/Recipient analysis)",
+        "reason": "Explain if amount, recipient, and ID were found correctly.",
         "details": {
            "recipientName": "string",
            "upiId": "string",
            "amount": number,
-           "isRealScreenshot": boolean,
            "transactionId": "string"
         }
       }
@@ -218,7 +218,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       console.log("Gemini AI Analysis:", result);
 
       return {
-        verified: result.verified && result.details?.isRealScreenshot && !!result.details?.transactionId,
+        verified: result.verified && !!result.details?.transactionId,
         reason: result.reason,
         transactionId: result.details?.transactionId
       };
