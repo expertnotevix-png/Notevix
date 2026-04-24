@@ -142,6 +142,12 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // Transaction ID Registry (Prevents reuse across accounts/sessions)
+    match /transaction_id_registry/{txId} {
+      allow get, create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
     // Study Groups
     match /study_groups/{groupId} {
       allow list, read: if true;

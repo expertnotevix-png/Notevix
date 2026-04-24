@@ -158,32 +158,31 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     const today = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
     const time = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     
-    // HIGH-STRICTNESS PROMPT: AI-generated detection + Strict Dates
+    // ENHANCED PROMPT: Authentic & Accurate
     const prompt = `
-      Analyze this payment proof for "NoteVix" educational app.
+      Analyze this UPI payment proof for "NoteVix" educational app.
       
-      FRAUD DETECTION (CRITICAL):
-      - REJECT if identifying AI-generated artifacts (warped text, illogical shadows, inconsistent fonts).
-      - REJECT if the screenshot is a duplicate of a common template.
-      - ENFORCE DATE: Current server date is ${today}. REJECT if the payment date is in the future relative to ${today}.
+      FRAUD DETECTION:
+      - Artifacts: Check for warped text, illogical shadows, or inconsistent fonts.
+      - Realistic: Confirm it looks like a genuine payment app screen (PhonePe, GPay, Paytm, etc.).
+      - Timestamp: Today is ${today}. Payment must be recent (today or yesterday).
       
       VALIDATION:
-      1. Recipient: Must be "Poonam devi" or "9236489649@mbk".
+      1. Recipient: Must be "Poonam devi" or include "9236489649".
       2. Status: Must be a definitively SUCCESSFUL transaction.
-      3. Amount: Must be exactly ₹${selectedPlan?.price}.
-      4. ID: Extract the UNIQUE Transaction ID/UTR/Reference.
+      3. Amount: Target is ₹${selectedPlan?.price}.
+      4. ID: Extract the Transaction ID/UTR/UPI Ref.
       
-      Return STRICT JSON:
+      Return JSON:
       {
         "verified": boolean,
-        "reason": "Detailed evidence for approval or rejection (mention AI/Date analysis)",
+        "reason": "Detailed evidence (AI/Date/Recipient analysis)",
         "details": {
            "recipientName": "string",
            "upiId": "string",
            "amount": number,
            "isRealScreenshot": boolean,
-           "transactionId": "string",
-           "transactionDate": "string"
+           "transactionId": "string"
         }
       }
     `;
@@ -260,24 +259,18 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
       const extractedTxId = aiResult.transactionId!.trim();
       
-      // 2. DUPLICATE CHECK (Anti-Cheat)
-      const duplicateQuery = query(
-        collection(db, 'purchase_requests'),
-        where('transactionId', '==', extractedTxId),
-        where('status', '==', 'approved')
-      );
-      const duplicateSnap = await getDocs(duplicateQuery);
+      // 2. DUPLICATE CHECK (Improved: Uses specific doc to avoid list-query permission issues)
+      const txCheckRef = doc(db, 'transaction_id_registry', extractedTxId);
+      const txCheckSnap = await getDoc(txCheckRef);
       
-      if (!duplicateSnap.empty) {
-        toast.error("FRAUD DETECTED: This transaction ID has already been used for a subscription.", {
-          duration: 6000
-        });
+      if (txCheckSnap.exists()) {
+        toast.error("ERROR: This payment screenshot has already been used. Please use a unique, recent screenshot.");
         setIsSubmitting(false);
         setAiVerifying(false);
         return;
       }
 
-      // 3. AI-ADMIN INSTANT APPROVAL (No Server Needed for Access)
+      // 3. AI-ADMIN INSTANT APPROVAL
       try {
         const userRef = doc(db, 'users', user.uid);
         const purchaseRef = doc(collection(db, 'purchase_requests'));
@@ -298,11 +291,17 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
             upgradeData.unlockedClasses = [...currentUnlocked, target];
           }
         }
+        
+        // 4. Register the transaction ID to prevent reuse
+        await setDoc(txCheckRef, {
+          userId: user.uid,
+          usedAt: new Date().toISOString()
+        });
 
-        // STEP 1: Update your account status DIRECTLY (User has permission)
+        // STEP 1: Update your account status DIRECTLY
         await updateDoc(userRef, upgradeData);
         
-        // STEP 2: Log the approved payment for your records
+        // STEP 2: Log the purchase
         await setDoc(purchaseRef, {
           userId: user.uid,
           userEmail: user.email,
@@ -318,7 +317,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           planType: (selectedPlan as any).type,
           ai_verified: true,
           verifiedAt: new Date().toISOString(),
-          verifiedBy: 'NoteVix_AI_Admin_V2'
+          verifiedBy: 'NoteVix_AI_Admin_V3_Registry'
         });
 
         // STEP 3: CELEBRATION - Instant Feedback
