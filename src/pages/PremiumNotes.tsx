@@ -114,7 +114,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: "nvidia/llama-3.2-11b-vision-instruct",
+          model: "meta/llama-3.2-11b-vision-instruct",
           messages: [
             {
               role: "user",
@@ -137,7 +137,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         let errMessage = response.statusText;
         try {
           const errData = await response.json();
-          errMessage = errData.error || errData.message || response.statusText;
+          errMessage = errData.error?.message || errData.message || response.statusText;
         } catch (e) {
           // fallback to text if not JSON
         }
@@ -155,7 +155,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       };
     } catch (error: any) {
       console.error("NVIDIA Verification Error:", error);
-      return { verified: false, reason: `System busy. Try again or contact expertraj8@gmail.com. (Error: ${error.message})` };
+      return { verified: false, reason: `System busy. Try again later or contact expertraj8@gmail.com. (Error: ${error.message})` };
     }
   };
 
@@ -164,20 +164,26 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     const today = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
     const time = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     
-    // SIMPLIFIED PROMPT: Focus on 3 key points for instant access
+    // AUTHENTIC PROMPT: Strict verification of 3 core criteria
     const prompt = `
-      UPI Payment Analysis for "NoteVix" App.
-      Current Date/Time: ${today} ${time}.
+      UPI Payment Screenshot Analysis for "NoteVix" Educational App.
+      Current Server Context: ${today} ${time} (IST).
       
-      CRITERIA FOR INSTANT APPROVAL:
-      1. AMOUNT: Should be ₹${selectedPlan?.price}.
-      2. RECIPIENT: Check for Name "Poonam devi" or VPA "9236489649".
-      3. TRANSACTION ID: Extract the unique UTR/Transaction ID/Reference No.
+      VERIFICATION GUIDELINES:
+      You are a strict financial auditor. Verify the following 3 MUST-HAVE criteria:
+      1. RECIPIENT: The money must be sent to "Poonam devi" or "9236489649@mbk".
+      2. AMOUNT: The transaction must be exactly ₹${selectedPlan?.price}.
+      3. TRANSACTION ID: Extract the unique Transaction ID / UTR / UPI Reference No.
       
-      Return JSON:
+      AUTHENTICITY CHECK:
+      - Reject if the image looks AI-generated (distorted text, impossible shapes).
+      - Reject if it's a future payment or much older than 48 hours relative to ${today}.
+      - Reject if it's a common internet screenshot (not a real phone screenshot).
+      
+      Return EXACT JSON:
       {
         "verified": boolean,
-        "reason": "Explain if amount, recipient, and ID were found correctly.",
+        "reason": "Detailed evidence of why verified or rejected (mention Recipient, Amount, and ID detection)",
         "details": {
            "recipientName": "string",
            "upiId": "string",
@@ -197,7 +203,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       const ai = new GoogleGenAI({ apiKey });
       
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-1.5-flash",
         contents: {
           parts: [
             { text: prompt },
@@ -229,7 +235,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       } catch (nvidiaErr: any) {
         return { 
           verified: false, 
-          reason: `Verification failed on all services: ${nvidiaErr.message}` 
+          reason: `Verification tech error. Please try again or contact support. (Ref: ${nvidiaErr.message})` 
         };
       }
     }

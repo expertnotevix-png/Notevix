@@ -271,14 +271,14 @@ async function startServer() {
     if (req.method === 'GET') return res.json({ status: "active" });
     if (req.method !== 'POST') return res.status(405).json({ error: "Method Not Allowed" });
 
-    const nvidiaKey = process.env.VITE_NVIDIA_API_KEY;
+    const nvidiaKey = process.env.VITE_NVIDIA_API_KEY || process.env.NVIDIA_API_KEY;
     if (!nvidiaKey) {
-      console.error("NVIDIA Proxy: Key missing in process.env");
-      return res.status(500).json({ error: "NVIDIA API Key (VITE_NVIDIA_API_KEY) is not configured in the server's 'Secrets' menu." });
+      console.error("NVIDIA Proxy: Key missing in both VITE_NVIDIA_API_KEY and NVIDIA_API_KEY");
+      return res.status(500).json({ error: "NVIDIA API Key is not configured." });
     }
 
     try {
-      console.log("NVIDIA Proxy: Forwarding request for model", req.body.model);
+      console.log(`[AI Proxy] Forwarding to NVIDIA Model: ${req.body.model}`);
       const nvidiaResponse = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -289,27 +289,27 @@ async function startServer() {
       });
 
       const responseText = await nvidiaResponse.text();
+      let data: any;
       
-      let data;
       try {
         data = responseText ? JSON.parse(responseText) : { error: "Empty response from NVIDIA" };
       } catch (e) {
-        console.error("NVIDIA Proxy: Failed to parse JSON from NVIDIA:", responseText);
-        return res.status(502).json({ 
-          error: "NVIDIA returned an invalid response. Please try again or check your API key.",
-          details: responseText.substring(0, 200)
+        console.error("[AI Proxy] JSON Parse Error from NVIDIA:", responseText);
+        return res.status(nvidiaResponse.status || 502).json({ 
+          error: "NVIDIA Backend Error", 
+          details: responseText.substring(0, 500) 
         });
       }
 
       if (!nvidiaResponse.ok) {
-        console.error("NVIDIA Proxy: NVIDIA returned error status", nvidiaResponse.status, data);
+        console.error(`[AI Proxy] NVIDIA returned ${nvidiaResponse.status}:`, data);
         return res.status(nvidiaResponse.status).json(data);
       }
 
       res.json(data);
     } catch (error: any) {
-      console.error("Server-side NVIDIA Error:", error);
-      res.status(500).json({ error: error.message });
+      console.error("[AI Proxy] Internal Proxy Error:", error);
+      res.status(500).json({ error: "Proxy internal error", message: error.message });
     }
   });
 
