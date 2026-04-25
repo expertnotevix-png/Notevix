@@ -5,7 +5,7 @@ import { UserProfile, PurchaseRequest } from '../types';
 import { db, auth, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
 import { collection, addDoc, query, where, getDocs, onSnapshot, doc, updateDoc, setDoc, getDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 interface PremiumNotesProps {
   user: UserProfile;
@@ -107,6 +107,23 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     }
   };
 
+  // Resilient JSON Extraction for AI responses
+  const parseAIJson = (text: string) => {
+    try {
+      // 1. Try direct parse
+      return JSON.parse(text);
+    } catch (e) {
+      // 2. Try extracting from markdown blocks or generic {}
+      try {
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) return JSON.parse(jsonMatch[0]);
+      } catch (innerE) {
+        console.error("AI JSON Parse Error:", text);
+      }
+      throw new Error("AI returned malformed data. Please try again.");
+    }
+  };
+
   const verifyWithNVIDIA = async (base64Image: string, prompt: string): Promise<{ verified: boolean; reason: string; transactionId?: string }> => {
     try {
       console.log("NVIDIA Fallback: Starting verification...");
@@ -119,7 +136,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
             {
               role: "user",
               content: [
-                { type: "text", text: prompt },
+                { type: "text", text: prompt + "\nRespond ONLY with a raw JSON object string." },
                 { 
                   type: "image_url", 
                   image_url: { 
@@ -146,7 +163,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       
       const data = await response.json();
       const content = data.choices[0].message.content;
-      const result = JSON.parse(content);
+      const result = parseAIJson(content);
       
       return {
         verified: result.verified && !!result.details?.transactionId,
@@ -155,7 +172,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       };
     } catch (error: any) {
       console.error("NVIDIA Verification Error:", error);
-      return { verified: false, reason: `System busy. Try again later or contact expertraj8@gmail.com. (Error: ${error.message})` };
+      throw error;
     }
   };
 
@@ -166,24 +183,23 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     
     // AUTHENTIC PROMPT: Strict verification of 3 core criteria
     const prompt = `
-      UPI Payment Screenshot Analysis for "NoteVix" Educational App.
-      Current Server Context: ${today} ${time} (IST).
+      Analyze this UPI Payment screenshot for "NoteVix" App.
+      Context: Today is ${today}, Time ${time}.
       
-      VERIFICATION GUIDELINES:
-      You are a strict financial auditor. Verify the following 3 MUST-HAVE criteria:
-      1. RECIPIENT: The money must be sent to "Poonam devi" or "9236489649@mbk".
-      2. AMOUNT: The transaction must be exactly ₹${selectedPlan?.price}.
-      3. TRANSACTION ID: Extract the unique Transaction ID / UTR / UPI Reference No.
+      MANDATORY AUDIT CRITERIA:
+      1. RECIPIENT: Must be "Poonam devi" or "9236489649@mbk".
+      2. AMOUNT: Must be exactly ₹${selectedPlan?.price}.
+      3. TRANSACTION ID: Extract the unique UTR / Transaction ID / Reference No.
       
-      AUTHENTICITY CHECK:
-      - Reject if the image looks AI-generated (distorted text, impossible shapes).
-      - Reject if it's a future payment or much older than 48 hours relative to ${today}.
-      - Reject if it's a common internet screenshot (not a real phone screenshot).
+      FRAUD DETECTION:
+      - Reject if the screenshot looks AI-generated, morphed, or fake.
+      - Reject if the payment date is in the future relative to ${today}.
       
-      Return EXACT JSON:
+      OUTPUT FORMAT:
+      Respond ONLY with a JSON object. No markdown, no intro/outro.
       {
         "verified": boolean,
-        "reason": "Detailed evidence of why verified or rejected (mention Recipient, Amount, and ID detection)",
+        "reason": "Detailed logic for verify/reject",
         "details": {
            "recipientName": "string",
            "upiId": "string",
@@ -195,32 +211,33 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
     try {
       const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || (window as any).process?.env?.GEMINI_API_KEY;
-      if (!apiKey) {
-        console.warn("Gemini key missing, using fallback...");
-        return await verifyWithNVIDIA(base64Image, prompt);
-      }
+      if (!apiKey) throw new Error("Gemini Key Missing");
       
-      const ai = new GoogleGenAI({ apiKey });
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       
-      const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
-        contents: {
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                mimeType: "image/jpeg",
-                data: base64Image.split(',')[1]
+      const response = await model.generateContent({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: "image/jpeg",
+                  data: base64Image.split(',')[1]
+                }
               }
-            }
-          ]
-        },
-        config: {
+            ]
+          }
+        ],
+        generationConfig: {
           responseMimeType: "application/json"
         }
       });
 
-      const result = JSON.parse(response.text || "{}");
+      const text = response.response.text();
+      const result = parseAIJson(text || "{}");
       console.log("Gemini AI Analysis:", result);
 
       return {
@@ -229,7 +246,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         transactionId: result.details?.transactionId
       };
     } catch (error: any) {
-      console.warn("Gemini Failed/Limited, switching to NVIDIA...", error.message);
+      console.warn("Primary AI failed, using NVIDIA fallback:", error.message);
       try {
         return await verifyWithNVIDIA(base64Image, prompt);
       } catch (nvidiaErr: any) {
