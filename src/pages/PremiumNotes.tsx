@@ -109,18 +109,24 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
   // Resilient JSON Extraction for AI responses
   const parseAIJson = (text: string) => {
+    console.log("AI Raw Output:", text);
     try {
       // 1. Try direct parse
       return JSON.parse(text);
     } catch (e) {
       // 2. Try extracting from markdown blocks or generic {}
       try {
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) return JSON.parse(jsonMatch[0]);
+        // Find first { and last }
+        const start = text.indexOf('{');
+        const end = text.lastIndexOf('}');
+        if (start !== -1 && end !== -1) {
+          const jsonStr = text.substring(start, end + 1);
+          return JSON.parse(jsonStr);
+        }
       } catch (innerE) {
         console.error("AI JSON Parse Error:", text);
       }
-      throw new Error("AI returned malformed data. Please try again.");
+      throw new Error(`AI returned malformed data: ${text.substring(0, 50)}...`);
     }
   };
 
@@ -181,29 +187,20 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     const today = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
     const time = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     
-    // AUTHENTIC PROMPT: Strict verification of 3 core criteria
+    // SIMPLIFIED PROMPT: Focus on mandatory ID, Name, and Amount
     const prompt = `
-      Analyze this UPI Payment screenshot for "NoteVix" App.
-      Context: Today is ${today}, Time ${time}.
+      Extract details from this UPI payment screenshot for "NoteVix".
       
-      MANDATORY AUDIT CRITERIA:
-      1. RECIPIENT: Must be "Poonam devi" or "9236489649@mbk".
+      VERIFY:
+      1. RECIPIENT: Name must be "Poonam devi" or include "9236489649".
       2. AMOUNT: Must be exactly ₹${selectedPlan?.price}.
       3. TRANSACTION ID: Extract the unique UTR / Transaction ID / Reference No.
       
-      FRAUD DETECTION:
-      - Reject if the screenshot looks AI-generated, morphed, or fake.
-      - Reject if the payment date is in the future relative to ${today}.
-      
-      OUTPUT FORMAT:
-      Respond ONLY with a JSON object. No markdown, no intro/outro.
+      Respond only with a JSON object:
       {
         "verified": boolean,
-        "reason": "Detailed logic for verify/reject",
+        "reason": "Clear explanation",
         "details": {
-           "recipientName": "string",
-           "upiId": "string",
-           "amount": number,
            "transactionId": "string"
         }
       }
@@ -282,32 +279,41 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
       const extractedTxId = aiResult.transactionId!.trim();
       
-      // 2. DUPLICATE CHECK (Improved: Uses specific doc to avoid list-query permission issues)
+      // Basic quality check for Transaction ID
+      if (extractedTxId.length < 5 || extractedTxId.toLowerCase().includes('unknown') || extractedTxId.toLowerCase().includes('null')) {
+        toast.error("AI could not clearly read the Transaction ID. Please try a clearer screenshot.");
+        setIsSubmitting(false);
+        setAiVerifying(false);
+        return;
+      }
+      
+      // 2. STRICT DUPLICATE CHECK
       const txCheckRef = doc(db, 'transaction_id_registry', extractedTxId);
       const txCheckSnap = await getDoc(txCheckRef);
       
       if (txCheckSnap.exists()) {
-        toast.error("ERROR: This payment screenshot has already been used. Please use a unique, recent screenshot.");
+        toast.error("DUPLICATE: This UTR/Payment ID has already been used. Please use a unique payment screenshot.", {
+          icon: '🚫',
+          duration: 8000
+        });
         setIsSubmitting(false);
         setAiVerifying(false);
         return;
       }
 
-      // 3. AI-ADMIN INSTANT APPROVAL
+      // 3. SECURE ASSET CREATION & ACCESS GRANT
       try {
         const userRef = doc(db, 'users', user.uid);
         const purchaseRef = doc(collection(db, 'purchase_requests'));
         
-        // Prepare instant upgrade package
+        // Prepare upgrade payload
         const upgradeData: any = {
           isPremium: true,
-          premiumActivatedAt: new Date().toISOString(),
-          lastPurchaseId: extractedTxId
+          planType: selectedPlan?.id,
+          premiumActivatedAt: new Date().toISOString()
         };
 
-        if ((selectedPlan as any).type === 'subscription') {
-          upgradeData.subscriptionExpiry = new Date(Date.now() + 32 * 24 * 60 * 60 * 1000).toISOString();
-        } else if ((selectedPlan as any).type === 'one-time' && (selectedPlan as any).class) {
+        if (selectedPlan && (selectedPlan as any).type === 'one-time' && (selectedPlan as any).class) {
           const target = (selectedPlan as any).class;
           const currentUnlocked = [...(user.unlockedClasses || [])];
           if (!currentUnlocked.includes(target)) {
@@ -315,31 +321,31 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           }
         }
         
-        // 4. Register the transaction ID to prevent reuse
+        // A. REGISTER TRANSACTION ID (Prevents repeat usage)
         await setDoc(txCheckRef, {
           userId: user.uid,
-          usedAt: new Date().toISOString()
+          usedAt: new Date().toISOString(),
+          amount: selectedPlan?.price
         });
 
-        // STEP 1: Update your account status DIRECTLY
+        // B. UPDATE USER ACCOUNT
         await updateDoc(userRef, upgradeData);
         
-        // STEP 2: Log the purchase
+        // C. LOG PURCHASE REQUEST
         await setDoc(purchaseRef, {
           userId: user.uid,
           userEmail: user.email,
           userName: user.displayName,
-          planId: selectedPlan!.id,
-          planName: selectedPlan!.name,
-          amount: selectedPlan!.price,
+          planId: selectedPlan?.id,
+          planName: selectedPlan?.name,
+          amount: selectedPlan?.price,
           transactionId: extractedTxId,
+          status: 'approved',
           whatsappNumber: whatsapp,
-          status: 'approved', 
-          timestamp: new Date().toISOString(),
-          targetClass: (selectedPlan as any).class || null,
-          planType: (selectedPlan as any).type,
+          createdAt: new Date(),
+          approvedAt: new Date(),
+          method: 'AI_INSTANT',
           ai_verified: true,
-          verifiedAt: new Date().toISOString(),
           verifiedBy: 'NoteVix_AI_Admin_V3_Registry'
         });
 
