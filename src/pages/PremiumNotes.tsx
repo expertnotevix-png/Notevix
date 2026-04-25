@@ -182,6 +182,11 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     }
   };
 
+  // Resilient ID Normalization
+  const normalizeId = (id: string) => {
+    return id.toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
+  };
+
   const verifyPaymentWithAI = async (base64Image: string): Promise<{ verified: boolean; reason: string; transactionId?: string }> => {
     const now = new Date();
     const today = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -189,17 +194,18 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     
     // SIMPLIFIED PROMPT: Focus on mandatory ID, Name, and Amount
     const prompt = `
-      Extract details from this UPI payment screenshot for "NoteVix".
+      Extract EXACT details from this UPI payment screenshot for "NoteVix".
       
-      VERIFY:
-      1. RECIPIENT: Name must be "Poonam devi" or include "9236489649".
-      2. AMOUNT: Must be exactly ₹${selectedPlan?.price}.
-      3. TRANSACTION ID: Extract the unique UTR / Transaction ID / Reference No.
+      TARGETS:
+      1. RECIPIENT: Verify match with "Poonam devi" or "9236489649@mbk".
+      2. AMOUNT: Verify exactly ₹${selectedPlan?.price}.
+      3. TRANSACTION ID: Extract the UNIQUE UTR / Transaction ID / Ref No. 
+         (Look for a 12-digit number for UTR or alphanumeric ID).
       
-      Respond only with a JSON object:
+      Respond ONLY with a JSON object:
       {
         "verified": boolean,
-        "reason": "Clear explanation",
+        "reason": "Clear explanation of what you found (Amount, Recipient, ID)",
         "details": {
            "transactionId": "string"
         }
@@ -270,15 +276,18 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       // 1. AI Verification
       const aiResult = await verifyPaymentWithAI(screenshotPreview);
       
-      if (!aiResult.verified) {
-        toast.error(`Verification Failed: ${aiResult.reason}`);
+      if (!aiResult.verified || !aiResult.transactionId) {
+        toast.error(`Verification Failed: ${aiResult.reason || "AI could not read payment details"}`);
         setAiVerifying(false);
         setIsSubmitting(false);
         return;
       }
 
-      const extractedTxId = aiResult.transactionId!.trim();
+      const rawTxId = aiResult.transactionId;
+      const extractedTxId = normalizeId(rawTxId);
       
+      console.log(`Original ID: ${rawTxId} -> Normalized ID: ${extractedTxId}`);
+
       // Basic quality check for Transaction ID
       if (extractedTxId.length < 5 || extractedTxId.toLowerCase().includes('unknown') || extractedTxId.toLowerCase().includes('null')) {
         toast.error("AI could not clearly read the Transaction ID. Please try a clearer screenshot.");
@@ -292,9 +301,10 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       const txCheckSnap = await getDoc(txCheckRef);
       
       if (txCheckSnap.exists()) {
-        toast.error("DUPLICATE: This UTR/Payment ID has already been used. Please use a unique payment screenshot.", {
+        const data = txCheckSnap.data();
+        toast.error(`DUPLICATE DETECTED: This Transaction ID (${extractedTxId}) was already used on ${new Date(data.usedAt).toLocaleDateString()}. Reusing screenshots is not allowed.`, {
           icon: '🚫',
-          duration: 8000
+          duration: 10000
         });
         setIsSubmitting(false);
         setAiVerifying(false);
@@ -324,8 +334,10 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         // A. REGISTER TRANSACTION ID (Prevents repeat usage)
         await setDoc(txCheckRef, {
           userId: user.uid,
+          userEmail: user.email,
           usedAt: new Date().toISOString(),
-          amount: selectedPlan?.price
+          amount: selectedPlan?.price,
+          originalId: rawTxId
         });
 
         // B. UPDATE USER ACCOUNT

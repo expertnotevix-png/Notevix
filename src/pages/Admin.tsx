@@ -9,12 +9,13 @@ import { toast } from 'sonner';
 import ModerationTab from '../components/community/ModerationTab';
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users'>('chapters');
+  const [activeTab, setActiveTab] = useState<'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry'>('chapters');
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [registry, setRegistry] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const navigate = useNavigate();
@@ -33,7 +34,21 @@ export default function Admin() {
     if (activeTab === 'notifications') fetchNotifications();
     if (activeTab === 'payments') fetchPurchaseRequests();
     if (activeTab === 'users') fetchUsers();
+    if (activeTab === 'registry') fetchRegistry();
   }, [activeTab]);
+
+  const fetchRegistry = async () => {
+    setLoading(true);
+    try {
+      const q = query(collection(db, 'transaction_id_registry'), orderBy('usedAt', 'desc'), limit(100));
+      const snap = await getDocs(q);
+      setRegistry(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -619,6 +634,7 @@ export default function Admin() {
           { id: 'chapters', label: 'Chapters', icon: Database },
           { id: 'messages', label: 'Messages', icon: MessageSquare },
           { id: 'payments', label: 'Payments', icon: CreditCard },
+          { id: 'registry', label: 'Registry', icon: Database },
           { id: 'users', label: 'Users', icon: Users },
           { id: 'notifications', label: 'Broadcast', icon: Bell },
           { id: 'moderation', label: 'Moderation', icon: Shield },
@@ -944,6 +960,41 @@ export default function Admin() {
           ) : (
             <div className="text-center py-20 text-gray-500">No payment requests yet.</div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'registry' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-bold">Transaction Registry</h3>
+            <p className="text-xs text-gray-400">Burned IDs: {registry.length}</p>
+          </div>
+          <div className="space-y-3">
+            {registry.map((tx) => (
+              <div key={tx.id} className="glass-card p-5 rounded-3xl bg-white/5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="font-mono text-sm font-bold text-purple-400 break-all">{tx.id}</div>
+                  <div className="text-[10px] text-gray-500 font-bold">{new Date(tx.usedAt).toLocaleString()}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest mb-1">User</p>
+                    <p className="text-xs truncate">{tx.userEmail || 'Unknown'}</p>
+                    <p className="text-[8px] text-gray-600 font-mono">{tx.userId}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest mb-1">Amount</p>
+                    <p className="text-xs font-black text-green-500">₹{tx.amount || '??'}</p>
+                  </div>
+                </div>
+                {tx.originalId && tx.originalId !== tx.id && (
+                  <div className="pt-2 border-t border-white/5 text-[9px] text-gray-500">
+                    <span className="font-bold">Original:</span> {tx.originalId}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
