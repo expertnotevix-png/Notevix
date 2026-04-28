@@ -55,8 +55,10 @@ service cloud.firestore {
     match /users/{userId} {
       allow list: if isAdmin();
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if (isAuthenticated() && userId == request.auth.uid && (request.resource.data.role == 'student' || isAdmin())) || isAdmin();
-      allow update: if isAdmin() || (isOwner(userId) && request.resource.data.role == resource.data.role);
+      allow create: if (isAuthenticated() && userId == request.auth.uid) || isAdmin();
+      allow update: if isAdmin() || (isOwner(userId) && (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isAdmin', 'email'])
+      ));
       allow delete: if isAdmin();
     }
 
@@ -144,6 +146,7 @@ service cloud.firestore {
 
     // Transaction ID Registry (Prevents reuse across accounts/sessions)
     match /transaction_id_registry/{txId} {
+      allow list: if isAdmin();
       allow get, create: if isAuthenticated();
       allow update, delete: if isAdmin();
     }

@@ -332,34 +332,49 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         }
         
         // A. REGISTER TRANSACTION ID (Prevents repeat usage)
-        await setDoc(txCheckRef, {
-          userId: user.uid,
-          userEmail: user.email,
-          usedAt: new Date().toISOString(),
-          amount: selectedPlan?.price,
-          originalId: rawTxId
-        });
+        try {
+          await setDoc(txCheckRef, {
+            userId: user.uid,
+            userEmail: user.email,
+            usedAt: new Date().toISOString(),
+            amount: selectedPlan?.price,
+            originalId: rawTxId
+          });
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, `transaction_id_registry/${extractedTxId}`);
+          throw new Error("Unable to register payment ID. Please try a different screenshot.");
+        }
 
         // B. UPDATE USER ACCOUNT
-        await updateDoc(userRef, upgradeData);
+        try {
+          await updateDoc(userRef, upgradeData);
+        } catch (err) {
+          handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
+          throw new Error("Payment verified but account update failed. Contact support with your TxID.");
+        }
         
         // C. LOG PURCHASE REQUEST
-        await setDoc(purchaseRef, {
-          userId: user.uid,
-          userEmail: user.email,
-          userName: user.displayName,
-          planId: selectedPlan?.id,
-          planName: selectedPlan?.name,
-          amount: selectedPlan?.price,
-          transactionId: extractedTxId,
-          status: 'approved',
-          whatsappNumber: whatsapp,
-          createdAt: new Date(),
-          approvedAt: new Date(),
-          method: 'AI_INSTANT',
-          ai_verified: true,
-          verifiedBy: 'NoteVix_AI_Admin_V3_Registry'
-        });
+        try {
+          await setDoc(purchaseRef, {
+            userId: user.uid,
+            userEmail: user.email,
+            userName: user.displayName,
+            planId: selectedPlan?.id,
+            planName: selectedPlan?.name,
+            amount: selectedPlan?.price,
+            transactionId: extractedTxId,
+            status: 'approved',
+            whatsappNumber: whatsapp,
+            createdAt: new Date(),
+            approvedAt: new Date(),
+            method: 'AI_INSTANT',
+            ai_verified: true,
+            verifiedBy: 'NoteVix_AI_Admin_V3_Registry'
+          });
+        } catch (err) {
+          handleFirestoreError(err, OperationType.CREATE, 'purchase_requests');
+          // Non-critical if user is already upgraded
+        }
 
         // STEP 3: CELEBRATION - Instant Feedback
         toast.success(`👑 AI ADMIN APPROVED!`, {
