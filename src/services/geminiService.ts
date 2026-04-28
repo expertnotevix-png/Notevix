@@ -20,6 +20,7 @@ function getAI() {
 
 const MODEL_FAST = "meta/llama-3.1-8b-instruct";
 const MODEL_POWER = "meta/llama-3.1-70b-instruct";
+const GEMINI_MODEL = "gemini-1.5-flash";
 
 function handleAIError(error: any): never {
   console.error("AI Service Error:", error);
@@ -27,35 +28,32 @@ function handleAIError(error: any): never {
   const errorString = error?.message?.toLowerCase() || "";
   const rawMessage = error?.message || "Internal network error";
   
-  // Specific check for NVIDIA's "invalid api key" which often means credits or wrong key
   if (errorString.includes('unauthorized') || errorString.includes('401') || errorString.includes('invalid api key')) {
-    throw new Error(`AI Key Error: The key appears invalid or expired. Please verify your NVIDIA/Gemini API key in Cloudflare settings.`);
+    throw new Error(`AI Key Error: The key appears invalid. Please verify your NVIDIA/Gemini API key in Settings.`);
   }
 
   if (errorString.includes('429') || error?.status === 429 || errorString.includes('quota') || errorString.includes('exhausted')) {
     const service = errorString.includes('nvidia') || errorString.includes('llama') ? 'NVIDIA' : 'Gemini';
-    throw new Error(`AI Limit Reached: ${service} is busy or out of credits. Please wait 1 minute or check your dashboard! ⏳`);
+    throw new Error(`AI Limit Reached: ${service} is busy. Please wait a moment! ⏳`);
   }
   
   if (errorString.includes('failed to fetch') || errorString.includes('method not allowed') || errorString.includes('405')) {
-    throw new Error("Direct AI Mode: Server proxy blocked. Using direct fallback... 🔄");
+    throw new Error("AI Connection Error: Server proxy issue. Reconnecting... 🔄");
   }
 
   if (errorString.includes('timeout') || errorString.includes('abort')) {
-    throw new Error("AI Timeout: The engine took too long to respond. Retrying with secondary engine...");
+    throw new Error("AI Timeout: The engine was slow. Retrying...");
   }
 
   throw new Error(`AI Issue: ${rawMessage.substring(0, 100)}`);
 }
 
 export const geminiService = {
-  // Use the official AI Studio SDK for direct calls to provide the best fallback experience
   async callGeminiDirect(prompt: string, system: string, key: string) {
     try {
       const ai = new GoogleGenAI({ apiKey: key });
-      // Use the preview model which matches the user's requirement
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: GEMINI_MODEL,
         contents: `${system}\n\nUser: ${prompt}`,
       });
       return response.text;
@@ -68,18 +66,19 @@ export const geminiService = {
   async solveDoubt(query: string) {
     try {
       const { apiKey, nvidiaKey } = getAI();
+
       if (nvidiaKey) {
         try {
-          // Use Faster model for chat tasks to prevent timeouts
-          return await this.callNvidiaAPI(query, "You are an expert CBSE Class 8-10 tutor. Answer the student's doubt in simple Hinglish (Hindi + English). Keep answers short, clear, and student-friendly.", false, MODEL_FAST, 20000);
+          return await this.callNvidiaAPI(query, "Expert CBSE tutor. Hinglish answers.", false, MODEL_FAST, 15000);
         } catch (nvidiaErr) {
-          console.warn("NVIDIA failed, falling back to Gemini:", nvidiaErr);
+          console.warn("NVIDIA failed, trying Gemini...", nvidiaErr);
         }
       }
 
       if (apiKey) {
-        return await this.callGeminiDirect(query, "You are an expert CBSE Class 8-10 tutor. Answer the student's doubt in simple Hinglish (Hindi + English).", apiKey);
+        return await this.callGeminiDirect(query, "You are an expert CBSE tutor. Answer CBSE Class 8-10 doubts in simple Hinglish. Keep answers clear and student-friendly.", apiKey);
       }
+      
       throw new Error("No AI providers available");
     } catch (error) {
       return handleAIError(error);
@@ -88,20 +87,19 @@ export const geminiService = {
 
   async generateQuiz(subject: string, className: string) {
     const prompt = `CBSE Class ${className} ${subject} Quiz:
-    Generate 5 deep NCERT MCQs.
-    Format: JSON array of objects.
-    Fields: question, options (4), correctAnswer, explanation.`;
+    Generate 5 NCERT MCQs.
+    Format: JSON array of objects with fields: question, options (4), correctAnswer, explanation.`;
     const system = "Expert CBSE Exam Setter. ONLY raw JSON []. No markdown.";
 
     try {
       const { apiKey, nvidiaKey } = getAI();
+
       if (nvidiaKey) {
         try {
-          // Quizzes need more time (30s) but 8b is usually fast enough
-          const res = await this.callNvidiaAPI(prompt, system, true, MODEL_FAST, 35000);
+          const res = await this.callNvidiaAPI(prompt, system, true, MODEL_FAST, 25000);
           return JSON.parse(res.replace(/```json|```/g, '').trim());
-        } catch (nvidiaErr) {
-          console.warn("NVIDIA Quiz slow/failed, jumping to Gemini...");
+        } catch (err) {
+          console.warn("NVIDIA Quiz failed, trying Gemini...");
         }
       }
 
@@ -109,31 +107,30 @@ export const geminiService = {
         const res = await this.callGeminiDirect(prompt, system, apiKey);
         return JSON.parse(res.replace(/```json|```/g, '').trim());
       }
-      throw new Error("AI engine currently busy. Please try again in 30 seconds.");
+      throw new Error("AI engine busy.");
     } catch (error) {
       return handleAIError(error);
     }
   },
 
   async summarizeChapter(text: string) {
-    const prompt = `Summarize the following chapter text in exactly 5 bullet points in simple Hinglish:\n\n${text}`;
-    const system = "You are a helpful study assistant. Summarize the provided text into exactly 5 clear bullet points using simple Hinglish.";
+    const prompt = `Summarize in 5 bullet points in Hinglish:\n\n${text}`;
+    const system = "Helpful study assistant. 5 clear bullets.";
 
     try {
       const { apiKey, nvidiaKey } = getAI();
       if (nvidiaKey) {
         try {
-          // Use 70b ONLY for summaries if possible, or fallback
-          return await this.callNvidiaAPI(prompt, system, false, MODEL_POWER, 30000);
-        } catch (nvidiaErr) {
-          console.warn("NVIDIA summarize failed, falling back...");
+          return await this.callNvidiaAPI(prompt, system, false, MODEL_FAST, 30000);
+        } catch (err) {
+          console.warn("NVIDIA Summary failed, trying Gemini...");
         }
       }
 
       if (apiKey) {
         return await this.callGeminiDirect(prompt, system, apiKey);
       }
-      throw new Error("AI engine currently busy. Please try again in 30 seconds.");
+      throw new Error("AI engine busy.");
     } catch (error) {
       return handleAIError(error);
     }
@@ -154,13 +151,18 @@ export const geminiService = {
 
     try {
       const { apiKey, nvidiaKey } = getAI();
-      // For very long text, Gemini is better due to 1M token window
+      
+      if (nvidiaKey) {
+        try {
+          // Long summaries need high tokens and time
+          return await this.callNvidiaAPI(prompt, system, false, MODEL_POWER, 60000);
+        } catch (err) {
+          console.warn("NVIDIA Long Summary failed, trying Gemini...");
+        }
+      }
+
       if (apiKey) {
         return await this.callGeminiDirect(prompt, system, apiKey);
-      }
-      if (nvidiaKey) {
-        // Long summaries need high tokens and time
-        return await this.callNvidiaAPI(prompt, system, false, MODEL_POWER, 60000);
       }
       throw new Error("AI engine currently busy.");
     } catch (error) {
@@ -173,20 +175,21 @@ export const geminiService = {
 
     try {
       const { apiKey, nvidiaKey } = getAI();
+      
       if (nvidiaKey) {
         try {
           const chatPrompt = history.map(h => `${h.role === 'model' ? 'assistant' : h.role}: ${h.parts[0].text}`).join("\n") + `\nuser: ${message}`;
-          // Use 8b for chat to keep it snappy and avoid timeouts
           return await this.callNvidiaAPI(chatPrompt, system, false, MODEL_FAST, 25000);
-        } catch (nvidiaErr) {
-          console.warn("NVIDIA chat failed, falling back...");
+        } catch (err) {
+          console.warn("NVIDIA chat failed, trying Gemini...");
         }
       }
 
       if (apiKey) {
         return await this.callGeminiDirect(message, system, apiKey);
       }
-      throw new Error("No AI providers available");
+      
+      throw new Error("No AI available");
     } catch (error) {
       return handleAIError(error);
     }
@@ -199,22 +202,22 @@ export const geminiService = {
 
     try {
       const { apiKey, nvidiaKey } = getAI();
+      
       if (nvidiaKey) {
         try {
           const res = await this.callNvidiaAPI(prompt, "You are a strict community moderator. Return ONLY raw JSON.", true, MODEL_FAST, 10000);
           return JSON.parse(res.replace(/```json|```/g, '').trim());
-        } catch (nvidiaErr) {
-          console.warn("NVIDIA moderate failed, falling back...");
+        } catch (err) {
+          console.warn("NVIDIA Moderate failed, trying Gemini...");
         }
       }
 
       if (apiKey) {
-        const res = await this.callGeminiDirect(prompt, "You are a strict community moderator. Return ONLY JSON.", apiKey);
+        const res = await this.callGeminiDirect(prompt, "Moderate school community content. JSON ONLY.", apiKey);
         return JSON.parse(res.replace(/```json|```/g, '').trim());
       }
       return { approved: true };
     } catch (error) {
-      console.warn("Moderation failed, allowing content:", error);
       return { approved: true };
     }
   },
@@ -225,60 +228,54 @@ export const geminiService = {
     Description: ${description}
     
     Tasks:
-    1. Moderate: Is it appropriate?
-    2. Notes Check: Is the user primarily asking for notes/PDFs?
-    3. Expert Answer: If approved and NOT a notes request, provide a helpful, concise answer in simple Hinglish (under 100 words).
+    1. Moderate appropriateness.
+    2. Notes Check: Is this primarily for notes?
+    3. Expert Response: Short Hinglish answer.
     
-    Return ONLY raw JSON:
-    {
-      "approved": boolean,
-      "reason": "reason if rejected",
-      "isNotes": boolean,
-      "aiAnswer": "your answer here"
-    }`;
+    Return ONLY JSON: { "approved": boolean, "reason": "...", "isNotes": boolean, "aiAnswer": "..." }`;
 
     try {
       const { apiKey, nvidiaKey } = getAI();
+      
       if (nvidiaKey) {
         try {
           const res = await this.callNvidiaAPI(prompt, "Expert CBSE Moderator. Return ONLY JSON.", true, MODEL_FAST, 20000);
           return JSON.parse(res.replace(/```json|```/g, '').trim());
-        } catch (nvidiaErr) {
-          console.warn("NVIDIA post process failed, falling back...");
+        } catch (err) {
+          console.warn("NVIDIA Post Process failed, trying Gemini...");
         }
       }
 
       if (apiKey) {
-        const res = await this.callGeminiDirect(prompt, "Expert CBSE Moderator. Return ONLY JSON.", apiKey);
+        const res = await this.callGeminiDirect(prompt, "Expert CBSE Moderator. JSON ONLY.", apiKey);
         return JSON.parse(res.replace(/```json|```/g, '').trim());
       }
       return { approved: true, isNotes: false };
     } catch (error) {
-      console.error("Process Post Error:", error);
-      // Fallback: allow post but no AI answer
       return { approved: true, isNotes: false };
     }
   },
 
   async getCommunityAnswer(title: string, description: string): Promise<string> {
-    const prompt = `Provide a helpful, expert answer to this student's question for the community forum.
+    const prompt = `Answer this student's question for the community forum.
     Title: ${title}
     Description: ${description}`;
 
     try {
       const { apiKey, nvidiaKey } = getAI();
+      
       if (nvidiaKey) {
         try {
           return await this.callNvidiaAPI(prompt, "Expert CBSE Tutor.", false, MODEL_FAST, 20000);
-        } catch (nvidiaErr) {
-          console.warn("NVIDIA community answer failed, falling back...");
+        } catch (err) {
+          console.warn("NVIDIA Community Answer failed, trying Gemini...");
         }
       }
 
       if (apiKey) {
         return await this.callGeminiDirect(prompt, "Expert CBSE Tutor.", apiKey);
       }
-      return "That's a great question! I'm looking into it.";
+      return "I'm looking into that for you!";
     } catch (error) {
       return handleAIError(error);
     }
