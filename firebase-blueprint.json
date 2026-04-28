@@ -46,6 +46,8 @@
           } 
         },
         "pdfUrl": { "type": "string" },
+        "coverUrl": { "type": "string" },
+        "driveLink": { "type": "string" },
         "isPremium": { "type": "boolean" }
       },
       "required": ["class", "subject", "title"]
@@ -74,7 +76,9 @@
         "onePageNotesUrl": { "type": "string" },
         "fullNotesUrl": { "type": "string" },
         "importantQuestionsUrl": { "type": "string" },
-        "examOrientedQuestionsUrl": { "type": "string" }
+        "examOrientedQuestionsUrl": { "type": "string" },
+        "coverUrl": { "type": "string" },
+        "driveLink": { "type": "string" }
       },
       "required": ["class", "subject"]
     },

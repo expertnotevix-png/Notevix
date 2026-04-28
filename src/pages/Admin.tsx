@@ -7,7 +7,8 @@ import {
   Plus, Trash2, Edit2, Save, X, ChevronLeft, Database, 
   MessageSquare, Bell, Send, CheckCircle2, Clock, 
   Shield, RefreshCw, CreditCard, Check, XCircle, Users, 
-  Instagram, LayoutDashboard, BarChart3, Settings, Menu, LogOut, Search, TrendingUp, DollarSign, UserCheck
+  Instagram, LayoutDashboard, BarChart3, Settings, Menu, LogOut, Search, TrendingUp, DollarSign, UserCheck,
+  BookOpen
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -18,7 +19,7 @@ import {
 } from 'recharts';
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources'>('analytics');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -26,6 +27,7 @@ export default function Admin() {
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [registry, setRegistry] = useState<any[]>([]);
+  const [subjectResources, setSubjectResources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,7 +57,20 @@ export default function Admin() {
     if (activeTab === 'payments') fetchPurchaseRequests();
     if (activeTab === 'users') fetchUsers();
     if (activeTab === 'registry') fetchRegistry();
+    if (activeTab === 'resources') fetchSubjectResources();
   }, [activeTab]);
+
+  const fetchSubjectResources = async () => {
+    setLoading(true);
+    try {
+      const snap = await getDocs(collection(db, 'subject_resources'));
+      setSubjectResources(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchAnalytics = async () => {
     setLoading(true);
@@ -254,108 +269,7 @@ export default function Admin() {
       }
     }
 
-    // Add Subject Resources from User Request
-    const subjectResources = [
-      {
-        class: '8', subject: 'science',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1ka-QeoholdXB3xaX7jX2QNXO-kP2n-ES/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1wCuBo0YApmkqef-UnT29CtRd1tOcrb9v/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/1UB0-QptnzsAOEU5lKwA60HtVfFo5_P_g/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1F5OA8aK6ncJLD0iVYTIR_etSDjBqKheB/view?usp=drivesdk'
-      },
-      {
-        class: '8', subject: 'sst',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1mV5bcLIz8j3IEE61Ijwdo2RDrq-j05yG/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1USJWh6tDlRH7ATYRrsHC_HgESYHAzb8D/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/1TCAEGb4e9s1bd6ttGmHiDVYsimaH3_Pd/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1cVOUmI7StT61OlrZC16oE0mE1pV8YnNk/view?usp=drivesdk'
-      },
-      {
-        class: '8', subject: 'maths',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1GcVbFswV7OB3dutymQjdHbOXheuK9Ysn/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1K64QsZT9lNwS_12r5HioULIHVXFDm_oB/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/1d1-V1u8oWALR49tKMKBWe1Dtnz3nnOBH/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1z-cvLUQQAT02csfWiM03_b8dcPFObtE0/view?usp=drivesdk'
-      },
-      {
-        class: '8', subject: 'english',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1CCK6uzH1ma5I0E5sWWW57_BbUo9PrlHX/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1IXSc8wcjttmkOVpVY7ocKZkTuRVI0iTZ/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/1Cr_fvccNKi-PBWTRb6CF6DB27qz73r3z/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1nuGRofcxb9LKD7d0-7ngBU1mmrhCSjgX/view?usp=drivesdk'
-      },
-      {
-        class: '9', subject: 'science',
-        onePageNotesUrl: 'https://drive.google.com/file/d/16J3l5x2tiNwhtG1YUH6Xpc1VyhlbEhaU/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/19KV_y1pdj4TN9mSg1pnymrjF7RVpghGH/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/1_Nr1VeZX7a3g9HM3j6nhzZ5xe9XXA-3_/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1IGo5ErM6jnmJ1KrM60o-XjAt1XgEj5sc/view?usp=drivesdk'
-      },
-      {
-        class: '9', subject: 'sst',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1Nhof272xWczHbg7hX_ageR4NvXPJNrJP/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1Ig18ncXDHEQ0Mxu-sM7akb_01Ab3H02j/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/1rig4ZYP8nk22Kfr35OR9VLxv7WQy7n9a/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1lDAxdI-_b7JcYkWPdt6uegR4LdQuxQ3h/view?usp=drivesdk'
-      },
-      {
-        class: '9', subject: 'maths',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1aIa3PGgzZu8K1p9NY5yejDcgzMPHZ2ZP/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1iW1BUO46koPSud20WlGPAf1VMNlXUNyI/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/1DJEF8yHKGWDnsJt7tGGTkH0DgGbn9yRp/view?usp=drivesdk'
-      },
-      {
-        class: '9', subject: 'english',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1k_7qp8KYIyIvYME5sfO1Oq-nt7LjxyOL/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1B81cuGvF5-jJnhUA1n-Yy6nAk-H9W-B3/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/10X16DY-AxnxyXrIDwbNqJSt_Y8NRZyv7/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1n4_HnHrShSzIMkfiVQYDtuJSWPnkqqO2/view?usp=drivesdk'
-      },
-      {
-        class: '10', subject: 'science',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1vVRXXenGoaFzn1R2cEs_es5gDzzEzO9J/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1Rer-yq5_lUAx79ziwtXDR0AXgaoB10Eh/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/17gHE4BBgTcFbq6Z1jUMEaooPuDhSxrFR/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1lGG-l-89veqwwbEIltxRtXql1Xhb1uVT/view?usp=drivesdk'
-      },
-      {
-        class: '10', subject: 'sst',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1C5HNfr4u_8vQ9eArzdZRSUhE_Owy4h8c/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1hUk1u-XnJb47lAFvU3qvWUK_kTMHwVc6/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/1B_s9nxd9df3uR2Zas-sna9S5sthtt-1w/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1Bo5ON7oLLp_uhra5dOx5vVk82x07WGCJ/view?usp=drivesdk'
-      },
-      {
-        class: '10', subject: 'maths',
-        onePageNotesUrl: 'https://drive.google.com/file/d/1oa2WBPNO4ChJrAp-aP7uyvVCn2SPI6w1/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/1wNNhEXC06_qpsom2lzfAoOAjxZtfzc2f/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/1jUpfYzuNwiE6b6CTYTE--Gk8ttqZ5b26/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1nWLsptC9vEV7egT8rbapiRi_gBm7SeTW/view?usp=drivesdk'
-      },
-      {
-        class: '10', subject: 'english',
-        onePageNotesUrl: 'https://drive.google.com/file/d/161HIkuYtIOD5esDsmjwnI5lq6PPltOZG/view?usp=drivesdk',
-        fullNotesUrl: 'https://drive.google.com/file/d/158isO5zrYWgdKafIiRdzOXLHJaYEeu35/view?usp=drivesdk',
-        importantQuestionsUrl: 'https://drive.google.com/file/d/1ELq7c3bOUDaVFAsu2OcDtuwYiOikTm74/view?usp=drivesdk',
-        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1DcvYECk1QfqhAu2isR3PHnolvcMtx4n5/view?usp=drivesdk'
-      }
-    ];
-
-    for (const res of subjectResources) {
-      // Check if already exists
-      const q = query(collection(db, 'subject_resources'), where('class', '==', res.class), where('subject', '==', res.subject));
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        await addDoc(collection(db, 'subject_resources'), res);
-      } else {
-        // Update ALL matching records to ensure no duplicates with old links remain
-        const updates = snap.docs.map(d => updateDoc(doc(db, 'subject_resources', d.id), res));
-        await Promise.all(updates);
-      }
-    }
-
-    fetchChapters();
-    alert("All resources synced successfully with new links!");
+    toast.success("Chapter samples synchronized!");
   };
 
   const fetchMessages = async () => {
@@ -629,6 +543,7 @@ export default function Admin() {
 
   const menuItems = [
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'resources', label: 'Digital Library', icon: BookOpen },
     { id: 'chapters', label: 'Flashcards', icon: Database },
     { id: 'messages', label: 'Support', icon: MessageSquare },
     { id: 'payments', label: 'Revenue', icon: CreditCard },
@@ -652,6 +567,107 @@ export default function Admin() {
     }
 
     switch (activeTab) {
+      case 'resources':
+        return (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="flex justify-between items-center bg-white/5 p-6 rounded-[2rem] border border-white/10">
+              <div>
+                <h3 className="text-xl font-black">Digital Library Management</h3>
+                <p className="text-xs text-gray-400">Manage premium book covers and drive links</p>
+              </div>
+              <div className="flex gap-4">
+                <button 
+                  onClick={async () => {
+                    if(!window.confirm("Delete ALL premium books? This cannot be undone.")) return;
+                    setLoading(true);
+                    const snap = await getDocs(collection(db, 'subject_resources'));
+                    const deletes = snap.docs.map(d => deleteDoc(doc(db, 'subject_resources', d.id)));
+                    await Promise.all(deletes);
+                    fetchSubjectResources();
+                    toast.success("Library cleared.");
+                  }}
+                  className="bg-red-500/10 text-red-500 border border-red-500/20 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" /> Clear All Books
+                </button>
+                <button 
+                  onClick={() => {
+                  const sub = window.prompt("Subject Name?");
+                  const cls = window.prompt("Class (8/9/10)?");
+                  const price = window.prompt("Price?");
+                  const cover = window.prompt("Cover URL (1:1)?");
+                  const drive = window.prompt("Drive Link?");
+                  if (sub && cls) {
+                    addDoc(collection(db, 'subject_resources'), {
+                      subject: sub, 
+                      class: cls, 
+                      price: Number(price) || 0,
+                      coverUrl: cover || '',
+                      driveLink: drive || ''
+                    }).then(() => fetchSubjectResources());
+                  }
+                }}
+                className="bg-indigo-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" /> Add Premium Book
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {subjectResources.map((res) => (
+                <div key={res.id} className="glass-card p-6 rounded-[2.5rem] bg-white/5 border border-white/10 flex flex-col gap-4">
+                  <div className="aspect-[1/1] w-full bg-white/5 rounded-2xl overflow-hidden border border-white/10 relative">
+                    {res.coverUrl ? (
+                      <img src={res.coverUrl} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-600">
+                        <BookOpen className="w-12 h-12" />
+                      </div>
+                    )}
+                    <div className="absolute top-2 left-2 px-3 py-1 bg-black/60 rounded-full text-[8px] font-black uppercase">
+                      ₹{res.price || 0}
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1 space-y-1">
+                    <h4 className="font-black text-lg uppercase tracking-tight">{res.subject}</h4>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Class {res.class}</p>
+                    <p className="text-[8px] text-gray-600 truncate mt-2">{res.driveLink || 'No Link'}</p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => {
+                        const newPrice = window.prompt("New Price?", res.price);
+                        const newCover = window.prompt("New Cover URL?", res.coverUrl);
+                        const newDrive = window.prompt("New Drive Link?", res.driveLink);
+                        updateDoc(doc(db, 'subject_resources', res.id), {
+                          price: Number(newPrice) || 0,
+                          coverUrl: newCover || '',
+                          driveLink: newDrive || ''
+                        }).then(() => fetchSubjectResources());
+                      }}
+                      className="flex-1 bg-white/5 hover:bg-white/10 py-3 rounded-xl text-[8px] font-black uppercase transition-colors"
+                    >
+                      Edit Details
+                    </button>
+                    <button 
+                      onClick={() => {
+                        if(window.confirm("Delete this book?")) {
+                          deleteDoc(doc(db, 'subject_resources', res.id)).then(() => fetchSubjectResources());
+                        }
+                      }}
+                      className="p-3 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
       case 'analytics':
         return (
           <div className="space-y-8 animate-in fade-in duration-500">

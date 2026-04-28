@@ -20,7 +20,9 @@ export interface UserProfile {
   referredBy?: string;
   referralCount: number;
   isPremium: boolean;
+  planType?: string;
   unlockedClasses?: string[];
+  unlockedResources?: string[];
   subscriptionExpiry?: string;
   instagramUsername?: string;
   createdAt: string;
@@ -72,6 +74,8 @@ export interface Chapter {
     answer: string;
   }[];
   pdfUrl?: string;
+  coverUrl?: string;
+  driveLink?: string;
   isPremium: boolean;
 }
 
@@ -91,6 +95,9 @@ export interface SubjectResource {
   fullNotesUrl?: string;
   importantQuestionsUrl?: string;
   examOrientedQuestionsUrl?: string;
+  coverUrl?: string;
+  driveLink?: string;
+  price?: number;
 }
 
 export interface PurchaseRequest {

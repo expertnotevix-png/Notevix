@@ -1,9 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Crown, Check, ShieldCheck, QrCode, Copy, ExternalLink, X, Send, CreditCard, Upload, Image as ImageIcon, Loader2, Zap } from 'lucide-react';
-import { UserProfile, PurchaseRequest } from '../types';
-import { db, auth, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
-import { collection, addDoc, query, where, getDocs, onSnapshot, doc, updateDoc, setDoc, getDoc } from 'firebase/firestore';
+import { 
+  Sparkles, Crown, Check, ShieldCheck, QrCode, Copy, 
+  ExternalLink, X, Send, CreditCard, Upload, 
+  Image as ImageIcon, Loader2, Zap, BookOpen, 
+  Lock, ChevronRight, FileText, Download 
+} from 'lucide-react';
+import { UserProfile, SubjectResource } from '../types';
+import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
+import { collection, query, where, getDocs, doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
@@ -11,261 +16,116 @@ interface PremiumNotesProps {
   user: UserProfile;
 }
 
+const CLASSES = ['8', '9', '10'];
+
 const PREMIUM_PLANS = [
   {
     id: 'monthly_sub',
     name: 'NoteVix Plus',
-    price: 49,
-    description: 'Monthly Subscription',
+    price: 199,
+    description: 'Full Access (All Classes)',
     features: ['All Class 8-10 Notes', 'Unlimited AI Doubt Solver', 'Exclusive Exam PDFs', 'Priority Chat Support'],
-    color: 'from-purple-500 to-indigo-600',
-    popular: true,
+    color: 'from-indigo-600 to-purple-600',
     type: 'subscription'
   },
   {
     id: 'class_8_one_time',
-    name: 'Class 8 Pack',
+    name: 'Class 8 Master Pack',
     class: '8',
     price: 99,
-    description: 'Lifetime for Class 8',
-    features: ['All Class 8 Notes', 'Chapter-wise AI Solver', 'Standard PDFs'],
-    color: 'from-blue-500 to-cyan-600',
+    features: ['All Class 8 Notes', 'Chapter-wise AI Solver', 'Lifetime Access'],
+    color: 'from-blue-600 to-cyan-600',
     type: 'one-time'
   },
   {
     id: 'class_9_one_time',
-    name: 'Class 9 Pack',
+    name: 'Class 9 Master Pack',
     class: '9',
     price: 99,
-    description: 'Lifetime for Class 9',
-    features: ['All Class 9 Notes', 'Chapter-wise AI Solver', 'Standard PDFs'],
-    color: 'from-emerald-500 to-teal-600',
+    features: ['All Class 9 Notes', 'Chapter-wise AI Solver', 'Lifetime Access'],
+    color: 'from-emerald-600 to-teal-600',
     type: 'one-time'
   },
   {
     id: 'class_10_one_time',
-    name: 'Class 10 Pack',
+    name: 'Class 10 Master Pack',
     class: '10',
     price: 99,
-    description: 'Lifetime for Class 10',
-    features: ['All Class 10 Notes', 'Chapter-wise AI Solver', 'Standard PDFs'],
-    color: 'from-orange-500 to-pink-600',
+    features: ['All Class 10 Notes', 'Chapter-wise AI Solver', 'Lifetime Access'],
+    color: 'from-orange-600 to-pink-600',
     type: 'one-time'
   }
 ];
 
 export default function PremiumNotes({ user }: PremiumNotesProps) {
-  const [selectedPlan, setSelectedPlan] = useState<typeof PREMIUM_PLANS[0] | null>(null);
+  const [activeClass, setActiveClass] = useState<'8' | '9' | '10'>(user.class as any || '10');
+  const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
+  const [resources, setResources] = useState<SubjectResource[]>([]);
+  const [loading, setLoading] = useState(true);
   const [whatsapp, setWhatsapp] = useState('');
-  const [screenshot, setScreenshot] = useState<File | null>(null);
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiVerifying, setAiVerifying] = useState(false);
-  const [hasPendingRequest, setHasPendingRequest] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   const upiId = (import.meta as any).env?.VITE_UPI_ID || '9236489649@mbk';
 
   useEffect(() => {
-    // 1. Check for pending requests (One-time fetch to save quota)
-    const checkPendingRequests = async () => {
-      try {
-        if (checkQuotaLock()) {
-          console.warn("PremiumNotes: Quota lockout active. Skipping pending check.");
-          return;
-        }
+    fetchResources();
+  }, [activeClass]);
 
-        const q = query(
-          collection(db, 'purchase_requests'),
-          where('userId', '==', user.uid),
-          where('status', '==', 'pending')
-        );
-        const snap = await getDocs(q);
-        setHasPendingRequest(!snap.empty);
-      } catch (error) {
-        console.error("Error checking pending requests:", error);
-      }
-    };
+  const fetchResources = async () => {
+    try {
+      setLoading(true);
+      const q = query(collection(db, 'subject_resources'), where('class', '==', activeClass));
+      const snap = await getDocs(q);
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as SubjectResource));
+      setResources(data);
+    } catch (error) {
+      console.error("Error fetching resources:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    checkPendingRequests();
-  }, [user.uid]);
+  const isUnlocked = (res: SubjectResource) => {
+    if (user.isPremium && user.planType === 'monthly_sub') return true;
+    if (user.unlockedClasses?.includes(res.class)) return true;
+    return user.unlockedResources?.includes(res.id);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) { // 2MB limit
+      if (file.size > 2 * 1024 * 1024) {
         toast.error('Screenshot must be less than 2MB');
         return;
       }
-      setScreenshot(file);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setScreenshotPreview(reader.result as string);
-      };
+      reader.onloadend = () => setScreenshotPreview(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
 
-  // Resilient JSON Extraction for AI responses
   const parseAIJson = (text: string) => {
-    console.log("AI Raw Output:", text);
     try {
-      // 1. Try direct parse
+      const start = text.indexOf('{');
+      const end = text.lastIndexOf('}');
+      if (start !== -1 && end !== -1) {
+        return JSON.parse(text.substring(start, end + 1));
+      }
       return JSON.parse(text);
     } catch (e) {
-      // 2. Try extracting from markdown blocks or generic {}
-      try {
-        // Find first { and last }
-        const start = text.indexOf('{');
-        const end = text.lastIndexOf('}');
-        if (start !== -1 && end !== -1) {
-          const jsonStr = text.substring(start, end + 1);
-          return JSON.parse(jsonStr);
-        }
-      } catch (innerE) {
-        console.error("AI JSON Parse Error:", text);
-      }
-      throw new Error(`AI returned malformed data: ${text.substring(0, 50)}...`);
+      console.error("Parse error:", text);
+      return { verified: false };
     }
   };
 
-  const verifyWithNVIDIA = async (base64Image: string, prompt: string): Promise<{ verified: boolean; reason: string; transactionId?: string }> => {
-    try {
-      console.log("NVIDIA Fallback: Starting verification...");
-      const response = await fetch('/api/ai/nvidia', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: "meta/llama-3.2-11b-vision-instruct",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: prompt + "\nRespond ONLY with a raw JSON object string." },
-                { 
-                  type: "image_url", 
-                  image_url: { 
-                    url: base64Image
-                  } 
-                }
-              ]
-            }
-          ],
-          response_format: { type: "json_object" }
-        })
-      });
-
-      if (!response.ok) {
-        let errMessage = response.statusText;
-        try {
-          const errData = await response.json();
-          errMessage = errData.error?.message || errData.message || response.statusText;
-        } catch (e) {
-          // fallback to text if not JSON
-        }
-        throw new Error(`NVIDIA Error (${response.status}): ${errMessage}`);
-      }
-      
-      const data = await response.json();
-      const content = data.choices[0].message.content;
-      const result = parseAIJson(content);
-      
-      return {
-        verified: result.verified && !!result.details?.transactionId,
-        reason: result.reason,
-        transactionId: result.details?.transactionId
-      };
-    } catch (error: any) {
-      console.error("NVIDIA Verification Error:", error);
-      throw error;
-    }
-  };
-
-  // Resilient ID Normalization
-  const normalizeId = (id: string) => {
-    return id.toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
-  };
-
-  const verifyPaymentWithAI = async (base64Image: string): Promise<{ verified: boolean; reason: string; transactionId?: string }> => {
-    const now = new Date();
-    const today = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
-    const time = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-    
-    // SIMPLIFIED PROMPT: Focus on mandatory ID, Name, and Amount
-    const prompt = `
-      Extract EXACT details from this UPI payment screenshot for "NoteVix".
-      
-      TARGETS:
-      1. RECIPIENT: Verify match with "Poonam devi" or "9236489649@mbk".
-      2. AMOUNT: Verify exactly ₹${selectedPlan?.price}.
-      3. TRANSACTION ID: Extract the UNIQUE UTR / Transaction ID / Ref No. 
-         (Look for a 12-digit number for UTR or alphanumeric ID).
-      
-      Respond ONLY with a JSON object:
-      {
-        "verified": boolean,
-        "reason": "Clear explanation of what you found (Amount, Recipient, ID)",
-        "details": {
-           "transactionId": "string"
-        }
-      }
-    `;
-
-    try {
-      const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || (window as any).process?.env?.GEMINI_API_KEY;
-      if (!apiKey) throw new Error("Gemini Key Missing");
-      
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      
-      const response = await model.generateContent({
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { text: prompt },
-              {
-                inlineData: {
-                  mimeType: "image/jpeg",
-                  data: base64Image.split(',')[1]
-                }
-              }
-            ]
-          }
-        ],
-        generationConfig: {
-          responseMimeType: "application/json"
-        }
-      });
-
-      const text = response.response.text();
-      const result = parseAIJson(text || "{}");
-      console.log("Gemini AI Analysis:", result);
-
-      return {
-        verified: result.verified && !!result.details?.transactionId,
-        reason: result.reason,
-        transactionId: result.details?.transactionId
-      };
-    } catch (error: any) {
-      console.warn("Primary AI failed, using NVIDIA fallback:", error.message);
-      try {
-        return await verifyWithNVIDIA(base64Image, prompt);
-      } catch (nvidiaErr: any) {
-        return { 
-          verified: false, 
-          reason: `Verification tech error. Please try again or contact support. (Ref: ${nvidiaErr.message})` 
-        };
-      }
-    }
-  };
+  const normalizeId = (id: string) => id.toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
 
   const handlePurchase = async () => {
-    if (isSubmitting || aiVerifying) return;
-
-    if (!whatsapp || !screenshotPreview) {
-      toast.error('Please enter WhatsApp number and upload screenshot');
+    if (isSubmitting || aiVerifying || !whatsapp || !screenshotPreview) {
+      toast.error('Details missing');
       return;
     }
 
@@ -273,369 +133,315 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     setAiVerifying(true);
 
     try {
-      // 1. AI Verification
-      const aiResult = await verifyPaymentWithAI(screenshotPreview);
+      const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       
-      if (!aiResult.verified || !aiResult.transactionId) {
-        toast.error(`Verification Failed: ${aiResult.reason || "AI could not read payment details"}`);
-        setAiVerifying(false);
-        setIsSubmitting(false);
-        return;
+      const prompt = `Extract UPI details. Recipient: 9236489649@mbk, Amount: ₹${selectedPlan?.price}. JSON ONLY: {verified: boolean, transactionId: string}`;
+      
+      const response = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: screenshotPreview.split(',')[1] } }] }]
+      });
+
+      const result = parseAIJson(response.response.text());
+      const txId = normalizeId(result.transactionId || '');
+
+      if (!result.verified || !txId) {
+        throw new Error("AI could not verify payment. Reason: " + (result as any).reason || "Details unclear");
       }
 
-      const rawTxId = aiResult.transactionId;
-      const extractedTxId = normalizeId(rawTxId);
-      
-      console.log(`Original ID: ${rawTxId} -> Normalized ID: ${extractedTxId}`);
+      const txRef = doc(db, 'transaction_id_registry', txId);
+      const txSnap = await getDoc(txRef);
+      if (txSnap.exists()) throw new Error("Duplicate transaction!");
 
-      // Basic quality check for Transaction ID
-      if (extractedTxId.length < 5 || extractedTxId.toLowerCase().includes('unknown') || extractedTxId.toLowerCase().includes('null')) {
-        toast.error("AI could not clearly read the Transaction ID. Please try a clearer screenshot.");
-        setIsSubmitting(false);
-        setAiVerifying(false);
-        return;
+      await setDoc(txRef, { userId: user.uid, usedAt: new Date().toISOString(), amount: selectedPlan?.price });
+      
+      const updateData: any = { isPremium: true, planType: selectedPlan?.id || 'individual_resource' };
+      
+      if (selectedPlan?.class && selectedPlan.type === 'one-time') {
+        updateData.unlockedClasses = [...(user.unlockedClasses || []), selectedPlan.class];
       }
       
-      // 2. STRICT DUPLICATE CHECK
-      const txCheckRef = doc(db, 'transaction_id_registry', extractedTxId);
-      const txCheckSnap = await getDoc(txCheckRef);
+      if (selectedPlan?.resourceId) {
+        updateData.unlockedResources = [...(user.unlockedResources || []), selectedPlan.resourceId];
+      }
+
+      await updateDoc(doc(db, 'users', user.uid), updateData);
       
-      if (txCheckSnap.exists()) {
-        const data = txCheckSnap.data();
-        toast.error(`DUPLICATE DETECTED: This Transaction ID (${extractedTxId}) was already used on ${new Date(data.usedAt).toLocaleDateString()}. Reusing screenshots is not allowed.`, {
-          icon: '🚫',
-          duration: 10000
-        });
-        setIsSubmitting(false);
-        setAiVerifying(false);
-        return;
-      }
-
-      // 3. SECURE ASSET CREATION & ACCESS GRANT
-      try {
-        const userRef = doc(db, 'users', user.uid);
-        const purchaseRef = doc(collection(db, 'purchase_requests'));
-        
-        // Prepare upgrade payload
-        const upgradeData: any = {
-          isPremium: true,
-          planType: selectedPlan?.id,
-          premiumActivatedAt: new Date().toISOString()
-        };
-
-        if (selectedPlan && (selectedPlan as any).type === 'one-time' && (selectedPlan as any).class) {
-          const target = (selectedPlan as any).class;
-          const currentUnlocked = [...(user.unlockedClasses || [])];
-          if (!currentUnlocked.includes(target)) {
-            upgradeData.unlockedClasses = [...currentUnlocked, target];
-          }
-        }
-        
-        // A. REGISTER TRANSACTION ID (Prevents repeat usage)
-        try {
-          await setDoc(txCheckRef, {
-            userId: user.uid,
-            userEmail: user.email,
-            usedAt: new Date().toISOString(),
-            amount: selectedPlan?.price,
-            originalId: rawTxId
-          });
-        } catch (err) {
-          handleFirestoreError(err, OperationType.WRITE, `transaction_id_registry/${extractedTxId}`);
-          throw new Error("Unable to register payment ID. Please try a different screenshot.");
-        }
-
-        // B. UPDATE USER ACCOUNT
-        try {
-          await updateDoc(userRef, upgradeData);
-        } catch (err) {
-          handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
-          throw new Error("Payment verified but account update failed. Contact support with your TxID.");
-        }
-        
-        // C. LOG PURCHASE REQUEST
-        try {
-          await setDoc(purchaseRef, {
-            userId: user.uid,
-            userEmail: user.email,
-            userName: user.displayName,
-            planId: selectedPlan?.id,
-            planName: selectedPlan?.name,
-            amount: selectedPlan?.price,
-            transactionId: extractedTxId,
-            status: 'approved',
-            whatsappNumber: whatsapp,
-            createdAt: new Date(),
-            approvedAt: new Date(),
-            method: 'AI_INSTANT',
-            ai_verified: true,
-            verifiedBy: 'NoteVix_AI_Admin_V3_Registry'
-          });
-        } catch (err) {
-          handleFirestoreError(err, OperationType.CREATE, 'purchase_requests');
-          // Non-critical if user is already upgraded
-        }
-
-        // STEP 3: CELEBRATION - Instant Feedback
-        toast.success(`👑 AI ADMIN APPROVED!`, {
-          description: "Transaction verified and access granted automatically.",
-          duration: 8000
-        });
-
-        // Clear UI states
-        setSelectedPlan(null);
-        setScreenshotPreview(null);
-        
-        // FORCE RELOAD to see new Premium status immediately across all tabs
-        setTimeout(() => {
-          localStorage.removeItem('notevix_user_profile_v1'); // Clear cache
-          window.location.href = '/'; // Go home to see the crown!
-        }, 1200);
-
-      } catch (directErr: any) {
-        console.error("Direct Action Error:", directErr);
-        toast.error("AI verified but database was busy. Please refresh to check your status.");
-      }
-
-    } catch (error) {
-      console.error(error);
-      handleFirestoreError(error, OperationType.CREATE, 'purchase_requests');
-      toast.error('Failed to submit request. Please try again.');
+      toast.success("Payment Verified! " + (selectedPlan?.resourceId ? "Book" : "Class") + " Unlocked.");
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (error: any) {
+      toast.error(error.message);
     } finally {
       setIsSubmitting(false);
       setAiVerifying(false);
     }
   };
 
-  const copyUPI = () => {
-    navigator.clipboard.writeText(upiId);
-    toast.success('UPI ID copied!');
-  };
-
   return (
-    <div className="p-6 space-y-12 min-h-screen pb-32">
-      {/* Header */}
-      <div className="text-center space-y-4">
-        <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-full">
-          <Crown className="w-5 h-5 text-yellow-500" />
-          <span className="text-yellow-500 text-xs font-black uppercase tracking-widest">Premium Store</span>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 pb-32">
+      {/* Search & Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-12">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-3">
+            <BookOpen className="w-8 h-8 text-indigo-500" />
+            Digital Library
+          </h1>
+          <p className="text-gray-500 text-sm font-medium">Premium chapter-wise notes & exam guides</p>
         </div>
-        <h1 className="text-4xl font-black italic tracking-tight underline decoration-purple-500/50 underline-offset-8">Go Premium</h1>
-        <p className="text-gray-400 text-sm max-w-xs mx-auto">
-          One-time class packs for ₹99 or get everything with a monthly subscription.
-        </p>
+
+        {/* Class Selector Tabs */}
+        <div className="flex bg-white/5 p-1.5 rounded-2xl border border-white/5 backdrop-blur-md">
+          {CLASSES.map((cls) => (
+            <button
+              key={cls}
+              onClick={() => setActiveClass(cls as any)}
+              className={`px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                activeClass === cls 
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' 
+                  : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Class {cls}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {!user.isPremium && hasPendingRequest && (
-        <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-2xl flex items-center gap-4">
-          <div className="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center">
-            <Zap className="w-5 h-5 text-purple-500 animate-pulse" />
-          </div>
-          <div className="flex-1">
-            <h4 className="text-sm font-bold text-purple-500">AI Finalizing Access</h4>
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-normal">
-              Your premium upgrade is being deployed automatically. It should be active in seconds.
-            </p>
-          </div>
-        </div>
-      )}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-10">
+        {/* Main Content: The Library Grid */}
+        <div className="lg:col-span-3">
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-[400px] bg-white/5 animate-pulse rounded-[2rem]" />
+              ))}
+            </div>
+          ) : resources.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8">
+              {resources.map((res) => {
+                const unlocked = isUnlocked(res);
+                return (
+                  <motion.div
+                    key={res.id}
+                    layout
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="group bg-[#0a0a0a] border border-white/5 hover:border-white/20 rounded-[2.5rem] overflow-hidden transition-all duration-500 flex flex-col"
+                  >
+                    {/* Book Cover Container */}
+                    <div className="relative aspect-[1/1] overflow-hidden bg-gradient-to-br from-indigo-900/40 to-black p-6 flex items-center justify-center">
+                      <div className="relative w-full h-full shadow-2xl transition-transform duration-500 group-hover:scale-105 group-hover:-rotate-2">
+                        {res.coverUrl ? (
+                          <img src={res.coverUrl} alt={res.subject} className="w-full h-full object-cover rounded-md" />
+                        ) : (
+                          <div className={`w-full h-full bg-gradient-to-br ${unlocked ? 'from-indigo-600 to-purple-600' : 'from-gray-700 to-gray-900'} rounded-md flex flex-col items-center justify-center p-8 text-center text-white relative`}>
+                            <FileText className="w-16 h-16 mb-4 opacity-30" />
+                            <h3 className="text-2xl font-black leading-tight uppercase tracking-tighter">{res.subject}</h3>
+                            <p className="text-[10px] font-bold mt-4 opacity-60 uppercase tracking-widest leading-loose">Comprehensive Notes & Questions</p>
+                            <div className="absolute top-2 left-2 px-3 py-1 bg-white/10 rounded-full text-[8px] font-black tracking-widest uppercase">NoteVix Premium</div>
+                          </div>
+                        )}
+                      </div>
 
-      {/* Plans */}
-      <div className="space-y-6">
-        {PREMIUM_PLANS.map((plan) => (
-          <motion.div
-            key={plan.id}
-            whileHover={{ scale: 1.02 }}
-            className={`relative p-8 rounded-[2.5rem] border border-white/10 overflow-hidden bg-gradient-to-br ${plan.color} bg-opacity-10`}
-          >
-            {plan.popular && (
-              <div className="absolute top-0 right-0 px-6 py-2 bg-yellow-400 text-black text-[10px] font-black uppercase tracking-widest rounded-bl-3xl">
-                Most Popular
+                      {!unlocked && (
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center space-y-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center border border-white/20">
+                            <Lock className="w-6 h-6 text-white" />
+                          </div>
+                          <span className="text-xs font-black uppercase tracking-widest text-white">Unlock Content</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Book Info */}
+                    <div className="p-8 flex-1 flex flex-col justify-between space-y-6">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="px-3 py-1 bg-indigo-400/10 text-indigo-400 text-[8px] font-black rounded-full uppercase tracking-widest">
+                            Class {res.class}
+                          </span>
+                          <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 text-[8px] font-black rounded-full uppercase tracking-widest">
+                            Premium Edition
+                          </span>
+                        </div>
+                        <h4 className="text-xl font-black text-white group-hover:text-indigo-400 transition-colors uppercase tracking-tight">{res.subject}</h4>
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Exclusive Drive Library & AI Access</p>
+                      </div>
+
+                      {unlocked ? (
+                        <div className="space-y-3">
+                          <a 
+                            href={res.driveLink || res.fullNotesUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="w-full h-12 bg-white text-black rounded-2xl flex items-center justify-center gap-3 font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl shadow-white/5"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                            Access Drive
+                          </a>
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={() => {
+                            setSelectedPlan({
+                              id: `res_${res.id}`,
+                              name: `${res.subject} (Class ${res.class})`,
+                              price: res.price || 49,
+                              resourceId: res.id,
+                              type: 'one-time'
+                            });
+                          }}
+                          className="w-full h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center gap-3 font-black text-xs uppercase tracking-widest active:scale-95 transition-all hover:bg-indigo-500 shadow-xl shadow-indigo-600/20"
+                        >
+                          <Zap className="w-4 h-4" />
+                          Get it Now (₹{res.price || 49})
+                        </button>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-32 glass-card rounded-[3rem] bg-white/5 flex flex-col items-center justify-center space-y-6">
+              <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center border border-white/5">
+                <BookOpen className="w-10 h-10 text-gray-700" />
               </div>
-            )}
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-white">Library Restocking</h3>
+                <p className="text-gray-500 text-sm">Notes for Class {activeClass} {resources.length === 0 ? 'are arriving soon.' : ''}</p>
+              </div>
+            </div>
+          )}
+        </div>
 
-            <div className="space-y-6">
-              <div className="space-y-1">
-                <h3 className="text-2xl font-black">{plan.name}</h3>
-                <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest">{(plan as any).description}</p>
-                <div className="flex items-baseline gap-2 mt-2">
-                  <span className="text-4xl font-black text-white">₹{plan.price}</span>
-                  <span className="text-white/60 text-[10px] font-bold uppercase tracking-widest">
-                    {plan.type === 'subscription' ? '/ month' : 'one-time'}
-                  </span>
+        {/* Sidebar: Plans & Subscriptions */}
+        <div className="space-y-8">
+           <div className="p-8 glass-card rounded-[2.5rem] border-indigo-500/20 bg-indigo-500/5 space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-indigo-500 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                  <Crown className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h5 className="font-black text-sm text-white uppercase tracking-tighter">NoteVix Plus</h5>
+                  <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">Master Library Pass</p>
                 </div>
               </div>
+              
+              <div className="space-y-4">
+                <p className="text-xs text-gray-400 leading-relaxed font-medium">Unlock all classes, books, and AI features globally with our master subscription.</p>
+                <button 
+                  onClick={() => setSelectedPlan(PREMIUM_PLANS[0])}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-lg shadow-indigo-600/20 active:scale-[0.98] transition-all"
+                >
+                  Join the Club
+                </button>
+              </div>
+           </div>
 
-              <div className="space-y-3">
-                {plan.features.map((feature, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <div className="w-5 h-5 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
-                      <Check className="w-3 h-3 text-white" />
+           <div className="p-8 glass-card rounded-[2.5rem] bg-white/5 border border-white/5 space-y-6">
+              <h5 className="font-bold text-[10px] text-gray-500 uppercase tracking-[0.3em]">Quick Perks</h5>
+              <div className="space-y-5">
+                {[
+                  { label: 'One-time Payment', icon: CreditCard },
+                  { label: 'AI Doubt Solver', icon: Zap },
+                  { label: 'Secure Payment', icon: ShieldCheck }
+                ].map((perk, i) => (
+                  <div key={i} className="flex items-center gap-4 group">
+                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-500 group-hover:text-indigo-400 transition-colors">
+                      <perk.icon className="w-5 h-5" />
                     </div>
-                    <span className="text-sm text-white/90 font-medium">{feature}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-white transition-colors">{perk.label}</span>
                   </div>
                 ))}
               </div>
-
-              <button
-                onClick={() => setSelectedPlan(plan)}
-                disabled={user.isPremium || (plan.type === 'one-time' && user.unlockedClasses?.includes((plan as any).class)) || hasPendingRequest}
-                className="w-full py-4 bg-white text-black rounded-2xl font-black transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
-              >
-                {user.isPremium ? 'Full Access Active' : 
-                 (plan.type === 'one-time' && user.unlockedClasses?.includes((plan as any).class)) ? 'Class Unlocked' : 
-                 hasPendingRequest ? 'Pending' : 'Get Started Now'}
-              </button>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Support Section */}
-      <div className="text-center pt-8 border-t border-white/5 space-y-4">
-        <div className="inline-flex items-center gap-3 px-6 py-3 bg-white/5 border border-white/10 rounded-2xl">
-          <Send className="w-4 h-4 text-purple-400 rotate-12" />
-          <div className="text-left">
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Support & Help</p>
-            <a href="mailto:expertnotevix@gmail.com" className="text-xs font-black text-white hover:text-purple-400 transition-colors tracking-tight">expertnotevix@gmail.com</a>
-          </div>
+           </div>
         </div>
-        <p className="text-[9px] text-gray-600 font-bold uppercase tracking-[0.2em] leading-relaxed max-w-[200px] mx-auto">
-          Contact us for payment failures or verification delays.
-        </p>
       </div>
 
       {/* Payment Modal */}
       <AnimatePresence>
         {selectedPlan && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 sm:p-0">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedPlan(null)}
-              className="absolute inset-0 bg-black/90 backdrop-blur-xl"
-            />
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-2xl">
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-md bg-[#121212] border border-white/10 rounded-[3rem] overflow-hidden shadow-2xl"
+              className="relative w-full max-w-md bg-[#0a0a0a] border border-white/10 rounded-[3rem] overflow-hidden"
             >
               <div className="p-8 space-y-8">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <h2 className="text-2xl font-black tracking-tight">{selectedPlan.name}</h2>
-                    <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">Complete Payment</p>
+                    <p className="text-xs text-indigo-400 font-bold uppercase tracking-widest">Verify ₹{selectedPlan.price} Payment</p>
                   </div>
-                  <button 
-                    onClick={() => setSelectedPlan(null)}
-                    className="p-3 hover:bg-white/5 rounded-2xl transition-colors"
-                  >
+                  <button onClick={() => setSelectedPlan(null)} className="p-3 hover:bg-white/5 rounded-2xl transition-colors">
                     <X className="w-6 h-6 text-gray-400" />
                   </button>
                 </div>
 
                 <div className="space-y-6">
-                  {/* UPI Box */}
-                  <div className="glass-card p-6 rounded-[2rem] border-purple-500/20 bg-purple-500/5 space-y-6">
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="p-4 bg-white rounded-3xl">
-                        <img 
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=${upiId}&pn=NoteVix&am=${selectedPlan.price}&cu=INR`}
-                          alt="Payment QR"
-                          className="w-32 h-32"
-                        />
-                      </div>
-                      <div className="text-center">
-                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">UPI ID</p>
-                        <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl border border-white/10 group cursor-pointer" onClick={copyUPI}>
-                          <span className="text-sm font-bold">{upiId}</span>
-                          <Copy className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
-                        </div>
-                      </div>
+                  <div className="p-6 bg-indigo-600/5 border border-indigo-600/20 rounded-[2rem] flex flex-col items-center gap-6">
+                    <div className="p-4 bg-white rounded-3xl">
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=${upiId}&pn=NoteVix&am=${selectedPlan.price}&cu=INR`}
+                        alt="QR"
+                        className="w-32 h-32"
+                      />
                     </div>
-
-                    <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl text-[10px] text-yellow-500 font-bold uppercase tracking-widest text-center leading-normal">
-                      Pay ₹{selectedPlan.price} and upload the screenshot below.
+                    <div className="text-center space-y-2">
+                       <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Tap to copy UPI ID</p>
+                       <button 
+                        onClick={() => {
+                          navigator.clipboard.writeText(upiId);
+                          toast.success('UPI ID Copied!');
+                        }}
+                        className="px-6 py-2 bg-white/5 rounded-xl border border-white/10 text-sm font-bold flex items-center gap-2 hover:bg-white/10 transition-colors"
+                       >
+                         {upiId}
+                         <Copy className="w-3 h-3 text-indigo-400" />
+                       </button>
                     </div>
                   </div>
 
-                  {/* Submission Form */}
                   <div className="space-y-4">
-                    <div className="space-y-2">
-                       <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest px-1">WhatsApp Number</label>
-                       <input 
-                         type="tel" 
-                         value={whatsapp}
-                         onChange={(e) => setWhatsapp(e.target.value)}
-                         placeholder="+91 XXXXX XXXXX"
-                         className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:outline-none focus:border-purple-500 transition-colors"
-                       />
+                    <input 
+                      type="tel" 
+                      value={whatsapp}
+                      onChange={(e) => setWhatsapp(e.target.value)}
+                      placeholder="WhatsApp Number for Delivery"
+                      className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-all"
+                    />
+                    
+                    <div 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full aspect-video rounded-3xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-3 hover:border-indigo-500/50 cursor-pointer overflow-hidden relative group"
+                    >
+                       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+                       {screenshotPreview ? (
+                         <>
+                           <img src={screenshotPreview} className="w-full h-full object-contain" />
+                           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                             <span className="text-[10px] font-black uppercase text-white tracking-widest">Change Image</span>
+                           </div>
+                         </>
+                       ) : (
+                         <>
+                           <Upload className="w-6 h-6 text-gray-600 group-hover:text-indigo-400 transition-colors" />
+                           <span className="text-[10px] font-black uppercase text-gray-500 group-hover:text-indigo-400">Upload Transfer Receipt</span>
+                         </>
+                       )}
                     </div>
-                    {/* Screenshot Upload */}
-                    <div className="space-y-2">
-                      <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest px-1">Payment Screenshot</label>
-                      <input 
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleFileChange}
-                        accept="image/*"
-                        className="hidden"
-                      />
-                      <div 
-                        onClick={() => fileInputRef.current?.click()}
-                        className={`w-full aspect-video rounded-2xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center gap-2 overflow-hidden relative ${
-                          screenshotPreview 
-                            ? 'border-purple-500/50 bg-purple-500/5' 
-                            : 'border-white/10 hover:border-purple-500/30 bg-white/5'
-                        }`}
-                      >
-                        {screenshotPreview ? (
-                          <>
-                            <img src={screenshotPreview} alt="Preview" className="w-full h-full object-contain" />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <p className="text-white text-[10px] font-bold uppercase tracking-widest">Change Photo</p>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center">
-                              <Upload className="w-5 h-5 text-purple-400" />
-                            </div>
-                            <p className="text-[10px] text-gray-500 font-bold uppercase">Click to upload screenshot</p>
-                            <p className="text-[8px] text-gray-600 uppercase tracking-widest">Max 2MB • JPG, PNG</p>
-                          </>
-                        )}
-                      </div>
-                    </div>
+
                     <button
                       onClick={handlePurchase}
-                      disabled={isSubmitting || hasPendingRequest}
-                      className="w-full py-5 purple-gradient rounded-3xl font-black text-lg shadow-xl shadow-purple-500/30 flex items-center justify-center gap-3 active:scale-95 transition-transform disabled:opacity-50"
+                      disabled={isSubmitting}
+                      className="w-full h-16 bg-indigo-600 text-white rounded-3xl font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-3 active:scale-95 transition-all"
                     >
-                      {aiVerifying ? (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          Verifying with AI...
-                        </>
-                      ) : isSubmitting ? (
-                        <>
-                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          Submitting...
-                        </>
-                      ) : (
-                        <>
-                          <ShieldCheck className="w-5 h-5" />
-                          Verify & Activate
-                        </>
-                      )}
+                      {aiVerifying ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
+                      {aiVerifying ? 'Verifying with AI...' : 'Verify & Unlock Now'}
                     </button>
-
-                    <div className="pt-2 text-center">
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Facing issues?</p>
-                      <a href="mailto:expertnotevix@gmail.com" className="text-[10px] text-purple-400 font-black hover:underline tracking-widest">expertnotevix@gmail.com</a>
-                    </div>
                   </div>
                 </div>
               </div>
