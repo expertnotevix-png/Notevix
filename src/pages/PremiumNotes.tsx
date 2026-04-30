@@ -10,7 +10,7 @@ import { UserProfile, SubjectResource, ValidPayment } from '../types';
 import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, addDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { useRef } from 'react';
 
 interface PremiumNotesProps {
@@ -135,8 +135,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || (process as any).env.GEMINI_API_KEY;
         if (!apiKey) throw new Error("Verification server busy. Try again shortly.");
 
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const ai = new GoogleGenAI({ apiKey });
         
         const prompt = `You are the NoteVix Secure Auditor.
         Verify this payment receipt screenshot.
@@ -155,12 +154,18 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           "reason": "explanation if verification fails"
         }`;
         
-        const result = await model.generateContent([
-          prompt,
-          { inlineData: { mimeType: "image/jpeg", data: screenshotPreview.split(',')[1] } }
-        ]);
+        const response = await ai.models.generateContent({
+          model: "gemini-3-flash-preview",
+          contents: [
+            { text: prompt },
+            { inlineData: { mimeType: "image/jpeg", data: screenshotPreview.split(',')[1] } }
+          ],
+          config: {
+            responseMimeType: "application/json"
+          }
+        });
 
-        const aiData = parseAIJson(result.response.text());
+        const aiData = parseAIJson(response.text);
         
         if (!aiData.isVerified) {
           throw new Error(aiData.reason || "Payment details do not match NoteVix requirements.");

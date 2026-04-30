@@ -128,9 +128,9 @@ export default function Admin() {
       reader.onloadend = () => {
         const img = new Image();
         img.onload = () => {
-          // Compress image to manageable size for Firestore (1:1 ratio preferred)
+          // Compress image to manageable size for Firestore (HD Quality)
           const canvas = document.createElement('canvas');
-          const MAX_SIZE = 400; // 400x400 is plenty for a thumbnail
+          const MAX_SIZE = 1024; // Increased to 1024px for HD appearance
           let width = img.width;
           let height = img.height;
 
@@ -149,9 +149,15 @@ export default function Admin() {
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
           
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          // Use high quality interpolation
+          if (ctx) {
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, width, height);
+          }
+          
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.9); // Increased quality factor to 0.9
           setResourceCoverPreview(compressedDataUrl);
         };
         img.src = reader.result as string;

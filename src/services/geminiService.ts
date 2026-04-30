@@ -20,7 +20,7 @@ function getAI() {
 
 const MODEL_FAST = "meta/llama-3.1-8b-instruct";
 const MODEL_POWER = "meta/llama-3.1-70b-instruct";
-const GEMINI_MODEL = "gemini-1.5-flash";
+const GEMINI_MODEL = "gemini-3-flash-preview";
 
 function handleAIError(error: any): never {
   console.error("AI Service Error:", error);
