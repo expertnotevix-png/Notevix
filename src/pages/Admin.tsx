@@ -8,7 +8,7 @@ import {
   MessageSquare, Bell, Send, CheckCircle2, Clock, ShieldCheck,
   Shield, RefreshCw, CreditCard, Check, XCircle, Users, 
   Instagram, LayoutDashboard, BarChart3, Settings, Menu, LogOut, Search, TrendingUp, DollarSign, UserCheck,
-  BookOpen, Zap
+  BookOpen, Zap, AlertCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -613,6 +613,69 @@ export default function Admin() {
           <div>
             <h4 className="text-sm font-bold text-red-500">QUOTA LOCK ACTIVATED</h4>
             <p className="text-xs text-gray-500">Dashboard is in restricted mode to preserve student access.</p>
+          </div>
+          {/* Danger Zone */}
+          <div className="mt-12 p-8 rounded-[3rem] border border-red-500/20 bg-red-500/5 space-y-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-red-500/20 text-red-500 flex items-center justify-center">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-red-500">Danger Zone</h3>
+                <p className="text-xs text-gray-400">System-wide reset for fresh production launch</p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button 
+                onClick={async () => {
+                  if(!window.confirm("RESET ALL USERS TO FREE? This will remove premium access from EVERY student account. This cannot be undone.")) return;
+                  setLoading(true);
+                  try {
+                    const snap = await getDocs(collection(db, 'users'));
+                    const batch = writeBatch(db);
+                    snap.docs.forEach(u => {
+                      batch.update(doc(db, 'users', u.id), {
+                        isPremium: false,
+                        planType: null,
+                        unlockedClasses: [],
+                        unlockedResources: []
+                      });
+                    });
+                    await batch.commit();
+                    toast.success("All users reset to Free");
+                    fetchUsers();
+                  } finally { setLoading(false); }
+                }}
+                className="p-6 bg-red-500/10 border border-red-500/20 rounded-3xl text-left hover:bg-red-500 transition-all group"
+              >
+                <h5 className="font-black text-xs uppercase tracking-widest text-red-500 group-hover:text-white">Reset User Access</h5>
+                <p className="text-[10px] text-gray-500 mt-1 gnoup-hover:text-white/80">Make all users non-premium instantly.</p>
+              </button>
+
+              <button 
+                onClick={async () => {
+                  if(!window.confirm("NUKE TRANSACTION LEDGER? This clears all AI verification records and whitelists. Users could theoretically re-use old IDs if not cleared!")) return;
+                  setLoading(true);
+                  try {
+                    const ledgerSnap = await getDocs(collection(db, 'transaction_ledger'));
+                    const whiteSnap = await getDocs(collection(db, 'valid_payments'));
+                    
+                    const p1 = ledgerSnap.docs.map(d => deleteDoc(doc(db, 'transaction_ledger', d.id)));
+                    const p2 = whiteSnap.docs.map(d => deleteDoc(doc(db, 'valid_payments', d.id)));
+                    
+                    await Promise.all([...p1, ...p2]);
+                    toast.success("Transaction Ledger Purged");
+                    fetchTransactionLedger();
+                    fetchValidPayments();
+                  } finally { setLoading(false); }
+                }}
+                className="p-6 bg-red-500/10 border border-red-500/20 rounded-3xl text-left hover:bg-red-500 transition-all group"
+              >
+                <h5 className="font-black text-xs uppercase tracking-widest text-red-500 group-hover:text-white">Clear All Records</h5>
+                <p className="text-[10px] text-gray-500 mt-1 group-hover:text-white/80">Wipe AI logs & Whitelists.</p>
+              </button>
+            </div>
           </div>
         </div>
       );
