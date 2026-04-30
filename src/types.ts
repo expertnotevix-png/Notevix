@@ -87,6 +87,28 @@ export interface Doubt {
   timestamp: string;
 }
 
+export interface ValidPayment {
+  id: string;
+  transactionId: string;
+  whatsapp: string;
+  amount: number;
+  isUsed: boolean;
+  usedBy?: string;
+  createdAt: string;
+  usedAt?: string;
+}
+
+export interface TransactionLedger {
+  id: string;
+  transactionId: string;
+  userId: string;
+  whatsapp: string;
+  amount: number;
+  planId: string;
+  timestamp: string;
+  screenshotUrl?: string;
+}
+
 export interface SubjectResource {
   id: string;
   class: string;
@@ -98,6 +120,8 @@ export interface SubjectResource {
   coverUrl?: string;
   driveLink?: string;
   price?: number;
+  description?: string;
+  features?: string[];
 }
 
 export interface PurchaseRequest {

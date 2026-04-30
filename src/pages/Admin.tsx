@@ -2,13 +2,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp, writeBatch, getCountFromServer } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
 import { geminiService } from '../services/geminiService';
-import { Chapter, Message, Notification, PurchaseRequest, UserProfile } from '../types';
+import { Chapter, Message, Notification, PurchaseRequest, UserProfile, ValidPayment, TransactionLedger } from '../types';
 import { 
   Plus, Trash2, Edit2, Save, X, ChevronLeft, Database, 
-  MessageSquare, Bell, Send, CheckCircle2, Clock, 
+  MessageSquare, Bell, Send, CheckCircle2, Clock, ShieldCheck,
   Shield, RefreshCw, CreditCard, Check, XCircle, Users, 
   Instagram, LayoutDashboard, BarChart3, Settings, Menu, LogOut, Search, TrendingUp, DollarSign, UserCheck,
-  BookOpen
+  BookOpen, Zap
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -19,7 +19,7 @@ import {
 } from 'recharts';
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources' | 'valid_payments'>('analytics');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -28,6 +28,8 @@ export default function Admin() {
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [registry, setRegistry] = useState<any[]>([]);
   const [subjectResources, setSubjectResources] = useState<any[]>([]);
+  const [validPayments, setValidPayments] = useState<ValidPayment[]>([]);
+  const [transactionLedger, setTransactionLedger] = useState<TransactionLedger[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -58,7 +60,56 @@ export default function Admin() {
     if (activeTab === 'users') fetchUsers();
     if (activeTab === 'registry') fetchRegistry();
     if (activeTab === 'resources') fetchSubjectResources();
+    if (activeTab === 'valid_payments') {
+      fetchValidPayments();
+      fetchTransactionLedger();
+    }
   }, [activeTab]);
+
+  const fetchTransactionLedger = async () => {
+    try {
+      const q = query(collection(db, 'transaction_ledger'), orderBy('timestamp', 'desc'));
+      const snap = await getDocs(q);
+      setTransactionLedger(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TransactionLedger)));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchValidPayments = async () => {
+    setLoading(true);
+    try {
+      const q = query(collection(db, 'valid_payments'), orderBy('createdAt', 'desc'));
+      const snap = await getDocs(q);
+      setValidPayments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ValidPayment)));
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addValidPayment = async () => {
+    const txId = window.prompt("Enter Transaction ID (UTR):");
+    const whatsapp = window.prompt("Enter WhatsApp Code/Phone:");
+    const amount = window.prompt("Amount paid?");
+    
+    if (txId && whatsapp) {
+      try {
+        await addDoc(collection(db, 'valid_payments'), {
+          transactionId: txId.trim(),
+          whatsapp: whatsapp.trim(),
+          amount: Number(amount) || 0,
+          isUsed: false,
+          createdAt: new Date().toISOString()
+        });
+        toast.success("Payment Whitelisted!");
+        fetchValidPayments();
+      } catch (e) {
+        toast.error("Failed to add.");
+      }
+    }
+  };
 
   const fetchSubjectResources = async () => {
     setLoading(true);
@@ -544,6 +595,7 @@ export default function Admin() {
   const menuItems = [
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'resources', label: 'Digital Library', icon: BookOpen },
+    { id: 'valid_payments', label: 'Verify Keys', icon: ShieldCheck },
     { id: 'chapters', label: 'Flashcards', icon: Database },
     { id: 'messages', label: 'Support', icon: MessageSquare },
     { id: 'payments', label: 'Revenue', icon: CreditCard },
@@ -567,6 +619,95 @@ export default function Admin() {
     }
 
     switch (activeTab) {
+      case 'valid_payments':
+        return (
+          <div className="space-y-10 animate-in fade-in duration-500">
+             <div className="flex justify-between items-center bg-white/5 p-6 rounded-[2rem] border border-white/10">
+              <div>
+                <h3 className="text-xl font-black">AI Auto-Audit Ledger</h3>
+                <p className="text-xs text-gray-400">Live feed of payments verified by Gemini AI</p>
+              </div>
+              <div className="flex gap-4">
+                <button 
+                  onClick={fetchTransactionLedger}
+                  className="bg-white/5 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-white/10"
+                >
+                  <RefreshCw className="w-4 h-4" /> Refresh
+                </button>
+                <button 
+                  onClick={addValidPayment}
+                  className="bg-indigo-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-indigo-600/20"
+                >
+                  <Plus className="w-4 h-4" /> Manual Entry
+                </button>
+              </div>
+            </div>
+
+            {/* AI AUTO LOGS */}
+            <div className="space-y-4">
+              <h5 className="text-[10px] font-black uppercase text-gray-500 tracking-[0.3em] ml-2">Recent AI Verifications</h5>
+              <div className="grid grid-cols-1 gap-4">
+                {transactionLedger.map((tx) => (
+                  <div key={tx.id} className="glass-card p-6 rounded-3xl bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between">
+                    <div className="flex items-center gap-6">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                        <Zap className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-3">
+                           <h4 className="font-black text-white uppercase tracking-wider">{tx.transactionId}</h4>
+                           <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-[8px] font-black rounded uppercase">AI Verified</span>
+                        </div>
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">
+                          WhatsApp: {tx.whatsapp} • Amt: ₹{tx.amount} • User: {tx.userId.slice(0, 8)}...
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                       <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest">{new Date(tx.timestamp).toLocaleString()}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* MANUAL WHITELIST (FOR EMERGENCY) */}
+            <div className="space-y-4 border-t border-white/5 pt-10">
+              <h5 className="text-[10px] font-black uppercase text-gray-500 tracking-[0.3em] ml-2">Legacy Manual Whitelist</h5>
+              <div className="grid grid-cols-1 gap-4">
+                {validPayments.map((pay) => (
+                  <div key={pay.id} className="glass-card p-6 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-between opacity-60">
+                    <div className="flex items-center gap-6">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${pay.isUsed ? 'bg-emerald-500/10 text-emerald-500' : 'bg-gray-500/10 text-gray-500'}`}>
+                        {pay.isUsed ? <CheckCircle2 className="w-6 h-6" /> : <Clock className="w-6 h-6" />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-3">
+                           <h4 className="font-black text-white uppercase tracking-wider">{pay.transactionId}</h4>
+                           {pay.isUsed && <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-500 text-[8px] font-black rounded uppercase">Used</span>}
+                        </div>
+                        <p className="text-[10px] text-gray-500 font-bold mt-1 uppercase tracking-widest">
+                          WhatsApp: {pay.whatsapp} • Amount: ₹{pay.amount}
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={async () => {
+                        if(window.confirm("Remove this entry?")) {
+                          await deleteDoc(doc(db, 'valid_payments', pay.id));
+                          fetchValidPayments();
+                        }
+                      }}
+                      className="p-3 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
       case 'resources':
         return (
           <div className="space-y-6 animate-in fade-in duration-500">
@@ -580,85 +721,112 @@ export default function Admin() {
                   onClick={async () => {
                     if(!window.confirm("Delete ALL premium books? This cannot be undone.")) return;
                     setLoading(true);
-                    const snap = await getDocs(collection(db, 'subject_resources'));
-                    const deletes = snap.docs.map(d => deleteDoc(doc(db, 'subject_resources', d.id)));
-                    await Promise.all(deletes);
-                    fetchSubjectResources();
-                    toast.success("Library cleared.");
+                    try {
+                      const snap = await getDocs(collection(db, 'subject_resources'));
+                      const deletes = snap.docs.map(d => deleteDoc(doc(db, 'subject_resources', d.id)));
+                      await Promise.all(deletes);
+                      toast.success("Library Reset.");
+                      fetchSubjectResources();
+                    } finally {
+                      setLoading(false);
+                    }
                   }}
-                  className="bg-red-500/10 text-red-500 border border-red-500/20 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                  className="bg-red-500/10 text-red-500 border border-red-500/20 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-red-500 hover:text-white transition-all shadow-lg shadow-red-500/10"
                 >
-                  <Trash2 className="w-4 h-4" /> Clear All Books
+                  <Trash2 className="w-4 h-4" /> Reset Library
                 </button>
                 <button 
                   onClick={() => {
-                  const sub = window.prompt("Subject Name?");
+                  const sub = window.prompt("Subject Name? (e.g. SST, Science)");
                   const cls = window.prompt("Class (8/9/10)?");
-                  const price = window.prompt("Price?");
-                  const cover = window.prompt("Cover URL (1:1)?");
+                  const price = window.prompt("Price? (e.g. 49)");
+                  const desc = window.prompt("Short Description? (e.g. Digital E-Book Library)");
+                  const cover = window.prompt("Cover URL (1:1 Ratio)?");
                   const drive = window.prompt("Drive Link?");
                   if (sub && cls) {
                     addDoc(collection(db, 'subject_resources'), {
                       subject: sub, 
                       class: cls, 
                       price: Number(price) || 0,
+                      description: desc || 'Premium curated digital resources for board prep.',
                       coverUrl: cover || '',
-                      driveLink: drive || ''
-                    }).then(() => fetchSubjectResources());
+                      driveLink: drive || '',
+                      features: ['Chapter-wise Notes', 'PYQs Included', 'AI Doubt Support'],
+                      createdAt: new Date().toISOString()
+                    }).then(() => {
+                      toast.success("Book Created!");
+                      fetchSubjectResources();
+                    });
                   }
                 }}
-                className="bg-indigo-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                className="bg-indigo-600 hover:bg-indigo-500 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-indigo-600/20 active:scale-95"
               >
-                <Plus className="w-4 h-4" /> Add Premium Book
+                <Plus className="w-4 h-4" /> Create New Book
               </button>
             </div>
-          </div>
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {subjectResources.map((res) => (
-                <div key={res.id} className="glass-card p-6 rounded-[2.5rem] bg-white/5 border border-white/10 flex flex-col gap-4">
-                  <div className="aspect-[1/1] w-full bg-white/5 rounded-2xl overflow-hidden border border-white/10 relative">
+                <div key={res.id} className="glass-card p-6 rounded-[2.5rem] bg-white/5 border border-white/10 flex flex-col gap-5 hover:border-indigo-500/30 transition-all group">
+                  <div className="aspect-[1/1] w-full bg-white/5 rounded-3xl overflow-hidden border border-white/10 relative shadow-2xl">
                     {res.coverUrl ? (
-                      <img src={res.coverUrl} className="w-full h-full object-cover" />
+                      <img src={res.coverUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-600">
-                        <BookOpen className="w-12 h-12" />
+                      <div className="w-full h-full flex flex-col items-center justify-center text-gray-700 bg-gradient-to-br from-white/5 to-white/[0.02]">
+                        <BookOpen className="w-12 h-12 mb-2 opacity-20" />
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">No Cover Art</span>
                       </div>
                     )}
-                    <div className="absolute top-2 left-2 px-3 py-1 bg-black/60 rounded-full text-[8px] font-black uppercase">
+                    <div className="absolute top-4 left-4 px-4 py-2 bg-black/80 backdrop-blur-md rounded-2xl text-[10px] font-black uppercase border border-white/10 shadow-xl">
                       ₹{res.price || 0}
+                    </div>
+                    <div className="absolute top-4 right-4 px-3 py-1 bg-indigo-600/80 backdrop-blur-sm rounded-full text-[8px] font-black uppercase border border-white/10">
+                      Class {res.class}
                     </div>
                   </div>
                   
-                  <div className="flex-1 space-y-1">
-                    <h4 className="font-black text-lg uppercase tracking-tight">{res.subject}</h4>
-                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Class {res.class}</p>
-                    <p className="text-[8px] text-gray-600 truncate mt-2">{res.driveLink || 'No Link'}</p>
+                  <div className="flex-1 space-y-2">
+                    <h4 className="font-black text-xl uppercase tracking-tight text-white">{res.subject}</h4>
+                    <p className="text-[10px] font-medium text-gray-500 leading-relaxed line-clamp-2 italic">“{res.description || 'Premium notes for topper-level preparation.'}”</p>
+                    <div className="pt-2 flex flex-wrap gap-2">
+                      {(res.features || ['Digital PDF', 'Instant Access']).slice(0, 3).map((f: string, i: number) => (
+                        <span key={i} className="px-3 py-1 bg-white/5 rounded-lg text-[8px] font-bold text-gray-400 border border-white/5">{f}</span>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="flex gap-2">
                     <button 
                       onClick={() => {
                         const newPrice = window.prompt("New Price?", res.price);
+                        const newDesc = window.prompt("New Description?", res.description);
                         const newCover = window.prompt("New Cover URL?", res.coverUrl);
                         const newDrive = window.prompt("New Drive Link?", res.driveLink);
                         updateDoc(doc(db, 'subject_resources', res.id), {
                           price: Number(newPrice) || 0,
-                          coverUrl: newCover || '',
-                          driveLink: newDrive || ''
-                        }).then(() => fetchSubjectResources());
+                          description: newDesc || res.description,
+                          coverUrl: newCover || res.coverUrl,
+                          driveLink: newDrive || res.driveLink
+                        }).then(() => {
+                           toast.success("Book Updated!");
+                           fetchSubjectResources();
+                        });
                       }}
-                      className="flex-1 bg-white/5 hover:bg-white/10 py-3 rounded-xl text-[8px] font-black uppercase transition-colors"
+                      className="flex-1 bg-white/5 hover:bg-white/10 py-4 rounded-2xl text-[10px] font-black uppercase transition-all tracking-widest border border-white/5"
                     >
-                      Edit Details
+                      Edit Book
                     </button>
                     <button 
                       onClick={() => {
                         if(window.confirm("Delete this book?")) {
-                          deleteDoc(doc(db, 'subject_resources', res.id)).then(() => fetchSubjectResources());
+                          deleteDoc(doc(db, 'subject_resources', res.id)).then(() => {
+                            toast.success("Deleted");
+                            fetchSubjectResources();
+                          });
                         }
                       }}
-                      className="p-3 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"
+                      className="p-4 bg-red-500/10 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
