@@ -19,7 +19,7 @@ import {
 } from 'recharts';
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources' | 'valid_payments'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources' | 'valid_payments' | 'settings'>('analytics');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -602,6 +602,7 @@ export default function Admin() {
     { id: 'registry', label: 'Registry', icon: Database },
     { id: 'users', label: 'Students', icon: Users },
     { id: 'notifications', label: 'Broadcast', icon: Bell },
+    { id: 'settings', label: 'Danger Zone', icon: Settings },
     { id: 'moderation', label: 'Moderation', icon: Shield },
   ];
 
@@ -614,74 +615,109 @@ export default function Admin() {
             <h4 className="text-sm font-bold text-red-500">QUOTA LOCK ACTIVATED</h4>
             <p className="text-xs text-gray-500">Dashboard is in restricted mode to preserve student access.</p>
           </div>
-          {/* Danger Zone */}
-          <div className="mt-12 p-8 rounded-[3rem] border border-red-500/20 bg-red-500/5 space-y-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-red-500/20 text-red-500 flex items-center justify-center">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-xl font-black text-red-500">Danger Zone</h3>
-                <p className="text-xs text-gray-400">System-wide reset for fresh production launch</p>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <button 
-                onClick={async () => {
-                  if(!window.confirm("RESET ALL USERS TO FREE? This will remove premium access from EVERY student account. This cannot be undone.")) return;
-                  setLoading(true);
-                  try {
-                    const snap = await getDocs(collection(db, 'users'));
-                    const batch = writeBatch(db);
-                    snap.docs.forEach(u => {
-                      batch.update(doc(db, 'users', u.id), {
-                        isPremium: false,
-                        planType: null,
-                        unlockedClasses: [],
-                        unlockedResources: []
-                      });
-                    });
-                    await batch.commit();
-                    toast.success("All users reset to Free");
-                    fetchUsers();
-                  } finally { setLoading(false); }
-                }}
-                className="p-6 bg-red-500/10 border border-red-500/20 rounded-3xl text-left hover:bg-red-500 transition-all group"
-              >
-                <h5 className="font-black text-xs uppercase tracking-widest text-red-500 group-hover:text-white">Reset User Access</h5>
-                <p className="text-[10px] text-gray-500 mt-1 gnoup-hover:text-white/80">Make all users non-premium instantly.</p>
-              </button>
-
-              <button 
-                onClick={async () => {
-                  if(!window.confirm("NUKE TRANSACTION LEDGER? This clears all AI verification records and whitelists. Users could theoretically re-use old IDs if not cleared!")) return;
-                  setLoading(true);
-                  try {
-                    const ledgerSnap = await getDocs(collection(db, 'transaction_ledger'));
-                    const whiteSnap = await getDocs(collection(db, 'valid_payments'));
-                    
-                    const p1 = ledgerSnap.docs.map(d => deleteDoc(doc(db, 'transaction_ledger', d.id)));
-                    const p2 = whiteSnap.docs.map(d => deleteDoc(doc(db, 'valid_payments', d.id)));
-                    
-                    await Promise.all([...p1, ...p2]);
-                    toast.success("Transaction Ledger Purged");
-                    fetchTransactionLedger();
-                    fetchValidPayments();
-                  } finally { setLoading(false); }
-                }}
-                className="p-6 bg-red-500/10 border border-red-500/20 rounded-3xl text-left hover:bg-red-500 transition-all group"
-              >
-                <h5 className="font-black text-xs uppercase tracking-widest text-red-500 group-hover:text-white">Clear All Records</h5>
-                <p className="text-[10px] text-gray-500 mt-1 group-hover:text-white/80">Wipe AI logs & Whitelists.</p>
-              </button>
-            </div>
-          </div>
         </div>
       );
     }
 
     switch (activeTab) {
+      case 'settings':
+        return (
+          <div className="space-y-6 animate-in fade-in duration-500">
+             <div className="p-10 rounded-[3.5rem] border border-red-500/20 bg-red-500/5 space-y-8">
+              <div className="flex items-center gap-6">
+                <div className="w-16 h-16 rounded-[2rem] bg-red-500/20 text-red-500 flex items-center justify-center shadow-2xl shadow-red-500/20">
+                  <AlertCircle className="w-8 h-8" />
+                </div>
+                <div>
+                  <h3 className="text-3xl font-black text-red-500 tracking-tighter">Danger Zone</h3>
+                  <p className="text-sm text-gray-400 font-bold uppercase tracking-widest mt-1">System-wide reset for fresh production launch</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <button 
+                  onClick={async () => {
+                    if(!window.confirm("CRITICAL: RESET ALL USERS TO FREE? This will remove premium access from EVERY student account. This cannot be undone.")) return;
+                    setLoading(true);
+                    try {
+                      const snap = await getDocs(collection(db, 'users'));
+                      const batch = writeBatch(db);
+                      let count = 0;
+                      snap.docs.forEach(u => {
+                        batch.update(doc(db, 'users', u.id), {
+                          isPremium: false,
+                          planType: null,
+                          unlockedClasses: [],
+                          unlockedResources: []
+                        });
+                        count++;
+                      });
+                      await batch.commit();
+                      toast.success(`Reset ${count} users to Free status`);
+                      fetchUsers();
+                    } catch (e) {
+                      toast.error("Process failed.");
+                    } finally { setLoading(false); }
+                  }}
+                  className="p-8 bg-red-500/10 border border-red-500/20 rounded-[2.5rem] text-left hover:bg-red-500 transition-all group relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-100 transition-opacity">
+                    <Users className="w-12 h-12" />
+                  </div>
+                  <h5 className="font-black text-xs uppercase tracking-[0.3em] text-red-500 group-hover:text-white">Reset All User Access</h5>
+                  <p className="text-xs text-gray-500 mt-2 group-hover:text-white/80 leading-relaxed font-bold">
+                    Instantly downgrades every registered account to a free user. Useful for clearing trial accounts.
+                  </p>
+                  <div className="mt-6 flex items-center gap-2 text-red-500 group-hover:text-white font-black text-[10px] uppercase tracking-widest">
+                    <span>Execute Reset</span>
+                    <ChevronLeft className="w-4 h-4 rotate-180" />
+                  </div>
+                </button>
+
+                <button 
+                  onClick={async () => {
+                    if(!window.confirm("CRITICAL: NUKE TRANSACTION LEDGER? This clears all AI verification records and whitelists. Users could theoretically re-use old IDs if not cleared!")) return;
+                    setLoading(true);
+                    try {
+                      const ledgerSnap = await getDocs(collection(db, 'transaction_ledger'));
+                      const whiteSnap = await getDocs(collection(db, 'valid_payments'));
+                      
+                      const p1 = ledgerSnap.docs.map(d => deleteDoc(doc(db, 'transaction_ledger', d.id)));
+                      const p2 = whiteSnap.docs.map(d => deleteDoc(doc(db, 'valid_payments', d.id)));
+                      
+                      await Promise.all([...p1, ...p2]);
+                      toast.success("Transaction Ledger & Whitelists Purged");
+                      fetchTransactionLedger();
+                      fetchValidPayments();
+                    } catch (e) {
+                      toast.error("Wipe failed.");
+                    } finally { setLoading(false); }
+                  }}
+                  className="p-8 bg-red-500/10 border border-red-500/20 rounded-[2.5rem] text-left hover:bg-red-500 transition-all group relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-100 transition-opacity">
+                    <Database className="w-12 h-12" />
+                  </div>
+                  <h5 className="font-black text-xs uppercase tracking-[0.3em] text-red-500 group-hover:text-white">Wipe All Records</h5>
+                  <p className="text-xs text-gray-500 mt-2 group-hover:text-white/80 leading-relaxed font-bold">
+                    Clears all historical transaction data, AI logs, and whitelisted IDs for a clean start.
+                  </p>
+                  <div className="mt-6 flex items-center gap-2 text-red-500 group-hover:text-white font-black text-[10px] uppercase tracking-widest">
+                    <span>Purge Database</span>
+                    <ChevronLeft className="w-4 h-4 rotate-180" />
+                  </div>
+                </button>
+              </div>
+
+              <div className="bg-orange-500/10 border border-orange-500/20 p-6 rounded-[2rem] flex items-start gap-4">
+                 <AlertCircle className="w-5 h-5 text-orange-500 mt-1 shrink-0" />
+                 <p className="text-[10px] text-orange-400 font-bold uppercase tracking-widest leading-relaxed">
+                   Warning: These actions are irreversible and directly modify the production database. Use only when preparing for a fresh launch.
+                 </p>
+              </div>
+            </div>
+          </div>
+        );
       case 'valid_payments':
         return (
           <div className="space-y-10 animate-in fade-in duration-500">
