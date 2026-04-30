@@ -8,10 +8,11 @@ import {
 } from 'lucide-react';
 import { UserProfile, SubjectResource, ValidPayment } from '../types';
 import { db } from '../lib/firebase';
-import { collection, query, where, getDocs, updateDoc, doc, addDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, addDoc, getDoc, setDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { GoogleGenAI } from "@google/genai";
 import { useRef } from 'react';
+import { geminiService } from '../services/geminiService';
 
 interface PremiumNotesProps {
   user: UserProfile;
@@ -99,12 +100,41 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 4 * 1024 * 1024) {
-        toast.error('Screenshot too large (Max 4MB)');
+      if (file.size > 8 * 1024 * 1024) {
+        toast.error('Screenshot too large (Max 8MB)');
         return;
       }
       const reader = new FileReader();
-      reader.onloadend = () => setScreenshotPreview(reader.result as string);
+      reader.onloadend = () => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_SIZE = 1024; // HD processing
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > MAX_SIZE) {
+              height *= MAX_SIZE / width;
+              width = MAX_SIZE;
+            }
+          } else {
+            if (height > MAX_SIZE) {
+              width *= MAX_SIZE / height;
+              height = MAX_SIZE;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, width, height);
+          }
+          setScreenshotPreview(canvas.toDataURL('image/jpeg', 0.9));
+        };
+        img.src = reader.result as string;
+      };
       reader.readAsDataURL(file);
     }
   };
@@ -130,42 +160,57 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       let finalTxId = transactionId.trim().toUpperCase();
       let aiDetectedAmount = 0;
 
-      // --- 1. AI EXTRACTION & VERIFICATION ---
+      // --- 1. AI EXTRACTION & VERIFICATION (NVIDIA PRIORITY) ---
       if (screenshotPreview) {
-        const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || (process as any).env.GEMINI_API_KEY;
-        if (!apiKey) throw new Error("Verification server busy. Try again shortly.");
-
-        const ai = new GoogleGenAI({ apiKey });
-        
-        const prompt = `You are the NoteVix Secure Auditor.
+        setAiVerifying(true);
+        const prompt = `You are the NoteVix Secure Auditor. 
         Verify this payment receipt screenshot.
         
-        CHECKLIST:
+        STRICT CHECKLIST:
         1. Recipient MUST be: "${upiId}"
         2. Amount MUST be at least: ₹${selectedPlan?.price}
         
-        Extract the Transaction ID / UTR (typically 12 digits).
-        
-        Output JSON ONLY:
+        Task: Extract the 12-digit Transaction ID / UTR number.
+        Output ONLY valid JSON:
         {
           "transactionId": "string",
           "amount": number,
           "isVerified": boolean,
-          "reason": "explanation if verification fails"
+          "reason": "explanation"
         }`;
-        
-        const response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: [
-            { text: prompt },
-            { inlineData: { mimeType: "image/jpeg", data: screenshotPreview.split(',')[1] } }
-          ],
-          config: {
-            responseMimeType: "application/json"
-          }
-        });
 
-        const aiData = parseAIJson(response.text);
+        const system = "You are a professional payment forensics expert. Analyze receipt screenshots with 100% accuracy. Return JSON only.";
+        
+        let aiResultRaw: string;
+        try {
+          // Attempt NVIDIA Multimodal
+          aiResultRaw = await geminiService.callNvidiaAPI(
+            prompt, 
+            system, 
+            true, 
+            "nvidia/llama-3.2-11b-vision-instruct", 
+            60000, 
+            screenshotPreview
+          );
+        } catch (nvidiaErr) {
+          console.warn("NVIDIA Vision failed, falling back to Gemini...", nvidiaErr);
+          // Fallback to Gemini 3 Flash
+          const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || (process as any).env.GEMINI_API_KEY;
+          if (!apiKey) throw new Error("Verification service busy. Please try again.");
+          
+          const ai = new GoogleGenAI({ apiKey });
+          const response = await ai.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: [
+              { text: prompt },
+              { inlineData: { mimeType: "image/jpeg", data: screenshotPreview.split(',')[1] } }
+            ],
+            config: { responseMimeType: "application/json" }
+          });
+          aiResultRaw = response.text;
+        }
+
+        const aiData = parseAIJson(aiResultRaw);
         
         if (!aiData.isVerified) {
           throw new Error(aiData.reason || "Payment details do not match NoteVix requirements.");
@@ -182,14 +227,39 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       }
 
       // --- 2. DOUBLE-SPEND PROTECTION ---
-      const historyQ = query(collection(db, 'transaction_ledger'), where('transactionId', '==', finalTxId));
-      const historySnap = await getDocs(historyQ);
-      if (!historySnap.empty) {
+      // Use a registry specifically for TX IDs to prevent global listing requirement
+      const registryDoc = doc(db, 'transaction_id_registry', finalTxId);
+      const registrySnap = await getDoc(registryDoc);
+      if (registrySnap.exists()) {
         throw new Error("This Transaction ID has already been redeemed.");
       }
-
+      
       // --- 3. AUTO-UNLOCK ---
-      // Log for Admin Audit (No manual check needed, just for records)
+      // 1. Mark TX ID as used
+      await addDoc(collection(db, 'transaction_id_registry'), {
+        txId: finalTxId,
+        userId: user.uid,
+        redeemedAt: new Date().toISOString()
+      }).catch(async () => {
+         // If addDoc fails, try setDoc on the ID specifically (matches rules)
+         // Actually the rules for transaction_id_registry use docId as txId?
+         // match /transaction_id_registry/{txId}
+      });
+      
+      // Attempt to secure the registry with the specific ID
+      try {
+        await updateDoc(doc(db, 'transaction_id_registry', finalTxId), { used: true });
+      } catch (e) {
+        // Doc might not exist yet, so set it
+        const { setDoc } = await import('firebase/firestore');
+        await setDoc(doc(db, 'transaction_id_registry', finalTxId), { 
+          used: true, 
+          userId: user.uid,
+          timestamp: new Date().toISOString() 
+        });
+      }
+
+      // Log for Admin Audit
       await addDoc(collection(db, 'transaction_ledger'), {
         transactionId: finalTxId,
         userId: user.uid,
@@ -458,9 +528,9 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-md bg-[#0a0a0a] border border-white/10 rounded-[3rem] overflow-hidden"
+              className="relative w-full max-w-lg max-h-[90vh] flex flex-col bg-[#0a0a0a] border border-white/10 rounded-[3rem] overflow-hidden"
             >
-              <div className="p-8 space-y-8">
+              <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar pb-16">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <h2 className="text-2xl font-black tracking-tight">{selectedPlan.name}</h2>

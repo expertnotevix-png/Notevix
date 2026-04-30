@@ -281,7 +281,7 @@ export const geminiService = {
     }
   },
 
-  async callNvidiaAPI(prompt: string, systemInstruction: string, isJson: boolean = false, model: string = MODEL_POWER, customTimeout: number = 25000) {
+  async callNvidiaAPI(prompt: string, systemInstruction: string, isJson: boolean = false, model: string = MODEL_POWER, customTimeout: number = 25000, imageData?: string) {
     const { nvidiaKey } = getAI();
     console.log(`AI Transition: Attempting NVIDIA call with model ${model}...`);
 
@@ -290,19 +290,37 @@ export const geminiService = {
     const timeoutId = setTimeout(() => controller.abort(), customTimeout);
 
     try {
-      // 1. Try server-side first (Secure proxy to bypass CORS)
+      const messages: any[] = [
+        { role: "system", content: systemInstruction }
+      ];
+
+      if (imageData) {
+        messages.push({
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            { 
+              type: "image_url", 
+              image_url: { 
+                url: imageData.startsWith('data:') ? imageData : `data:image/jpeg;base64,${imageData}` 
+              } 
+            }
+          ]
+        });
+      } else {
+        messages.push({ role: "user", content: prompt });
+      }
+
+      // 1. Try server-side first
       const response = await fetch("/api/ai/nvidia", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
           model,
-          messages: [
-            { role: "system", content: systemInstruction },
-            { role: "user", content: prompt }
-          ],
+          messages,
           temperature: isJson ? 0.1 : 0.6,
-          max_tokens: 2048, // Increased for long summaries
+          max_tokens: 2048,
         })
       });
 
@@ -312,7 +330,7 @@ export const geminiService = {
       if (response.status === 405 || response.status === 404 || response.status === 500) {
         if (nvidiaKey) {
           console.warn("NVIDIA Proxy failed (404/405/500), attempting direct browser call...");
-          return await this.callNvidiaDirect(prompt, systemInstruction, nvidiaKey, model, isJson, customTimeout);
+          return await this.callNvidiaDirect(prompt, systemInstruction, nvidiaKey, model, isJson, customTimeout, imageData);
         }
       }
 
@@ -342,17 +360,38 @@ export const geminiService = {
       
       // If server fetch fails (e.g. CORS or network issue), try direct with bundled key
       if (nvidiaKey && (error.message?.includes('fetch') || error.message?.includes('Network'))) {
-        return await this.callNvidiaDirect(prompt, systemInstruction, nvidiaKey, model, isJson, customTimeout);
+        return await this.callNvidiaDirect(prompt, systemInstruction, nvidiaKey, model, isJson, customTimeout, imageData);
       }
       throw error;
     }
   },
 
-  async callNvidiaDirect(prompt: string, system: string, key: string, model: string, isJson: boolean, timeout: number) {
+  async callNvidiaDirect(prompt: string, system: string, key: string, model: string, isJson: boolean, timeout: number, imageData?: string) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
+      const messages: any[] = [
+        { role: "system", content: system }
+      ];
+
+      if (imageData) {
+        messages.push({
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            { 
+              type: "image_url", 
+              image_url: { 
+                url: imageData.startsWith('data:') ? imageData : `data:image/jpeg;base64,${imageData}` 
+              } 
+            }
+          ]
+        });
+      } else {
+        messages.push({ role: "user", content: prompt });
+      }
+
       const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -362,7 +401,7 @@ export const geminiService = {
         signal: controller.signal,
         body: JSON.stringify({
           model,
-          messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
+          messages,
           temperature: isJson ? 0.1 : 0.6,
           max_tokens: 2048,
         })

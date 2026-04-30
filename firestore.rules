@@ -137,6 +137,20 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // Transaction Ledger (For AI Verification audits)
+    match /transaction_ledger/{docId} {
+      allow list: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow get: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // Valid Payments (Whitelisted IDs)
+    match /valid_payments/{paymentId} {
+      allow list, read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
     // Purchase Requests
     match /purchase_requests/{requestId} {
       allow list, read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
