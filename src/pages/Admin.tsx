@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp, writeBatch, getCountFromServer } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
 import { geminiService } from '../services/geminiService';
@@ -32,7 +32,12 @@ export default function Admin() {
   const [transactionLedger, setTransactionLedger] = useState<TransactionLedger[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
+  const [isAddingResource, setIsAddingResource] = useState(false);
+  const [editingResource, setEditingResource] = useState<any | null>(null);
+  const [resourceCoverPreview, setResourceCoverPreview] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const coverInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   // Analytics State
@@ -108,6 +113,88 @@ export default function Admin() {
       } catch (e) {
         toast.error("Failed to add.");
       }
+    }
+  };
+
+  const handleResourceCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('Image too large (Max 2MB)');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const img = new Image();
+        img.onload = () => {
+          // Compress image to manageable size for Firestore (1:1 ratio preferred)
+          const canvas = document.createElement('canvas');
+          const MAX_SIZE = 400; // 400x400 is plenty for a thumbnail
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_SIZE) {
+              height *= MAX_SIZE / width;
+              width = MAX_SIZE;
+            }
+          } else {
+            if (height > MAX_SIZE) {
+              width *= MAX_SIZE / height;
+              height = MAX_SIZE;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          setResourceCoverPreview(compressedDataUrl);
+        };
+        img.src = reader.result as string;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleAddResource = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resourceFormData.subject || !resourceFormData.class) {
+      toast.error("Please fill required fields.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'subject_resources'), {
+        subject: resourceFormData.subject,
+        class: resourceFormData.class,
+        price: Number(resourceFormData.price) || 0,
+        description: resourceFormData.description || 'Premium curated digital resources for board prep.',
+        coverUrl: resourceCoverPreview || '',
+        driveLink: resourceFormData.driveLink || '',
+        features: ['Chapter-wise Notes', 'PYQs Included', 'AI Doubt Support'],
+        createdAt: new Date().toISOString()
+      });
+      
+      toast.success("Book Created!");
+      setIsAddingResource(false);
+      setResourceCoverPreview(null);
+      setResourceFormData({
+        subject: '',
+        class: '10',
+        price: '',
+        description: '',
+        driveLink: ''
+      });
+      fetchSubjectResources();
+    } catch (error) {
+      toast.error("Failed to create book.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -196,6 +283,14 @@ export default function Admin() {
     formulas: [],
     importantQuestions: [],
     isPremium: false,
+  });
+
+  const [resourceFormData, setResourceFormData] = useState({
+    subject: '',
+    class: '10',
+    price: '',
+    description: '',
+    driveLink: ''
   });
 
   useEffect(() => {
@@ -801,35 +896,133 @@ export default function Admin() {
                   <Trash2 className="w-4 h-4" /> Reset Library
                 </button>
                 <button 
-                  onClick={() => {
-                  const sub = window.prompt("Subject Name? (e.g. SST, Science)");
-                  const cls = window.prompt("Class (8/9/10)?");
-                  const price = window.prompt("Price? (e.g. 49)");
-                  const desc = window.prompt("Short Description? (e.g. Digital E-Book Library)");
-                  const cover = window.prompt("Cover URL (1:1 Ratio)?");
-                  const drive = window.prompt("Drive Link?");
-                  if (sub && cls) {
-                    addDoc(collection(db, 'subject_resources'), {
-                      subject: sub, 
-                      class: cls, 
-                      price: Number(price) || 0,
-                      description: desc || 'Premium curated digital resources for board prep.',
-                      coverUrl: cover || '',
-                      driveLink: drive || '',
-                      features: ['Chapter-wise Notes', 'PYQs Included', 'AI Doubt Support'],
-                      createdAt: new Date().toISOString()
-                    }).then(() => {
-                      toast.success("Book Created!");
-                      fetchSubjectResources();
+                  onClick={() => setIsAddingResource(true)}
+                  className="bg-indigo-600 hover:bg-indigo-500 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-indigo-600/20 active:scale-95"
+                >
+                  <Plus className="w-4 h-4" /> Create New Book
+                </button>
+              </div>
+            </div>
+
+            {(isAddingResource || editingResource) && (
+              <div className="glass-card p-10 rounded-[3rem] bg-indigo-500/5 border border-indigo-500/20 animate-in slide-in-from-top duration-500">
+                <div className="flex justify-between items-center mb-8">
+                  <h3 className="text-2xl font-black">{editingResource ? 'Refine Digital Resource' : 'Design New Digital Resource'}</h3>
+                  <button onClick={() => { setIsAddingResource(false); setEditingResource(null); setResourceCoverPreview(null); }} className="p-3 bg-white/5 rounded-2xl hover:bg-white/10">
+                    <X className="w-5 h-5 text-gray-400" />
+                  </button>
+                </div>
+
+                <form onSubmit={editingResource ? async (e) => {
+                  e.preventDefault();
+                  setLoading(true);
+                  try {
+                    await updateDoc(doc(db, 'subject_resources', editingResource.id), {
+                      ...resourceFormData,
+                      price: Number(resourceFormData.price) || 0,
+                      coverUrl: resourceCoverPreview || editingResource.coverUrl
                     });
-                  }
-                }}
-                className="bg-indigo-600 hover:bg-indigo-500 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-indigo-600/20 active:scale-95"
-              >
-                <Plus className="w-4 h-4" /> Create New Book
-              </button>
-            </div>
-            </div>
+                    toast.success("Book Updated!");
+                    setEditingResource(null);
+                    setResourceCoverPreview(null);
+                    fetchSubjectResources();
+                  } catch (e) { toast.error("Update failed."); }
+                  finally { setLoading(false); }
+                } : handleAddResource} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-6">
+                    <div 
+                      onClick={() => coverInputRef.current?.click()}
+                      className="aspect-square w-full rounded-[2.5rem] bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-4 hover:border-indigo-500 group cursor-pointer overflow-hidden relative shadow-inner"
+                    >
+                      <input type="file" ref={coverInputRef} onChange={handleResourceCoverChange} accept="image/*" className="hidden" />
+                      {resourceCoverPreview ? (
+                        <>
+                          <img src={resourceCoverPreview} className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all">
+                             <RefreshCw className="w-8 h-8 text-white mb-2" />
+                             <span className="text-[10px] font-black uppercase tracking-widest">Change Cover</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <Database className="w-10 h-10 text-gray-700 group-hover:text-indigo-500 transition-colors" />
+                          <div className="text-center">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 group-hover:text-indigo-400">Upload Cover Art</p>
+                            <p className="text-[8px] text-gray-600 font-bold uppercase mt-1">1:1 Ratio Recommended</p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-5">
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">Subject & Class</label>
+                       <div className="grid grid-cols-2 gap-4">
+                          <input 
+                            required
+                            placeholder="e.g. Science"
+                            value={resourceFormData.subject}
+                            onChange={(e) => setResourceFormData({...resourceFormData, subject: e.target.value})}
+                            className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-indigo-500 outline-none"
+                          />
+                          <select 
+                            value={resourceFormData.class}
+                            onChange={(e) => setResourceFormData({...resourceFormData, class: e.target.value})}
+                            className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-indigo-500 outline-none"
+                          >
+                            <option value="8">Class 8</option>
+                            <option value="9">Class 9</option>
+                            <option value="10">Class 10</option>
+                            <option value="11">Class 11</option>
+                            <option value="12">Class 12</option>
+                          </select>
+                       </div>
+                    </div>
+
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">Pricing (INR)</label>
+                       <input 
+                         type="number"
+                         placeholder="e.g. 49"
+                         value={resourceFormData.price}
+                         onChange={(e) => setResourceFormData({...resourceFormData, price: e.target.value})}
+                         className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-indigo-500 outline-none"
+                       />
+                    </div>
+
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">Description</label>
+                       <textarea 
+                         placeholder="Short catchy description..."
+                         value={resourceFormData.description}
+                         onChange={(e) => setResourceFormData({...resourceFormData, description: e.target.value})}
+                         className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-indigo-500 outline-none h-24 resize-none"
+                       />
+                    </div>
+
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">PDF Drive Link</label>
+                       <input 
+                         placeholder="Google Drive PDF URL"
+                         value={resourceFormData.driveLink}
+                         onChange={(e) => setResourceFormData({...resourceFormData, driveLink: e.target.value})}
+                         className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-indigo-500 outline-none"
+                       />
+                    </div>
+
+                    <button 
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-indigo-600 text-white py-5 rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-indigo-600/30 flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-5 h-5" />}
+                      {loading ? "Processing..." : (editingResource ? "Save Changes" : "Launch This Resource")}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {subjectResources.map((res) => (
@@ -864,19 +1057,16 @@ export default function Admin() {
                   <div className="flex gap-2">
                     <button 
                       onClick={() => {
-                        const newPrice = window.prompt("New Price?", res.price);
-                        const newDesc = window.prompt("New Description?", res.description);
-                        const newCover = window.prompt("New Cover URL?", res.coverUrl);
-                        const newDrive = window.prompt("New Drive Link?", res.driveLink);
-                        updateDoc(doc(db, 'subject_resources', res.id), {
-                          price: Number(newPrice) || 0,
-                          description: newDesc || res.description,
-                          coverUrl: newCover || res.coverUrl,
-                          driveLink: newDrive || res.driveLink
-                        }).then(() => {
-                           toast.success("Book Updated!");
-                           fetchSubjectResources();
+                        setEditingResource(res);
+                        setResourceFormData({
+                          subject: res.subject,
+                          class: res.class,
+                          price: res.price.toString(),
+                          description: res.description,
+                          driveLink: res.driveLink
                         });
+                        setResourceCoverPreview(res.coverUrl);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
                       className="flex-1 bg-white/5 hover:bg-white/10 py-4 rounded-2xl text-[10px] font-black uppercase transition-all tracking-widest border border-white/5"
                     >
