@@ -634,7 +634,7 @@ export default function Admin() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="max-w-2xl">
                 <button 
                   onClick={async () => {
                     if(!window.confirm("CRITICAL: RESET ALL USERS TO FREE? This will remove premium access from EVERY student account. This cannot be undone.")) return;
@@ -659,7 +659,7 @@ export default function Admin() {
                       toast.error("Process failed.");
                     } finally { setLoading(false); }
                   }}
-                  className="p-8 bg-red-500/10 border border-red-500/20 rounded-[2.5rem] text-left hover:bg-red-500 transition-all group relative overflow-hidden"
+                  className="w-full p-8 bg-red-500/10 border border-red-500/20 rounded-[2.5rem] text-left hover:bg-red-500 transition-all group relative overflow-hidden"
                 >
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-100 transition-opacity">
                     <Users className="w-12 h-12" />
@@ -670,40 +670,6 @@ export default function Admin() {
                   </p>
                   <div className="mt-6 flex items-center gap-2 text-red-500 group-hover:text-white font-black text-[10px] uppercase tracking-widest">
                     <span>Execute Reset</span>
-                    <ChevronLeft className="w-4 h-4 rotate-180" />
-                  </div>
-                </button>
-
-                <button 
-                  onClick={async () => {
-                    if(!window.confirm("CRITICAL: NUKE TRANSACTION LEDGER? This clears all AI verification records and whitelists. Users could theoretically re-use old IDs if not cleared!")) return;
-                    setLoading(true);
-                    try {
-                      const ledgerSnap = await getDocs(collection(db, 'transaction_ledger'));
-                      const whiteSnap = await getDocs(collection(db, 'valid_payments'));
-                      
-                      const p1 = ledgerSnap.docs.map(d => deleteDoc(doc(db, 'transaction_ledger', d.id)));
-                      const p2 = whiteSnap.docs.map(d => deleteDoc(doc(db, 'valid_payments', d.id)));
-                      
-                      await Promise.all([...p1, ...p2]);
-                      toast.success("Transaction Ledger & Whitelists Purged");
-                      fetchTransactionLedger();
-                      fetchValidPayments();
-                    } catch (e) {
-                      toast.error("Wipe failed.");
-                    } finally { setLoading(false); }
-                  }}
-                  className="p-8 bg-red-500/10 border border-red-500/20 rounded-[2.5rem] text-left hover:bg-red-500 transition-all group relative overflow-hidden"
-                >
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-100 transition-opacity">
-                    <Database className="w-12 h-12" />
-                  </div>
-                  <h5 className="font-black text-xs uppercase tracking-[0.3em] text-red-500 group-hover:text-white">Wipe All Records</h5>
-                  <p className="text-xs text-gray-500 mt-2 group-hover:text-white/80 leading-relaxed font-bold">
-                    Clears all historical transaction data, AI logs, and whitelisted IDs for a clean start.
-                  </p>
-                  <div className="mt-6 flex items-center gap-2 text-red-500 group-hover:text-white font-black text-[10px] uppercase tracking-widest">
-                    <span>Purge Database</span>
                     <ChevronLeft className="w-4 h-4 rotate-180" />
                   </div>
                 </button>
