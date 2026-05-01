@@ -904,7 +904,7 @@ export default function Admin() {
                   onClick={async () => {
                     const class10Resources = [
                       {
-                        subject: 'Science',
+                        subject: 'science',
                         class: '10',
                         description: 'Complete Science resources for Class 10.',
                         onePageNotesUrl: 'https://drive.google.com/file/d/1vVRXXenGoaFzn1R2cEs_es5gDzzEzO9J/view?usp=drivesdk',
@@ -915,7 +915,7 @@ export default function Admin() {
                         isFree: true
                       },
                       {
-                        subject: 'SST',
+                        subject: 'sst',
                         class: '10',
                         description: 'Complete Social Science resources for Class 10.',
                         onePageNotesUrl: 'https://drive.google.com/file/d/1C5HNfr4u_8vQ9eArzdZRSUhE_Owy4h8c/view?usp=drivesdk',
@@ -926,7 +926,7 @@ export default function Admin() {
                         isFree: true
                       },
                       {
-                        subject: 'Maths',
+                        subject: 'maths',
                         class: '10',
                         description: 'Complete Mathematics resources for Class 10.',
                         onePageNotesUrl: 'https://drive.google.com/file/d/1oa2WBPNO4ChJrAp-aP7uyvVCn2SPI6w1/view?usp=drivesdk',
@@ -937,7 +937,7 @@ export default function Admin() {
                         isFree: true
                       },
                       {
-                        subject: 'English',
+                        subject: 'english',
                         class: '10',
                         description: 'Complete English resources for Class 10.',
                         onePageNotesUrl: 'https://drive.google.com/file/d/161HIkuYtIOD5esDsmjwnI5lq6PPltOZG/view?usp=drivesdk',

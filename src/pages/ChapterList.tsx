@@ -40,7 +40,7 @@ export default function ChapterList() {
       }
 
       const resourceSnapshot = await getDocs(qResources);
-      const data = resourceSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectResource));
+      const data = resourceSnapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as SubjectResource));
       setResources(data);
       localStorage.setItem(`notevix_resources_${classId}_${subjectId}`, JSON.stringify(data));
     } catch (error) {
@@ -75,13 +75,6 @@ export default function ChapterList() {
       </div>
     );
   }
-
-  const resourceItems = [
-    { label: 'One Page Notes', url: resource?.onePageNotesUrl, icon: FileText },
-    { label: 'Full Notes', url: resource?.fullNotesUrl, icon: Book },
-    { label: 'Important Questions', url: resource?.importantQuestionsUrl, icon: HelpCircle },
-    { label: 'Exam Oriented Questions', url: resource?.examOrientedQuestionsUrl, icon: History },
-  ];
 
   return (
     <div className="p-6 space-y-8">
