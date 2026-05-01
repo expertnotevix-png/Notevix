@@ -122,6 +122,7 @@ export interface SubjectResource {
   price?: number;
   description?: string;
   features?: string[];
+  isFree?: boolean;
 }
 
 export interface PurchaseRequest {

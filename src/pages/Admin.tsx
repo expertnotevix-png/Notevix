@@ -36,6 +36,7 @@ export default function Admin() {
   const [editingResource, setEditingResource] = useState<any | null>(null);
   const [resourceCoverPreview, setResourceCoverPreview] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewResourceMode, setViewResourceMode] = useState<'premium' | 'free'>('premium');
   
   const coverInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
@@ -182,6 +183,7 @@ export default function Admin() {
         coverUrl: resourceCoverPreview || '',
         driveLink: resourceFormData.driveLink || '',
         features: ['Chapter-wise Notes', 'PYQs Included', 'AI Doubt Support'],
+        isFree: Number(resourceFormData.price) === 0,
         createdAt: new Date().toISOString()
       });
       
@@ -874,23 +876,42 @@ export default function Admin() {
           </div>
         );
       case 'resources':
+        const currentResources = subjectResources.filter(r => 
+          viewResourceMode === 'free' ? r.isFree === true : r.isFree !== true
+        );
+
         return (
           <div className="space-y-6 animate-in fade-in duration-500">
-            <div className="flex justify-between items-center bg-white/5 p-6 rounded-[2rem] border border-white/10">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white/5 p-6 rounded-[2rem] border border-white/10 gap-6">
               <div>
                 <h3 className="text-xl font-black">Digital Library Management</h3>
-                <p className="text-xs text-gray-400">Manage premium book covers and drive links</p>
+                <div className="flex gap-2 mt-2">
+                  <button 
+                    onClick={() => setViewResourceMode('premium')}
+                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewResourceMode === 'premium' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-gray-500 hover:text-gray-300'}`}
+                  >
+                    Premium Resources
+                  </button>
+                  <button 
+                    onClick={() => setViewResourceMode('free')}
+                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewResourceMode === 'free' ? 'bg-emerald-600 text-white' : 'bg-white/5 text-gray-500 hover:text-gray-300'}`}
+                  >
+                    Free Resources
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-4">
+              <div className="flex flex-wrap gap-4">
                 <button 
                   onClick={async () => {
-                    if(!window.confirm("Delete ALL premium books? This cannot be undone.")) return;
+                    const typeLabel = viewResourceMode === 'free' ? 'FREE' : 'PREMIUM';
+                    if(!window.confirm(`Delete ALL ${typeLabel} resources? This cannot be undone.`)) return;
                     setLoading(true);
                     try {
-                      const snap = await getDocs(collection(db, 'subject_resources'));
+                      const q = query(collection(db, 'subject_resources'), where('isFree', '==', viewResourceMode === 'free'));
+                      const snap = await getDocs(q);
                       const deletes = snap.docs.map(d => deleteDoc(doc(db, 'subject_resources', d.id)));
                       await Promise.all(deletes);
-                      toast.success("Library Reset.");
+                      toast.success(`${typeLabel} Library Reset.`);
                       fetchSubjectResources();
                     } finally {
                       setLoading(false);
@@ -898,7 +919,7 @@ export default function Admin() {
                   }}
                   className="bg-red-500/10 text-red-500 border border-red-500/20 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-red-500 hover:text-white transition-all shadow-lg shadow-red-500/10"
                 >
-                  <Trash2 className="w-4 h-4" /> Reset Library
+                  <Trash2 className="w-4 h-4" /> Reset {viewResourceMode === 'free' ? 'Free' : 'Premium'}
                 </button>
                 <button 
                   onClick={async () => {
@@ -978,6 +999,7 @@ export default function Admin() {
                     await updateDoc(doc(db, 'subject_resources', editingResource.id), {
                       ...resourceFormData,
                       price: Number(resourceFormData.price) || 0,
+                      isFree: Number(resourceFormData.price) === 0,
                       coverUrl: resourceCoverPreview || editingResource.coverUrl
                     });
                     toast.success("Book Updated!");
@@ -1083,8 +1105,8 @@ export default function Admin() {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {subjectResources.map((res) => (
-                <div key={res.id} className="glass-card p-6 rounded-[2.5rem] bg-white/5 border border-white/10 flex flex-col gap-5 hover:border-indigo-500/30 transition-all group">
+              {currentResources.map((res) => (
+                <div key={res.id} className={`glass-card p-6 rounded-[2.5rem] bg-white/5 border border-white/10 flex flex-col gap-5 transition-all group ${res.isFree ? 'hover:border-emerald-500/30' : 'hover:border-indigo-500/30'}`}>
                   <div className="aspect-[1/1] w-full bg-white/5 rounded-3xl overflow-hidden border border-white/10 relative shadow-2xl">
                     {res.coverUrl ? (
                       <img src={res.coverUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />

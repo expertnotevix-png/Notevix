@@ -29,13 +29,15 @@ export default function ChapterList() {
       if (subjectId === 'all') {
         qResources = query(
           collection(db, 'subject_resources'),
-          where('class', '==', classId)
+          where('class', '==', classId),
+          where('isFree', '==', true)
         );
       } else {
         qResources = query(
           collection(db, 'subject_resources'),
           where('class', '==', classId),
-          where('subject', '==', subjectId)
+          where('subject', '==', subjectId),
+          where('isFree', '==', true)
         );
       }
 

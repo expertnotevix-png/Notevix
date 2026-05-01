@@ -82,7 +82,9 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       setLoading(true);
       const q = query(collection(db, 'subject_resources'), where('class', '==', activeClass));
       const snap = await getDocs(q);
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as SubjectResource));
+      const data = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as SubjectResource))
+        .filter(res => res.isFree !== true); // Filter out free resources
       setResources(data);
     } catch (error) {
       console.error("Error fetching resources:", error);
