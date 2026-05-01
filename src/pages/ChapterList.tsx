@@ -104,10 +104,12 @@ export default function ChapterList() {
         {resources.length > 0 ? (
           resources.map((res) => (
             <div key={res.id} className="space-y-4">
-              <div className="flex items-center gap-2 pl-2">
-                <span className="text-[10px] font-black text-purple-500 uppercase tracking-[0.3em]">{res.subject}</span>
-                <div className="h-px flex-1 bg-white/5" />
-              </div>
+              {resources.length > 1 && (
+                <div className="flex items-center gap-2 pl-2">
+                  <span className="text-[10px] font-black text-purple-500 uppercase tracking-[0.3em]">{res.subject}</span>
+                  <div className="h-px flex-1 bg-white/5" />
+                </div>
+              )}
               <div className="space-y-3">
                 {[
                   { label: 'One Page Notes', url: res.onePageNotesUrl, icon: FileText },

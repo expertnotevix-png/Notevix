@@ -109,7 +109,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_SIZE = 2048; // ULTRA HD processing
+          const MAX_SIZE = 1024; // HD processing
           let width = img.width;
           let height = img.height;
           if (width > height) {
@@ -127,11 +127,10 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           if (ctx) {
-            ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, width, height);
           }
-          setScreenshotPreview(canvas.toDataURL('image/jpeg', 0.95));
+          setScreenshotPreview(canvas.toDataURL('image/jpeg', 0.9));
         };
         img.src = reader.result as string;
       };
@@ -512,14 +511,14 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
       <AnimatePresence>
         {selectedPlan && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/95 backdrop-blur-2xl">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-2xl">
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-lg h-auto max-h-[90vh] flex flex-col bg-[#0a0a0a] border border-white/10 rounded-[2.5rem] sm:rounded-[3rem] overflow-hidden shadow-[0_0_100px_rgba(79,70,229,0.2)]"
+              className="relative w-full max-w-lg max-h-[90vh] flex flex-col bg-[#0a0a0a] border border-white/10 rounded-[3rem] overflow-hidden"
             >
-              <div className="p-6 sm:p-8 space-y-6 sm:space-y-8 overflow-y-auto no-scrollbar pb-24">
+              <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar pb-16">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <h2 className="text-2xl font-black tracking-tight">{selectedPlan.name}</h2>
