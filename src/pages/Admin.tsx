@@ -19,7 +19,7 @@ import {
 } from 'recharts';
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources' | 'valid_payments' | 'settings'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources' | 'valid_payments' | 'settings' | 'banners'>('analytics');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -37,6 +37,9 @@ export default function Admin() {
   const [resourceCoverPreview, setResourceCoverPreview] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewResourceMode, setViewResourceMode] = useState<'premium' | 'free'>('premium');
+  const [banners, setBanners] = useState<any[]>([]);
+  const [isAddingBanner, setIsAddingBanner] = useState(false);
+  const [bannerFormData, setBannerFormData] = useState({ imageUrl: '', link: '' });
   
   const coverInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
@@ -66,6 +69,7 @@ export default function Admin() {
     if (activeTab === 'users') fetchUsers();
     if (activeTab === 'registry') fetchRegistry();
     if (activeTab === 'resources') fetchSubjectResources();
+    if (activeTab === 'banners') fetchBanners();
     if (activeTab === 'valid_payments') {
       fetchValidPayments();
       fetchTransactionLedger();
@@ -202,6 +206,50 @@ export default function Admin() {
       toast.error("Failed to create book.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchBanners = async () => {
+    setLoading(true);
+    try {
+      const q = query(collection(db, 'promo_banners'), orderBy('createdAt', 'desc'));
+      const snap = await getDocs(q);
+      setBanners(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddBanner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bannerFormData.imageUrl) return;
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'promo_banners'), {
+        ...bannerFormData,
+        createdAt: new Date().toISOString()
+      });
+      toast.success("Banner added!");
+      setIsAddingBanner(false);
+      setBannerFormData({ imageUrl: '', link: '' });
+      fetchBanners();
+    } catch (e) {
+      toast.error("Failed to add banner");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteBanner = async (id: string) => {
+    if (!window.confirm("Delete this banner?")) return;
+    try {
+      await deleteDoc(doc(db, 'promo_banners', id));
+      toast.success("Banner deleted");
+      fetchBanners();
+    } catch (e) {
+      toast.error("Failed to delete banner");
     }
   };
 
@@ -696,6 +744,7 @@ export default function Admin() {
 
   const menuItems = [
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'banners', label: 'Promotion Banners', icon: LayoutDashboard },
     { id: 'resources', label: 'Digital Library', icon: BookOpen },
     { id: 'valid_payments', label: 'Verify Keys', icon: ShieldCheck },
     { id: 'chapters', label: 'Flashcards', icon: Database },
@@ -722,6 +771,81 @@ export default function Admin() {
     }
 
     switch (activeTab) {
+      case 'banners':
+        return (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="flex justify-between items-center bg-white/5 p-6 rounded-[2rem] border border-white/10">
+              <div>
+                <h3 className="text-xl font-black">Promotion Banners</h3>
+                <p className="text-xs text-gray-400">Manage 1:1 carousel banners for Home page</p>
+              </div>
+              <button 
+                onClick={() => setIsAddingBanner(true)}
+                className="bg-indigo-600 hover:bg-indigo-500 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-indigo-600/20 active:scale-95"
+              >
+                <Plus className="w-4 h-4" /> Add Banner
+              </button>
+            </div>
+
+            {isAddingBanner && (
+              <div className="glass-card p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6 animate-in slide-in-from-top duration-500">
+                <div className="flex justify-between items-center">
+                  <h4 className="font-black text-xs uppercase tracking-[0.3em] text-indigo-400">New Banner Configuration</h4>
+                  <button onClick={() => setIsAddingBanner(false)} className="p-2 hover:bg-white/5 rounded-full"><X className="w-4 h-4" /></button>
+                </div>
+                <form onSubmit={handleAddBanner} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2">Banner Image URL (1:1 Ratio Highly Recommended)</label>
+                    <input 
+                      type="url" 
+                      required
+                      placeholder="https://example.com/banner.jpg"
+                      className="w-full bg-[#0a0a0a] border border-white/10 rounded-2xl p-4 focus:border-indigo-500 transition-colors"
+                      value={bannerFormData.imageUrl}
+                      onChange={e => setBannerFormData({ ...bannerFormData, imageUrl: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2">Redirect Link (Optional - Defaults to /premium-notes)</label>
+                    <input 
+                      type="text" 
+                      placeholder="/premium-notes"
+                      className="w-full bg-[#0a0a0a] border border-white/10 rounded-2xl p-4 focus:border-indigo-500 transition-colors"
+                      value={bannerFormData.link}
+                      onChange={e => setBannerFormData({ ...bannerFormData, link: e.target.value })}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <button type="submit" disabled={loading} className="w-full py-4 bg-indigo-600 rounded-2xl font-black uppercase tracking-[0.2em] text-xs hover:bg-indigo-500 transition-all">
+                      {loading ? 'Processing...' : 'Save Promotion Banner'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {banners.map((banner) => (
+                <div key={banner.id} className="glass-card p-4 rounded-[2.5rem] bg-white/5 border border-white/10 flex flex-col gap-4 group">
+                  <div className="aspect-square w-full rounded-[2rem] overflow-hidden border border-white/10">
+                    <img src={banner.imageUrl} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex justify-between items-center px-2">
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-gray-500 truncate">{banner.link || 'No Link'}</p>
+                    </div>
+                    <button 
+                      onClick={() => handleDeleteBanner(banner.id)}
+                      className="p-3 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
       case 'settings':
         return (
           <div className="space-y-6 animate-in fade-in duration-500">

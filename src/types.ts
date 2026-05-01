@@ -109,6 +109,13 @@ export interface TransactionLedger {
   screenshotUrl?: string;
 }
 
+export interface PromoBanner {
+  id: string;
+  imageUrl: string;
+  link?: string;
+  createdAt: string;
+}
+
 export interface SubjectResource {
   id: string;
   class: string;

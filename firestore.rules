@@ -179,6 +179,12 @@ service cloud.firestore {
       }
     }
 
+    // Promotional Banners
+    match /promo_banners/{bannerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // ===============================================================
     // Default Deny
     // ===============================================================

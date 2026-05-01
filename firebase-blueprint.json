@@ -255,6 +255,18 @@
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["groupId", "userId", "text", "timestamp"]
+    },
+    "PromoBanner": {
+      "title": "PromoBanner",
+      "description": "Promotional banners displayed on the home page",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "link": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["imageUrl", "createdAt"]
     }
   },
   "firestore": {
@@ -317,6 +329,10 @@
     "/study_groups/{groupId}/messages/{messageId}": {
       "schema": "GroupMessage",
       "description": "Chat messages within a group"
+    },
+    "/promo_banners/{bannerId}": {
+      "schema": "PromoBanner",
+      "description": "Home page promotional banners"
     }
   }
 }
