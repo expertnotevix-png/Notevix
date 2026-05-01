@@ -165,19 +165,19 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       if (screenshotPreview) {
         setAiVerifying(true);
         const prompt = `You are the NoteVix Secure Auditor. 
-        Verify this payment receipt screenshot.
+        Verify this payment receipt screenshot for a purchase of "${selectedPlan?.name}".
         
         STRICT CHECKLIST:
         1. Recipient MUST be: "${upiId}"
-        2. Amount MUST be at least: ₹${selectedPlan?.price}
+        2. Amount detected on receipt MUST be exactly or at least: ₹${selectedPlan?.price}
         
-        Task: Extract the 12-digit Transaction ID / UTR number.
+        Task: Extract the 12-digit Transaction ID / UTR / Reference number and the total payment amount.
         Output ONLY valid JSON:
         {
           "transactionId": "string",
           "amount": number,
           "isVerified": boolean,
-          "reason": "explanation"
+          "reason": "explanation if not verified"
         }`;
 
         const system = "You are a professional payment forensics expert. Analyze receipt screenshots with 100% accuracy. Return JSON only.";
@@ -215,6 +215,11 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         
         if (!aiData.isVerified) {
           throw new Error(aiData.reason || "Payment details do not match NoteVix requirements.");
+        }
+
+        // Hard check: Ensure amount detected is not less than the price
+        if (aiData.amount && aiData.amount < (selectedPlan?.price || 0)) {
+          throw new Error(`Insufficient Amount: Detected ₹${aiData.amount} but required ₹${selectedPlan?.price}.`);
         }
 
         if (aiData.transactionId) {
