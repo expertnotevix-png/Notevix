@@ -34,7 +34,7 @@ export function PromoCarousel() {
   if (banners.length === 0) return null;
 
   return (
-    <div className="relative w-full aspect-square overflow-hidden rounded-[2.5rem] bg-white/5 border border-white/10 shadow-2xl">
+    <div className="relative w-full aspect-video overflow-hidden rounded-[2.5rem] bg-white/5 border border-white/10 shadow-2xl">
       <AnimatePresence mode="wait">
         <motion.div
           key={banners[currentIndex].id}

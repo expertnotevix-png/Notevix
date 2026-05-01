@@ -777,7 +777,7 @@ export default function Admin() {
             <div className="flex justify-between items-center bg-white/5 p-6 rounded-[2rem] border border-white/10">
               <div>
                 <h3 className="text-xl font-black">Promotion Banners</h3>
-                <p className="text-xs text-gray-400">Manage 1:1 carousel banners for Home page</p>
+                <p className="text-xs text-gray-400">Manage 16:9 carousel banners for Home page</p>
               </div>
               <button 
                 onClick={() => setIsAddingBanner(true)}
@@ -795,7 +795,7 @@ export default function Admin() {
                 </div>
                 <form onSubmit={handleAddBanner} className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2">Banner Image URL (1:1 Ratio Highly Recommended)</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2">Banner Image URL (16:9 YouTube Size Recommended)</label>
                     <input 
                       type="url" 
                       required
@@ -827,7 +827,7 @@ export default function Admin() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {banners.map((banner) => (
                 <div key={banner.id} className="glass-card p-4 rounded-[2.5rem] bg-white/5 border border-white/10 flex flex-col gap-4 group">
-                  <div className="aspect-square w-full rounded-[2rem] overflow-hidden border border-white/10">
+                  <div className="aspect-video w-full rounded-[2rem] overflow-hidden border border-white/10">
                     <img src={banner.imageUrl} className="w-full h-full object-cover" />
                   </div>
                   <div className="flex justify-between items-center px-2">
