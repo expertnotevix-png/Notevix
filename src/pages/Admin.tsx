@@ -40,8 +40,10 @@ export default function Admin() {
   const [banners, setBanners] = useState<any[]>([]);
   const [isAddingBanner, setIsAddingBanner] = useState(false);
   const [bannerFormData, setBannerFormData] = useState({ imageUrl: '', link: '' });
+  const [bannerImagePreview, setBannerImagePreview] = useState<string | null>(null);
   
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   // Analytics State
@@ -222,18 +224,71 @@ export default function Admin() {
     }
   };
 
+  const handleBannerImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('Image too large (Max 2MB)');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_SIZE = 1920; 
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_SIZE) {
+              height *= MAX_SIZE / width;
+              width = MAX_SIZE;
+            }
+          } else {
+            if (height > MAX_SIZE) {
+              width *= MAX_SIZE / height;
+              height = MAX_SIZE;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          
+          if (ctx) {
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, width, height);
+          }
+          
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+          setBannerImagePreview(compressedDataUrl);
+        };
+        img.src = reader.result as string;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleAddBanner = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bannerFormData.imageUrl) return;
+    if (!bannerFormData.imageUrl && !bannerImagePreview) {
+      toast.error("Please provide an image URL or upload from gallery");
+      return;
+    }
     setLoading(true);
     try {
       await addDoc(collection(db, 'promo_banners'), {
         ...bannerFormData,
+        imageUrl: bannerImagePreview || bannerFormData.imageUrl,
         createdAt: new Date().toISOString()
       });
       toast.success("Banner added!");
       setIsAddingBanner(false);
       setBannerFormData({ imageUrl: '', link: '' });
+      setBannerImagePreview(null);
       fetchBanners();
     } catch (e) {
       toast.error("Failed to add banner");
@@ -794,18 +849,57 @@ export default function Admin() {
                   <button onClick={() => setIsAddingBanner(false)} className="p-2 hover:bg-white/5 rounded-full"><X className="w-4 h-4" /></button>
                 </div>
                 <form onSubmit={handleAddBanner} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2">Banner Image URL (16:9 YouTube Size Recommended)</label>
+                  <div className="md:col-span-2 flex flex-col items-center justify-center p-8 border-2 border-dashed border-white/10 rounded-[2.5rem] bg-white/5 hover:bg-white/10 transition-all cursor-pointer group"
+                    onClick={() => bannerInputRef.current?.click()}>
+                    {bannerImagePreview ? (
+                      <div className="relative aspect-video w-full max-w-md rounded-2xl overflow-hidden border border-white/10">
+                        <img src={bannerImagePreview} className="w-full h-full object-cover" />
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setBannerImagePreview(null);
+                          }}
+                          className="absolute top-2 right-2 p-2 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-red-500 transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-3">
+                        <img 
+                          src="https://img.icons8.com/isometric/100/shared-9.png" 
+                          className="w-16 h-16 group-hover:scale-110 transition-transform duration-500" 
+                          alt="upload"
+                        />
+                        <div className="text-center">
+                          <p className="text-xs font-black uppercase tracking-widest text-indigo-400">Upload from Gallery</p>
+                          <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold">16:9 Youtube Size Recommended</p>
+                        </div>
+                      </div>
+                    )}
                     <input 
-                      type="url" 
-                      required
-                      placeholder="https://example.com/banner.jpg"
-                      className="w-full bg-[#0a0a0a] border border-white/10 rounded-2xl p-4 focus:border-indigo-500 transition-colors"
-                      value={bannerFormData.imageUrl}
-                      onChange={e => setBannerFormData({ ...bannerFormData, imageUrl: e.target.value })}
+                      type="file"
+                      ref={bannerInputRef}
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleBannerImageChange}
                     />
                   </div>
-                  <div className="space-y-2">
+
+                  {!bannerImagePreview && (
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2">Or paste Banner Image URL</label>
+                      <input 
+                        type="url" 
+                        placeholder="https://example.com/banner.jpg"
+                        className="w-full bg-[#0a0a0a] border border-white/10 rounded-2xl p-4 focus:border-indigo-500 transition-colors"
+                        value={bannerFormData.imageUrl}
+                        onChange={e => setBannerFormData({ ...bannerFormData, imageUrl: e.target.value })}
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-2 md:col-span-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2">Redirect Link (Optional - Defaults to /premium-notes)</label>
                     <input 
                       type="text" 
