@@ -130,7 +130,7 @@ export default function Admin() {
         img.onload = () => {
           // Compress image to manageable size for Firestore (HD Quality)
           const canvas = document.createElement('canvas');
-          const MAX_SIZE = 1024; // Increased to 1024px for HD appearance
+          const MAX_SIZE = 2048; // ULTRA HD
           let width = img.width;
           let height = img.height;
 
@@ -150,14 +150,13 @@ export default function Admin() {
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           
-          // Use high quality interpolation
           if (ctx) {
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, width, height);
           }
           
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.9); // Increased quality factor to 0.9
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.95);
           setResourceCoverPreview(compressedDataUrl);
         };
         img.src = reader.result as string;
@@ -900,6 +899,88 @@ export default function Admin() {
                   className="bg-red-500/10 text-red-500 border border-red-500/20 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-red-500 hover:text-white transition-all shadow-lg shadow-red-500/10"
                 >
                   <Trash2 className="w-4 h-4" /> Reset Library
+                </button>
+                <button 
+                  onClick={async () => {
+                    const class10Resources = [
+                      {
+                        subject: 'Science',
+                        class: '10',
+                        description: 'Complete Science resources for Class 10.',
+                        onePageNotesUrl: 'https://drive.google.com/file/d/1vVRXXenGoaFzn1R2cEs_es5gDzzEzO9J/view?usp=drivesdk',
+                        fullNotesUrl: 'https://drive.google.com/file/d/1Rer-yq5_lUAx79ziwtXDR0AXgaoB10Eh/view?usp=drivesdk',
+                        importantQuestionsUrl: 'https://drive.google.com/file/d/17gHE4BBgTcFbq6Z1jUMEaooPuDhSxrFR/view?usp=drivesdk',
+                        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1lGG-l-89veqwwbEIltxRtXql1Xhb1uVT/view?usp=drivesdk',
+                        price: 0,
+                        isFree: true
+                      },
+                      {
+                        subject: 'SST',
+                        class: '10',
+                        description: 'Complete Social Science resources for Class 10.',
+                        onePageNotesUrl: 'https://drive.google.com/file/d/1C5HNfr4u_8vQ9eArzdZRSUhE_Owy4h8c/view?usp=drivesdk',
+                        fullNotesUrl: 'https://drive.google.com/file/d/1hUk1u-XnJb47lAFvU3qvWUK_kTMHwVc6/view?usp=drivesdk',
+                        importantQuestionsUrl: 'https://drive.google.com/file/d/1B_s9nxd9df3uR2Zas-sna9S5sthtt-1w/view?usp=drivesdk',
+                        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1Bo5ON7oLLp_uhra5dOx5vVk82x07WGCJ/view?usp=drivesdk',
+                        price: 0,
+                        isFree: true
+                      },
+                      {
+                        subject: 'Maths',
+                        class: '10',
+                        description: 'Complete Mathematics resources for Class 10.',
+                        onePageNotesUrl: 'https://drive.google.com/file/d/1oa2WBPNO4ChJrAp-aP7uyvVCn2SPI6w1/view?usp=drivesdk',
+                        fullNotesUrl: 'https://drive.google.com/file/d/1wNNhEXC06_qpsom2lzfAoOAjxZtfzc2f/view?usp=drivesdk',
+                        importantQuestionsUrl: 'https://drive.google.com/file/d/1jUpfYzuNwiE6b6CTYTE--Gk8ttqZ5b26/view?usp=drivesdk',
+                        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1nWLsptC9vEV7egT8rbapiRi_gBm7SeTW/view?usp=drivesdk',
+                        price: 0,
+                        isFree: true
+                      },
+                      {
+                        subject: 'English',
+                        class: '10',
+                        description: 'Complete English resources for Class 10.',
+                        onePageNotesUrl: 'https://drive.google.com/file/d/161HIkuYtIOD5esDsmjwnI5lq6PPltOZG/view?usp=drivesdk',
+                        fullNotesUrl: 'https://drive.google.com/file/d/158isO5zrYWgdKafIiRdzOXLHJaYEeu35/view?usp=drivesdk',
+                        importantQuestionsUrl: 'https://drive.google.com/file/d/1ELq7c3bOUDaVFAsu2OcDtuwYiOikTm74/view?usp=drivesdk',
+                        examOrientedQuestionsUrl: 'https://drive.google.com/file/d/1DcvYECk1QfqhAu2isR3PHnolvcMtx4n5/view?usp=drivesdk',
+                        price: 0,
+                        isFree: true
+                      }
+                    ];
+
+                    setLoading(true);
+                    try {
+                      for (const res of class10Resources) {
+                        const q = query(
+                          collection(db, 'subject_resources'), 
+                          where('subject', '==', res.subject), 
+                          where('class', '==', res.class)
+                        );
+                        const snap = await getDocs(q);
+                        if (snap.empty) {
+                          await addDoc(collection(db, 'subject_resources'), {
+                            ...res,
+                            createdAt: new Date().toISOString()
+                          });
+                        } else {
+                          await updateDoc(doc(db, 'subject_resources', snap.docs[0].id), {
+                            ...res,
+                            updatedAt: new Date().toISOString()
+                          });
+                        }
+                      }
+                      toast.success("Class 10 Resources Restored!");
+                      fetchSubjectResources();
+                    } catch (e) {
+                      toast.error("Restoration failed.");
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-500 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-emerald-600/20 active:scale-95"
+                >
+                  <RefreshCw className="w-4 h-4" /> Restore Class 10
                 </button>
                 <button 
                   onClick={() => setIsAddingResource(true)}

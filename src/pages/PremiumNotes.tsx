@@ -109,7 +109,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_SIZE = 1024; // HD processing
+          const MAX_SIZE = 2048; // ULTRA HD processing
           let width = img.width;
           let height = img.height;
           if (width > height) {
@@ -131,7 +131,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
             ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, width, height);
           }
-          setScreenshotPreview(canvas.toDataURL('image/jpeg', 0.9));
+          setScreenshotPreview(canvas.toDataURL('image/jpeg', 0.95));
         };
         img.src = reader.result as string;
       };
@@ -227,7 +227,6 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       }
 
       // --- 2. DOUBLE-SPEND PROTECTION ---
-      // Use a registry specifically for TX IDs to prevent global listing requirement
       const registryDoc = doc(db, 'transaction_id_registry', finalTxId);
       const registrySnap = await getDoc(registryDoc);
       if (registrySnap.exists()) {
@@ -235,30 +234,21 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       }
       
       // --- 3. AUTO-UNLOCK ---
-      // 1. Mark TX ID as used
-      await addDoc(collection(db, 'transaction_id_registry'), {
-        txId: finalTxId,
-        userId: user.uid,
-        redeemedAt: new Date().toISOString()
-      }).catch(async () => {
-         // If addDoc fails, try setDoc on the ID specifically (matches rules)
-         // Actually the rules for transaction_id_registry use docId as txId?
-         // match /transaction_id_registry/{txId}
-      });
-      
-      // Attempt to secure the registry with the specific ID
+      // Mark TX ID as used by creating the document with the TX ID as document name
       try {
-        await updateDoc(doc(db, 'transaction_id_registry', finalTxId), { used: true });
-      } catch (e) {
-        // Doc might not exist yet, so set it
-        const { setDoc } = await import('firebase/firestore');
         await setDoc(doc(db, 'transaction_id_registry', finalTxId), { 
-          used: true, 
           userId: user.uid,
-          timestamp: new Date().toISOString() 
+          redeemedAt: new Date().toISOString(),
+          planId: selectedPlan?.id,
+          amount: aiDetectedAmount || selectedPlan?.price || 0
         });
+      } catch (e: any) {
+        if (e.message?.includes('permission-denied')) {
+          throw new Error("Transaction verification error. This ID might be pending review.");
+        }
+        throw e;
       }
-
+      
       // Log for Admin Audit
       await addDoc(collection(db, 'transaction_ledger'), {
         transactionId: finalTxId,
@@ -520,17 +510,16 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         </div>
       </div>
 
-      {/* Payment Modal */}
       <AnimatePresence>
         {selectedPlan && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-2xl">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/95 backdrop-blur-2xl">
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-lg max-h-[90vh] flex flex-col bg-[#0a0a0a] border border-white/10 rounded-[3rem] overflow-hidden"
+              className="relative w-full max-w-lg h-auto max-h-[90vh] flex flex-col bg-[#0a0a0a] border border-white/10 rounded-[2.5rem] sm:rounded-[3rem] overflow-hidden shadow-[0_0_100px_rgba(79,70,229,0.2)]"
             >
-              <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar pb-16">
+              <div className="p-6 sm:p-8 space-y-6 sm:space-y-8 overflow-y-auto no-scrollbar pb-24">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <h2 className="text-2xl font-black tracking-tight">{selectedPlan.name}</h2>

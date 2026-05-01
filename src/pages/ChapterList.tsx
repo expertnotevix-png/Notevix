@@ -10,37 +10,43 @@ import { MotivationalCarousel } from '../components/MotivationalCarousel';
 export default function ChapterList() {
   const { classId, subjectId } = useParams();
   const navigate = useNavigate();
-  const [resource, setResource] = useState<SubjectResource | null>(null);
+  const [resources, setResources] = useState<SubjectResource[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       if (checkQuotaLock()) {
-        const cached = localStorage.getItem(`notevix_resource_${classId}_${subjectId}`);
+        const cached = localStorage.getItem(`notevix_resources_${classId}_${subjectId}`);
         if (cached) {
-          setResource(JSON.parse(cached));
+          setResources(JSON.parse(cached));
           setLoading(false);
           return;
         }
       }
 
-      const qResources = query(
-        collection(db, 'subject_resources'),
-        where('class', '==', classId),
-        where('subject', '==', subjectId)
-      );
-      const resourceSnapshot = await getDocs(qResources);
-      if (!resourceSnapshot.empty) {
-        const data = { id: resourceSnapshot.docs[0].id, ...resourceSnapshot.docs[0].data() } as SubjectResource;
-        setResource(data);
-        localStorage.setItem(`notevix_resource_${classId}_${subjectId}`, JSON.stringify(data));
+      let qResources;
+      if (subjectId === 'all') {
+        qResources = query(
+          collection(db, 'subject_resources'),
+          where('class', '==', classId)
+        );
+      } else {
+        qResources = query(
+          collection(db, 'subject_resources'),
+          where('class', '==', classId),
+          where('subject', '==', subjectId)
+        );
       }
+
+      const resourceSnapshot = await getDocs(qResources);
+      const data = resourceSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectResource));
+      setResources(data);
+      localStorage.setItem(`notevix_resources_${classId}_${subjectId}`, JSON.stringify(data));
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, 'subject_resources');
-      // Look for cache on error
-      const cached = localStorage.getItem(`notevix_resource_${classId}_${subjectId}`);
-      if (cached) setResource(JSON.parse(cached));
+      const cached = localStorage.getItem(`notevix_resources_${classId}_${subjectId}`);
+      if (cached) setResources(JSON.parse(cached));
     }
     setLoading(false);
   };
@@ -100,46 +106,62 @@ export default function ChapterList() {
 
       <div className="w-full h-px bg-white/10" />
 
-      {/* Content Type Cards */}
-      <div className="space-y-4">
-        {resourceItems.map((item, index) => (
-          <motion.button
-            key={item.label}
-            onClick={() => {
-              if (item.url && item.url !== '#') {
-                window.open(item.url, '_blank');
-              }
-            }}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-            className={`w-full p-5 rounded-3xl flex items-center justify-between transition-all active:scale-[0.98] border border-white/5 shadow-xl ${
-              item.url && item.url !== '#' 
-                ? 'bg-[#1a1635] hover:border-purple-500/50' 
-                : 'bg-white/5 opacity-50 cursor-not-allowed'
-            }`}
-          >
-            <div className="flex items-center gap-5">
-              <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center">
-                <item.icon className="w-7 h-7 text-purple-400" />
+      {/* Content */}
+      <div className="space-y-8">
+        {resources.length > 0 ? (
+          resources.map((res) => (
+            <div key={res.id} className="space-y-4">
+              <div className="flex items-center gap-2 pl-2">
+                <span className="text-[10px] font-black text-purple-500 uppercase tracking-[0.3em]">{res.subject}</span>
+                <div className="h-px flex-1 bg-white/5" />
               </div>
-              <span className="text-lg font-bold text-white/90">{item.label}</span>
+              <div className="space-y-3">
+                {[
+                  { label: 'One Page Notes', url: res.onePageNotesUrl, icon: FileText },
+                  { label: 'Full Notes', url: res.fullNotesUrl, icon: Book },
+                  { label: 'Important Questions', url: res.importantQuestionsUrl, icon: HelpCircle },
+                  { label: 'Exam Oriented Questions', url: res.examOrientedQuestionsUrl, icon: History },
+                ].map((item, index) => (
+                  <motion.button
+                    key={item.label + res.id}
+                    onClick={() => {
+                      if (item.url && item.url !== '#') {
+                        window.open(item.url, '_blank');
+                      }
+                    }}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.05 }}
+                    className={`w-full p-4 rounded-2xl flex items-center justify-between transition-all active:scale-[0.98] border border-white/5 shadow-xl ${
+                      item.url && item.url !== '#' 
+                        ? 'bg-[#1a1635] hover:border-purple-500/50' 
+                        : 'bg-white/5 opacity-50 cursor-not-allowed'
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center">
+                        <item.icon className="w-5 h-5 text-purple-400" />
+                      </div>
+                      <span className="text-sm font-bold text-white/90">{item.label}</span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-purple-400/50" />
+                  </motion.button>
+                ))}
+              </div>
             </div>
-            <div className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center">
-              <ChevronRight className="w-5 h-5 text-purple-400" />
+          ))
+        ) : (
+          <div className="text-center py-20 space-y-4">
+            <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto">
+              <FileText className="w-10 h-10 text-gray-600" />
             </div>
-          </motion.button>
-        ))}
-      </div>
-
-      {!resource && !loading && (
-        <div className="text-center py-10 space-y-4">
-          <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto">
-            <FileText className="w-10 h-10 text-gray-600" />
+            <div className="space-y-1">
+              <h3 className="text-white font-bold">No High-Yield PDFs yet</h3>
+              <p className="text-gray-500 text-xs">Our team is uploading resources for Class {classId}. Check back soon!</p>
+            </div>
           </div>
-          <p className="text-gray-500">No resources found for this subject yet.</p>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

@@ -309,6 +309,42 @@ export default function Home({ user }: HomeProps) {
 
       <MotivationalCarousel />
       
+      {/* Free Study Material Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">📚</span>
+            <h3 className="font-bold text-lg">Free Study Material</h3>
+          </div>
+          <button 
+            onClick={() => navigate('/explore')}
+            className="text-purple-400 text-xs font-bold hover:underline"
+          >
+            Explore All
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-1 gap-3">
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={() => navigate('/class/10/all')}
+            className="p-6 rounded-[2rem] bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/20 flex items-center justify-between group overflow-hidden relative"
+          >
+            <div className="relative z-10 flex items-center gap-4">
+              <div className="w-14 h-14 bg-orange-500/20 rounded-[1.5rem] flex items-center justify-center">
+                <FileText className="w-7 h-7 text-orange-500" />
+              </div>
+              <div className="text-left">
+                <h4 className="font-black text-lg italic text-orange-500 text-shadow-glow">Class 10 Special</h4>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Free High-Yield PDF Pack</p>
+              </div>
+            </div>
+            <ChevronRight className="w-6 h-6 text-orange-500/50 group-hover:text-orange-500 transition-colors" />
+            <Sparkles className="absolute -right-4 -bottom-4 w-24 h-24 opacity-5" />
+          </motion.button>
+        </div>
+      </div>
+      
       {/* AI Study Tools */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
