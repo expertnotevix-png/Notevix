@@ -169,7 +169,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         
         STRICT CHECKLIST:
         1. Recipient MUST be: "${upiId}"
-        2. Amount detected on receipt MUST be exactly or at least: ₹${selectedPlan?.price}
+        2. Amount detected on receipt MUST be EXACTLY: ₹${selectedPlan?.price}. REJECT if it is higher or lower.
         
         Task: Extract the 12-digit Transaction ID / UTR / Reference number and the total payment amount.
         Output ONLY valid JSON:
@@ -177,10 +177,10 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           "transactionId": "string",
           "amount": number,
           "isVerified": boolean,
-          "reason": "explanation if not verified"
+          "reason": "explanation if not verified (e.g., 'Amount mismatch')"
         }`;
 
-        const system = "You are a professional payment forensics expert. Analyze receipt screenshots with 100% accuracy. Return JSON only.";
+        const system = "You are a professional payment forensics expert. Analyze receipt screenshots with 100% accuracy. You must be extremely strict with the amount; if it's even ₹1 off, isVerified MUST be false. Return JSON only.";
         
         let aiResultRaw: string;
         try {
@@ -217,9 +217,10 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           throw new Error(aiData.reason || "Payment details do not match NoteVix requirements.");
         }
 
-        // Hard check: Ensure amount detected is not less than the price
-        if (aiData.amount && aiData.amount < (selectedPlan?.price || 0)) {
-          throw new Error(`Insufficient Amount: Detected ₹${aiData.amount} but required ₹${selectedPlan?.price}.`);
+        // Hard check: Ensure amount detected matches the price EXACTLY
+        const requiredAmount = selectedPlan?.price || 0;
+        if (aiData.amount && Math.floor(aiData.amount) !== Math.floor(requiredAmount)) {
+          throw new Error(`Strict Amount Check Failed: Detected ₹${aiData.amount} but required EXACTLY ₹${requiredAmount}.`);
         }
 
         if (aiData.transactionId) {
