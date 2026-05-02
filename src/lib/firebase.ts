@@ -88,7 +88,13 @@ export const checkQuotaLock = (): boolean => {
     const lockTime = parseInt(lockout);
     // If lock is older than duration, remove it
     if (Date.now() - lockTime > QUOTA_LOCK_DURATION) {
+      // AUTO-RECOVERY: Clear lock and all related caches
       localStorage.removeItem(QUOTA_LOCK_KEY);
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith(CACHE_PREFIX)) {
+          localStorage.removeItem(key);
+        }
+      });
       window.dispatchEvent(new Event(QUOTA_EVENT));
       return false;
     }
@@ -98,6 +104,13 @@ export const checkQuotaLock = (): boolean => {
 };
 
 export const setQuotaLock = () => {
+  // Prevent resetting the timer if a lock is already active
+  const existing = localStorage.getItem(QUOTA_LOCK_KEY);
+  if (existing) {
+    const time = parseInt(existing);
+    if (Date.now() - time < QUOTA_LOCK_DURATION) return;
+  }
+  
   localStorage.setItem(QUOTA_LOCK_KEY, Date.now().toString());
   window.dispatchEvent(new Event(QUOTA_EVENT));
 };
