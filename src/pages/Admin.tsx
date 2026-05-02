@@ -358,6 +358,51 @@ export default function Admin() {
     }
   };
 
+  const handleResetAnalytics = async () => {
+    if (!window.confirm("CRITICAL: This will archive all current approved sales and reset Revenue/Sales to 0 for the dashboard display. The users will NOT lose access, but the stats will clear. Continue?")) return;
+    
+    const loadingToast = toast.loading("Resetting analytics...");
+    try {
+      const q = query(collection(db, 'purchase_requests'), where('status', '==', 'approved'));
+      const snap = await getDocs(q);
+      
+      if (snap.empty) {
+        toast.dismiss(loadingToast);
+        toast.info("No approved sales to reset.");
+        return;
+      }
+
+      let batch = writeBatch(db);
+      let count = 0;
+
+      for (const doc of snap.docs) {
+        batch.update(doc.ref, {
+          status: 'archived',
+          archivedAt: new Date().toISOString()
+        });
+        count++;
+
+        if (count === 450) {
+          await batch.commit();
+          batch = writeBatch(db);
+          count = 0;
+        }
+      }
+
+      if (count > 0) {
+        await batch.commit();
+      }
+
+      toast.dismiss(loadingToast);
+      toast.success("Analytics reset successfully!");
+      fetchAnalytics();
+    } catch (error) {
+      console.error("Reset analytics error:", error);
+      toast.dismiss(loadingToast);
+      toast.error("Failed to reset analytics.");
+    }
+  };
+
   const fetchRegistry = async () => {
     setLoading(true);
     try {
@@ -1392,6 +1437,17 @@ export default function Admin() {
       case 'analytics':
         return (
           <div className="space-y-8 animate-in fade-in duration-500">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-black tracking-tight uppercase tracking-widest text-indigo-500">Live Analytics</h2>
+              <button 
+                onClick={handleResetAnalytics}
+                className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border border-red-500/20"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Reset Stats
+              </button>
+            </div>
+
             {/* Stat Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
@@ -1759,6 +1815,40 @@ export default function Admin() {
                 <p className="text-xs text-gray-400 truncate">{tx.userEmail || 'Unknown'}</p>
               </div>
             ))}
+          </div>
+        );
+
+      case 'settings':
+        return (
+          <div className="space-y-8 animate-in fade-in duration-500">
+             <div className="glass-card p-8 rounded-[2.5rem] bg-white/5 border border-white/5 space-y-6">
+                <h3 className="text-xl font-black uppercase tracking-widest text-red-500">Dangerous Actions</h3>
+                <p className="text-sm text-gray-500">These actions are irreversible. Use with extreme caution.</p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-6 rounded-3xl bg-red-500/5 border border-red-500/10 space-y-4">
+                    <h4 className="font-bold text-lg">Reset Analytics</h4>
+                    <p className="text-xs text-gray-500">Archive all approved purchases. This resets Revenue and Sales counters to zero.</p>
+                    <button 
+                      onClick={handleResetAnalytics}
+                      className="w-full bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all"
+                    >
+                      Reset Sales Stats
+                    </button>
+                  </div>
+
+                  <div className="p-6 rounded-3xl bg-red-500/5 border border-red-500/10 space-y-4">
+                    <h4 className="font-bold text-lg">Reset Leaderboard</h4>
+                    <p className="text-xs text-gray-500">Set all students points and focus minutes to zero. Start a new season.</p>
+                    <button 
+                      onClick={handleManualLeaderboardReset}
+                      className="w-full bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all"
+                    >
+                      Reset All Points
+                    </button>
+                  </div>
+                </div>
+             </div>
           </div>
         );
 
