@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { collection, query, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../../lib/firebase';
 import { motion } from 'motion/react';
 import { Trash2, Shield, ShieldAlert, ShieldCheck, UserX, UserCheck, MessageSquare, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -13,10 +13,15 @@ export default function ModerationTab() {
     const fetchPosts = async () => {
       try {
         setLoading(true);
+        if (checkQuotaLock()) {
+          setLoading(false);
+          return;
+        }
         const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(q);
         setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, 'posts');
         console.error("Moderation fetch error:", error);
       } finally {
         setLoading(false);

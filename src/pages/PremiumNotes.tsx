@@ -7,7 +7,7 @@ import {
   SearchCheck, FilePlus, AlertCircle
 } from 'lucide-react';
 import { UserProfile, SubjectResource, ValidPayment } from '../types';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, addDoc, getDoc, setDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { GoogleGenAI } from "@google/genai";
@@ -80,6 +80,10 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   const fetchResources = async () => {
     try {
       setLoading(true);
+      if (checkQuotaLock()) {
+        setLoading(false);
+        return;
+      }
       const q = query(collection(db, 'subject_resources'), where('class', '==', activeClass));
       const snap = await getDocs(q);
       const data = snap.docs
@@ -87,6 +91,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         .filter(res => res.isFree !== true); // Filter out free resources
       setResources(data);
     } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'subject_resources');
       console.error("Error fetching resources:", error);
     } finally {
       setLoading(false);

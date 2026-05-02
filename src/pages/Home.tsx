@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { UserProfile } from '../types';
 import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Trophy, Bell, Calendar, Sparkles, MessageSquare, BrainCircuit, FileText, Users, Instagram } from 'lucide-react';
 import { collection, query, where, getDocs, limit, addDoc, updateDoc, doc, setDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, checkQuotaLock, handleFirestoreError, OperationType } from '../lib/firebase';
 
 interface HomeProps {
   user: UserProfile;
@@ -39,14 +39,17 @@ export default function Home({ user }: HomeProps) {
   const handleClassSelect = async (cls: string) => {
     setSelectedClass(cls);
     try {
+      if (checkQuotaLock()) return;
       await updateDoc(doc(db, 'users', user.uid), { class: cls });
     } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
       console.error("Error updating class:", error);
     }
   };
 
   const autoSeedData = async () => {
     try {
+      if (checkQuotaLock()) return;
       const q = query(collection(db, 'subject_resources'), limit(1));
       const snap = await getDocs(q);
       if (snap.empty) {
@@ -217,6 +220,7 @@ export default function Home({ user }: HomeProps) {
         }
       }
     } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'home_seeding');
       console.warn("Home: Auto-seeding failed (likely quota):", err);
     }
   };

@@ -50,6 +50,7 @@ export enum OperationType {
 // System-wide quota lockout (30 minutes)
 const QUOTA_LOCK_KEY = 'firestore_quota_lockout';
 const QUOTA_LOCK_DURATION = 30 * 60 * 1000;
+const QUOTA_EVENT = 'notevix_quota_lock_changed';
 
 export const checkQuotaLock = (): boolean => {
   const lockout = localStorage.getItem(QUOTA_LOCK_KEY);
@@ -59,12 +60,31 @@ export const checkQuotaLock = (): boolean => {
       return true;
     }
     localStorage.removeItem(QUOTA_LOCK_KEY);
+    window.dispatchEvent(new Event(QUOTA_EVENT));
   }
   return false;
 };
 
 export const setQuotaLock = () => {
   localStorage.setItem(QUOTA_LOCK_KEY, Date.now().toString());
+  window.dispatchEvent(new Event(QUOTA_EVENT));
+};
+
+export const clearQuotaLock = () => {
+  localStorage.removeItem(QUOTA_LOCK_KEY);
+  window.dispatchEvent(new Event(QUOTA_EVENT));
+};
+
+export const listenToQuotaLock = (callback: (isLocked: boolean) => void) => {
+  const handler = () => callback(checkQuotaLock());
+  window.addEventListener(QUOTA_EVENT, handler);
+  window.addEventListener('storage', (e) => {
+    if (e.key === QUOTA_LOCK_KEY) handler();
+  });
+  return () => {
+    window.removeEventListener(QUOTA_EVENT, handler);
+    window.removeEventListener('storage', handler);
+  };
 };
 
 interface FirestoreErrorInfo {
@@ -88,8 +108,11 @@ interface FirestoreErrorInfo {
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null, shouldThrow = false) {
   const errorMsg = error instanceof Error ? error.message : String(error);
+  const errorCode = (error as any)?.code;
   const isQuotaError = errorMsg.toLowerCase().includes('quota') || 
-                      (error as any)?.code === 'resource-exhausted';
+                      errorCode === 'resource-exhausted' ||
+                      errorCode === '8' || // gRPC code for resource exhausted
+                      errorMsg.includes('resource-exhausted');
 
   if (isQuotaError) {
     setQuotaLock();

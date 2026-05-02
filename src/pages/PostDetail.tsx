@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, onSnapshot, collection, query, orderBy, addDoc, updateDoc, increment, arrayUnion, arrayRemove, deleteDoc, setDoc, getDoc, getDocs } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ChevronLeft, 
@@ -44,6 +44,12 @@ export default function PostDetail({ user }: { user: UserProfile | null }) {
     const fetchPostData = async () => {
       try {
         setLoading(true);
+        if (checkQuotaLock()) {
+          setError("Data limit reached. Please try again tomorrow.");
+          setLoading(false);
+          return;
+        }
+
         // Fetch Main Post
         const docSnap = await getDoc(doc(db, 'posts', postId));
         if (docSnap.exists()) {
@@ -62,7 +68,8 @@ export default function PostDetail({ user }: { user: UserProfile | null }) {
         const repliesSnap = await getDocs(repliesQuery);
         setReplies(repliesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } catch (error: any) {
-        console.error("Post detail fetch error:", error);
+        handleFirestoreError(error, OperationType.GET, `posts/${postId}`);
+        setError("Something went wrong while loading the post.");
       } finally {
         setLoading(false);
       }

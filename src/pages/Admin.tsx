@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp, writeBatch, getCountFromServer } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, checkQuotaLock, clearQuotaLock } from '../lib/firebase';
 import { geminiService } from '../services/geminiService';
 import { Chapter, Message, Notification, PurchaseRequest, UserProfile, ValidPayment, TransactionLedger } from '../types';
 import { 
@@ -80,10 +80,12 @@ export default function Admin() {
 
   const fetchTransactionLedger = async () => {
     try {
+      if (checkQuotaLock()) return;
       const q = query(collection(db, 'transaction_ledger'), orderBy('timestamp', 'desc'));
       const snap = await getDocs(q);
       setTransactionLedger(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TransactionLedger)));
     } catch (e) {
+      handleFirestoreError(e, OperationType.LIST, 'transaction_ledger');
       console.error(e);
     }
   };
@@ -91,10 +93,12 @@ export default function Admin() {
   const fetchValidPayments = async () => {
     setLoading(true);
     try {
+      if (checkQuotaLock()) return;
       const q = query(collection(db, 'valid_payments'), orderBy('createdAt', 'desc'));
       const snap = await getDocs(q);
       setValidPayments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ValidPayment)));
     } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'valid_payments');
       console.error(error);
     } finally {
       setLoading(false);
@@ -214,10 +218,12 @@ export default function Admin() {
   const fetchBanners = async () => {
     setLoading(true);
     try {
+      if (checkQuotaLock()) return;
       const q = query(collection(db, 'promo_banners'), orderBy('createdAt', 'desc'));
       const snap = await getDocs(q);
       setBanners(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'promo_banners');
       console.error(error);
     } finally {
       setLoading(false);
@@ -311,9 +317,11 @@ export default function Admin() {
   const fetchSubjectResources = async () => {
     setLoading(true);
     try {
+      if (checkQuotaLock()) return;
       const snap = await getDocs(collection(db, 'subject_resources'));
       setSubjectResources(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'subject_resources');
       console.error(error);
     } finally {
       setLoading(false);
@@ -323,6 +331,10 @@ export default function Admin() {
   const fetchAnalytics = async () => {
     setLoading(true);
     try {
+      if (checkQuotaLock()) {
+        setLoading(false);
+        return;
+      }
       const q = query(collection(db, 'purchase_requests'), where('status', '==', 'approved'), orderBy('timestamp', 'desc'), limit(500));
       const snap = await getDocs(q);
       const docs = snap.docs.map(d => d.data());
@@ -352,6 +364,7 @@ export default function Admin() {
         planDistribution
       });
     } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'purchase_requests');
       console.error("Analytics fetch error:", error);
     } finally {
       setLoading(false);
@@ -363,53 +376,73 @@ export default function Admin() {
     
     const loadingToast = toast.loading("Resetting analytics...");
     try {
-      const q = query(collection(db, 'purchase_requests'), where('status', '==', 'approved'));
-      const snap = await getDocs(q);
+      // Optimistic Reset: Fetching in chunks to prevent quota spikes
+      const q = query(
+        collection(db, 'purchase_requests'), 
+        where('status', '==', 'approved'),
+        limit(200)
+      );
       
-      if (snap.empty) {
-        toast.dismiss(loadingToast);
-        toast.info("No approved sales to reset.");
-        return;
-      }
+      let processedCount = 0;
+      let hasMore = true;
 
-      let batch = writeBatch(db);
-      let count = 0;
+      while (hasMore) {
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          hasMore = false;
+          break;
+        }
 
-      for (const doc of snap.docs) {
-        batch.update(doc.ref, {
-          status: 'archived',
-          archivedAt: new Date().toISOString()
+        const batch = writeBatch(db);
+        snap.docs.forEach(doc => {
+          batch.update(doc.ref, {
+            status: 'archived',
+            archivedAt: new Date().toISOString()
+          });
         });
-        count++;
 
-        if (count === 450) {
-          await batch.commit();
-          batch = writeBatch(db);
-          count = 0;
+        await batch.commit();
+        processedCount += snap.size;
+        
+        // If we got exactly 200, there's likely more, but let's pause a bit to stay under rate limits
+        if (snap.size < 200) {
+          hasMore = false;
+        } else {
+          await new Promise(r => setTimeout(r, 500)); // Small cooldown
         }
       }
-
-      if (count > 0) {
-        await batch.commit();
-      }
-
+      
       toast.dismiss(loadingToast);
-      toast.success("Analytics reset successfully!");
+      if (processedCount === 0) {
+        toast.info("No approved sales to reset.");
+      } else {
+        toast.success(`Reset complete! Archived ${processedCount} records.`);
+      }
       fetchAnalytics();
     } catch (error) {
       console.error("Reset analytics error:", error);
+      handleFirestoreError(error, OperationType.WRITE, 'purchase_requests/reset');
       toast.dismiss(loadingToast);
-      toast.error("Failed to reset analytics.");
+      toast.error("Failed to reset analytics. Check console for details.");
     }
+  };
+
+  const handleEmergencyReset = () => {
+    if (!window.confirm("This will clear your local app cache and reload. It resolves 'Unexpected State' and 'Internal Assertion' errors. You might need to login again. Proceed?")) return;
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.location.reload();
   };
 
   const fetchRegistry = async () => {
     setLoading(true);
     try {
+      if (checkQuotaLock()) return;
       const q = query(collection(db, 'transaction_id_registry'), orderBy('usedAt', 'desc'), limit(100));
       const snap = await getDocs(q);
       setRegistry(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'transaction_id_registry');
       console.error(error);
     } finally {
       setLoading(false);
@@ -419,10 +452,12 @@ export default function Admin() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
+      if (checkQuotaLock()) return;
       const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(100));
       const snap = await getDocs(q);
       setAllUsers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
     } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'users');
       console.error(error);
     } finally {
       setLoading(false);
@@ -514,10 +549,16 @@ export default function Admin() {
   };
 
   const fetchChapters = async () => {
-    const querySnapshot = await getDocs(collection(db, 'chapters'));
-    const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Chapter));
-    setChapters(data);
-    setLoading(false);
+    try {
+      if (checkQuotaLock()) return;
+      const querySnapshot = await getDocs(collection(db, 'chapters'));
+      const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Chapter));
+      setChapters(data);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'chapters');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -860,11 +901,34 @@ export default function Admin() {
   const renderTabContent = () => {
     if (checkQuotaLock()) {
       return (
-        <div className="p-5 bg-red-500/10 border border-red-500/20 rounded-3xl flex items-center gap-4 animate-pulse">
-          <Database className="w-6 h-6 text-red-500" />
-          <div>
-            <h4 className="text-sm font-bold text-red-500">QUOTA LOCK ACTIVATED</h4>
-            <p className="text-xs text-gray-500">Dashboard is in restricted mode to preserve student access.</p>
+        <div className="p-8 bg-red-500/5 border border-red-500/20 rounded-[2.5rem] flex flex-col items-center justify-center gap-6 text-center animate-in fade-in zoom-in duration-500">
+          <div className="w-20 h-20 rounded-[2rem] bg-red-500/10 flex items-center justify-center">
+            <Database className="w-10 h-10 text-red-500" />
+          </div>
+          <div className="space-y-2">
+            <h4 className="text-xl font-black text-red-500 uppercase tracking-widest">QUOTA LOCK ACTIVATED</h4>
+            <p className="text-sm text-gray-500 max-w-sm mx-auto">
+              The dashboard is currently restricted to preserve Firestore resources for your students. This happens when the daily free quota is nearly exhausted.
+            </p>
+          </div>
+          
+            <div className="flex flex-col gap-3 w-full max-w-xs">
+            <button 
+              onClick={() => {
+                clearQuotaLock();
+                window.location.reload();
+              }}
+              className="w-full bg-indigo-500 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-indigo-500/20 active:scale-95 transition-all"
+            >
+              Unlock & Try Anyway
+            </button>
+            <button 
+              onClick={handleEmergencyReset}
+              className="w-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white py-3 rounded-2xl font-black uppercase tracking-widest text-[8px] transition-all border border-white/5"
+            >
+              Emergency Fix (Clear App Cache)
+            </button>
+            <p className="text-[10px] text-gray-600 font-medium pt-2">Use with caution: Multiple retries during quota exhaustion may lead to temporary project suspension.</p>
           </div>
         </div>
       );
@@ -1845,6 +1909,17 @@ export default function Admin() {
                       className="w-full bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all"
                     >
                       Reset All Points
+                    </button>
+                  </div>
+
+                  <div className="p-6 rounded-3xl bg-indigo-500/5 border border-indigo-500/10 space-y-4">
+                    <h4 className="font-bold text-lg">System Health</h4>
+                    <p className="text-xs text-gray-500">Fix 'Internal Assertion' or 'Unexpected State' errors by clearing cache.</p>
+                    <button 
+                      onClick={handleEmergencyReset}
+                      className="w-full bg-indigo-500/10 hover:bg-indigo-500 text-indigo-500 hover:text-white py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all"
+                    >
+                      Emergency Fix App
                     </button>
                   </div>
                 </div>

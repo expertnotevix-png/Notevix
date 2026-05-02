@@ -40,6 +40,16 @@ export default function Login() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    // If Android + In-App Browser, try to auto-trigger Chrome intent once
+    if (isInAppBrowser && navigator.userAgent.includes('Android')) {
+      const timer = setTimeout(() => {
+        window.location.href = `intent://${window.location.host}${window.location.pathname}${window.location.search}#Intent;scheme=https;package=com.android.chrome;end`;
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [isInAppBrowser]);
+
   const handleLogin = async (useRedirect = false) => {
     if (!agreed) {
       setShowAgreedError(true);

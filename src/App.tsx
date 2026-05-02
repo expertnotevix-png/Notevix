@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { onAuthStateChanged, getRedirectResult, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, query, collection, where, getDocs, addDoc, increment, orderBy, limit } from 'firebase/firestore';
 import { logEvent } from 'firebase/analytics';
-import { auth, db, handleFirestoreError, OperationType, analytics, checkQuotaLock, setQuotaLock } from './lib/firebase';
+import { auth, db, handleFirestoreError, OperationType, analytics, checkQuotaLock, setQuotaLock, listenToQuotaLock } from './lib/firebase';
 import { UserProfile } from './types';
 
 const CACHED_USER_KEY = 'notevix_user_profile_v1';
@@ -48,14 +48,31 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const quotaLockRef = useRef<boolean>(false);
+  const [isQuotaLocked, setIsQuotaLocked] = useState(checkQuotaLock());
+  const quotaLockRef = useRef<boolean>(checkQuotaLock());
 
   useEffect(() => {
-    // Check for existing quota lockout on mount
-    if (checkQuotaLock()) {
-      quotaLockRef.current = true;
-      console.warn("App: Quota lockout active. Using cache only.");
-    }
+    return listenToQuotaLock((locked) => {
+      setIsQuotaLocked(locked);
+      quotaLockRef.current = locked;
+      if (locked) {
+        toast.error("Daily Data Limit Reached", {
+          description: "Simplified mode active for 24h. Use 'Emergency Refresh' if app feels stuck.",
+          id: 'quota-lock-toast',
+          duration: Infinity,
+          action: {
+            label: 'Refresh App',
+            onClick: () => {
+              window.localStorage.clear();
+              window.sessionStorage.clear();
+              window.location.reload();
+            }
+          }
+        });
+      } else {
+        toast.dismiss('quota-lock-toast');
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -340,6 +357,16 @@ export default function App() {
           <p className="text-[10px] text-gray-600 uppercase tracking-widest">Taking too long?</p>
           <div className="flex flex-col gap-3">
             <button 
+              onClick={() => {
+                window.localStorage.clear();
+                window.sessionStorage.clear();
+                window.location.reload();
+              }}
+              className="px-6 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-white/50 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all border border-white/5"
+            >
+              Emergency Fix (Clear Cache)
+            </button>
+            <button 
               onClick={() => window.location.href = '/login'}
               className="text-purple-500 text-xs font-bold hover:underline"
             >
@@ -352,7 +379,7 @@ export default function App() {
               }}
               className="text-gray-500 text-[10px] hover:text-white transition-colors"
             >
-              Force Logout & Refresh
+              Force Logout
             </button>
           </div>
         </div>

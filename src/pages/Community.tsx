@@ -138,7 +138,7 @@ export default function Community({ user }: { user: UserProfile | null }) {
         setMessages([...msgs].reverse());
         setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
       }, (error) => {
-        console.warn("Chat listener error:", error);
+        handleFirestoreError(error, OperationType.LIST, 'community_chat');
         setIsLiveChat(false);
       });
       return () => chatUnsub();

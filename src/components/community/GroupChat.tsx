@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, limit, getDocs } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Smile, Info, ChevronLeft, MapPin, Sparkles, Hash } from 'lucide-react';
 import { UserProfile } from '../../types';
@@ -35,6 +35,7 @@ export default function GroupChat({
   const fetchMessagesManual = async () => {
     if (!group?.id) return;
     try {
+      if (checkQuotaLock()) return;
       const q = query(
         collection(db, 'study_groups', group.id, 'messages'),
         orderBy('timestamp', 'desc'),
@@ -45,7 +46,7 @@ export default function GroupChat({
       setMessages([...msgs].reverse());
       setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     } catch (err) {
-      console.error("Manual fetch error:", err);
+      handleFirestoreError(err, OperationType.LIST, `study_groups/${group.id}/messages`);
     }
   };
 
@@ -64,7 +65,7 @@ export default function GroupChat({
         setMessages([...msgs].reverse());
         setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
       }, (error) => {
-        console.error("Group chat listener error:", error);
+        handleFirestoreError(error, OperationType.LIST, `study_groups/${group.id}/messages`);
         setIsLive(false);
       });
 
