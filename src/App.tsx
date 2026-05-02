@@ -301,8 +301,8 @@ export default function App() {
       };
 
       if (currentUser.role !== 'admin') {
-        const pointGain = 10;
-        const minuteGain = 1;
+        const pointGain = 50;
+        const minuteGain = 5;
 
         const newFocusMinutes = (currentUser.totalFocusMinutes || 0) + minuteGain;
         const newPoints = (currentUser.totalPoints || 0) + pointGain;
@@ -338,7 +338,7 @@ export default function App() {
       } catch (err) {
         console.error("Global tracking failed:", err);
       }
-    }, 60000); // Now every 1 minute for better feedback (10 pts/min)
+    }, 300000); // Reduced to 5 minutes to save writes
 
     return () => clearInterval(interval);
   }, [user?.uid]);
@@ -427,11 +427,23 @@ export default function App() {
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="bg-yellow-500 text-black text-[10px] font-black uppercase tracking-widest py-1.5 text-center sticky top-0 z-[120] flex items-center justify-center gap-2"
+              className="bg-yellow-500 text-black text-[10px] font-black uppercase tracking-widest py-1.5 text-center sticky top-0 z-[120] flex items-center justify-center gap-4 px-4"
             >
-              <Zap size={10} fill="currentColor" />
-              High Viral Traffic: App is running in Static Optimization Mode
-              <Zap size={10} fill="currentColor" />
+              <div className="flex items-center gap-2 flex-1 justify-center">
+                <Zap size={10} fill="currentColor" />
+                High Viral Traffic: App is running in Static Optimization Mode
+                <Zap size={10} fill="currentColor" />
+              </div>
+              <button 
+                onClick={() => {
+                  window.localStorage.removeItem('firestore_quota_lockout');
+                  window.localStorage.clear(); // Clear all caches to be sure
+                  window.location.reload();
+                }}
+                className="bg-black text-yellow-500 px-3 py-1 rounded-sm border border-black/10 active:scale-95 transition-transform"
+              >
+                Restore Full Mode
+              </button>
             </motion.div>
           )}
         </AnimatePresence>

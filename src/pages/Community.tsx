@@ -79,7 +79,7 @@ export default function Community({ user }: { user: UserProfile | null }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const [isLiveChat, setIsLiveChat] = useState(true); 
+  const [isLiveChat, setIsLiveChat] = useState(!checkQuotaLock()); 
 
   // Helpers for Smart Scroll
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {

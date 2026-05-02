@@ -477,6 +477,15 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                 <h3 className="text-2xl font-black text-white uppercase tracking-tight">Curating Resources</h3>
                 <p className="text-gray-500 text-xs font-medium uppercase tracking-[0.3em]">Class {activeClass} Premium Hub arriving shortly.</p>
               </div>
+              <button 
+                onClick={() => {
+                  window.localStorage.removeItem(`fs_cache_resources_${activeClass}`);
+                  fetchResources();
+                }}
+                className="px-6 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-white/50 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all border border-white/5"
+              >
+                Force Refresh Library
+              </button>
             </div>
           )}
         </div>

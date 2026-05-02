@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
+import { collection, query, orderBy, getDocs, limit } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType, checkQuotaLock, getCachedData, setCachedData } from '../lib/firebase';
 import { PromoBanner } from '../types';
 import { useNavigate } from 'react-router-dom';
 
@@ -11,20 +11,34 @@ export function PromoCarousel() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (checkQuotaLock()) return;
-    
-    const q = query(collection(db, 'promo_banners'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as PromoBanner[];
-      setBanners(data);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'promo_banners');
-    });
+    const fetchBanners = async () => {
+      const cacheKey = 'promo_banners_cache';
+      
+      // Check Cache
+      const cached = getCachedData<PromoBanner[]>(cacheKey);
+      if (cached) {
+        setBanners(cached);
+        return;
+      }
 
-    return () => unsubscribe();
+      if (checkQuotaLock()) return;
+      
+      try {
+        const q = query(collection(db, 'promo_banners'), orderBy('createdAt', 'desc'), limit(5));
+        const snapshot = await getDocs(q);
+        const data = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as PromoBanner[];
+        
+        setBanners(data);
+        setCachedData(cacheKey, data, 60); // Cache for 1 hour
+      } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, 'promo_banners');
+      }
+    };
+
+    fetchBanners();
   }, []);
 
   useEffect(() => {

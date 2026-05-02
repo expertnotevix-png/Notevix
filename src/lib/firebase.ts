@@ -82,14 +82,17 @@ const QUOTA_LOCK_DURATION = 30 * 60 * 1000;
 const QUOTA_EVENT = 'notevix_quota_lock_changed';
 
 export const checkQuotaLock = (): boolean => {
+  if (typeof window === 'undefined') return false;
   const lockout = localStorage.getItem(QUOTA_LOCK_KEY);
   if (lockout) {
     const lockTime = parseInt(lockout);
-    if (Date.now() - lockTime < QUOTA_LOCK_DURATION) {
-      return true;
+    // If lock is older than duration, remove it
+    if (Date.now() - lockTime > QUOTA_LOCK_DURATION) {
+      localStorage.removeItem(QUOTA_LOCK_KEY);
+      window.dispatchEvent(new Event(QUOTA_EVENT));
+      return false;
     }
-    localStorage.removeItem(QUOTA_LOCK_KEY);
-    window.dispatchEvent(new Event(QUOTA_EVENT));
+    return true;
   }
   return false;
 };

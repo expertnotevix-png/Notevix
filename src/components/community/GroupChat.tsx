@@ -32,7 +32,7 @@ export default function GroupChat({
   const scrollRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [isBanned, setIsBanned] = useState(false);
-  const [isLive, setIsLive] = useState(true);
+  const [isLive, setIsLive] = useState(!checkQuotaLock());
 
   // Smart Scroll Helpers
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
