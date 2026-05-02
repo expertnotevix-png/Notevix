@@ -41,6 +41,7 @@ import BottomNav from './components/BottomNav';
 import { FloatingChatbot } from './components/FloatingChatbot';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
+import { Zap } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -415,9 +416,22 @@ export default function App() {
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="bg-red-500 text-white text-[10px] font-bold uppercase tracking-widest py-1 text-center sticky top-0 z-[100]"
+              className="bg-red-500 text-white text-[10px] font-bold uppercase tracking-widest py-1 text-center sticky top-0 z-[110]"
             >
               You are offline. Some features may not work.
+            </motion.div>
+          )}
+          {isQuotaLocked && (
+            <motion.div
+              key="quota-banner"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="bg-yellow-500 text-black text-[10px] font-black uppercase tracking-widest py-1.5 text-center sticky top-0 z-[120] flex items-center justify-center gap-2"
+            >
+              <Zap size={10} fill="currentColor" />
+              High Viral Traffic: App is running in Static Optimization Mode
+              <Zap size={10} fill="currentColor" />
             </motion.div>
           )}
         </AnimatePresence>

@@ -59,7 +59,11 @@ export const getCachedData = <T>(key: string): T | null => {
 };
 
 export const setCachedData = (key: string, data: any, ttlMinutes: number = 10) => {
-  const expiry = Date.now() + (ttlMinutes * 60 * 1000);
+  // If we are under high load (quota lock), we cache much longer (6 hours)
+  const isLocked = checkQuotaLock();
+  const effectiveTTL = isLocked ? Math.max(ttlMinutes, 360) : ttlMinutes;
+  
+  const expiry = Date.now() + (effectiveTTL * 60 * 1000);
   window.localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ data, expiry }));
 };
 
@@ -135,13 +139,15 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   const errorMsg = error instanceof Error ? error.message : String(error);
   const errorCode = (error as any)?.code;
   const isQuotaError = errorMsg.toLowerCase().includes('quota') || 
+                      errorMsg.toLowerCase().includes('exhausted') ||
+                      errorMsg.toLowerCase().includes('limit exceeded') ||
                       errorCode === 'resource-exhausted' ||
                       errorCode === '8' || // gRPC code for resource exhausted
                       errorMsg.includes('resource-exhausted');
 
   if (isQuotaError) {
     setQuotaLock();
-    console.warn("Firestore Quota hit. Lockout active.");
+    console.warn("Firestore Quota hit. Lockout active.", errorMsg);
   }
 
   const errInfo: FirestoreErrorInfo = {

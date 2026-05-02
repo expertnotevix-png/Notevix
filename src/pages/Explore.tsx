@@ -30,7 +30,7 @@ export default function Explore() {
         const q = query(collection(db, 'chapters'), limit(100)); // Increased limit to fetch once
         const querySnapshot = await getDocs(q);
         allChapters = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Chapter));
-        setCachedData('explore_chapters', allChapters, 30); // Cache for 30 mins
+        setCachedData('explore_chapters', allChapters, 60); // Cache for 60 mins (Increased for viral mode)
       }
 
       const filtered = (allChapters || []).filter(c => 
