@@ -87,25 +87,7 @@ export default function App() {
     let unsubscribeUser: (() => void) | undefined;
 
     const initAuth = async () => {
-      try {
-        // 1. Ensure persistence is set first
-        await setPersistence(auth, browserLocalPersistence);
-        console.log("App: Persistence active");
-
-        // 2. Handle redirect result
-        console.log("App: Checking redirect result...");
-        const result = await getRedirectResult(auth);
-        if (result?.user) {
-          console.log("App: Redirect login success:", result.user.email);
-        }
-      } catch (error: any) {
-        console.error("App: Auth init error:", error);
-        if (error.code === 'auth/unauthorized-domain') {
-          setLoadingError(`Domain Not Authorized: Please add "${window.location.hostname}" to Firebase.`);
-        }
-      }
-
-        // 3. Listen for auth state
+      // Setup listener immediately to capture existing sessions
       const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
         if (!isMounted) return;
         console.log("App: Auth state changed:", firebaseUser ? "User present" : "No user");
@@ -133,7 +115,7 @@ export default function App() {
               // Cache for quota protection
               localStorage.setItem(CACHED_USER_KEY, JSON.stringify(userData));
               
-              // Streak Logic: Update if it's a new day
+              // Streak Logic
               const today = new Date().toISOString().split('T')[0];
               const lastUpdate = userData.streak?.lastUpdateDate;
               
@@ -146,7 +128,7 @@ export default function App() {
                 if (lastUpdate === yesterdayStr) {
                   newCount += 1;
                 } else {
-                  newCount = 1; // Reset if they missed a day
+                  newCount = 1; 
                 }
                 
                 await updateDoc(userRef, {
@@ -194,7 +176,6 @@ export default function App() {
               quotaLockRef.current = true;
             }
 
-            // Try to use cached version first
             const cached = localStorage.getItem(CACHED_USER_KEY);
             if (cached) {
               userData = JSON.parse(cached);
@@ -203,13 +184,12 @@ export default function App() {
               }
             } else {
               if (isQuotaError) {
-                toast.error("Cloud Quota Met: Some features may be limited until tomorrow, but you can still study!", {
+                toast.error("Cloud Quota Met: Accessing degraded mode.", {
                   duration: 6000,
                   id: 'quota-error'
                 });
               }
               
-              // Fallback user to break login loop and allow access in "Degraded Mode"
               userData = {
                 uid: firebaseUser.uid,
                 email: firebaseUser.email || '',
@@ -231,8 +211,6 @@ export default function App() {
 
           if (userData) {
             setUser(userData);
-            // We removed the real-time user profile listener (onSnapshot) to save quota.
-            // Local state updates in intervals handle UI sync.
           }
 
         } catch (err: any) {
@@ -242,6 +220,14 @@ export default function App() {
           setLoading(false);
         }
       });
+
+      // Background tasks
+      try {
+        await setPersistence(auth, browserLocalPersistence);
+        await getRedirectResult(auth).catch(e => console.warn("App: Redirect result check failed (common on mobile):", e));
+      } catch (error: any) {
+        console.error("App: Auth peripheral tasks error:", error);
+      }
 
       return unsubscribeAuth;
     };

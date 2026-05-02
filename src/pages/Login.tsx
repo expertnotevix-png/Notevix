@@ -10,8 +10,9 @@ import { Link, useSearchParams } from 'react-router-dom';
 export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [agreed, setAgreed] = useState(() => localStorage.getItem('login_agreed') === 'true');
+  const [agreed, setAgreed] = useState(() => localStorage.getItem('login_agreed') !== 'false'); // Default to true if not explicitly false
   const [copied, setCopied] = useState(false);
+  const [showAgreedError, setShowAgreedError] = useState(false);
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
@@ -40,7 +41,11 @@ export default function Login() {
   }, [searchParams]);
 
   const handleLogin = async (useRedirect = false) => {
-    if (!agreed) return;
+    if (!agreed) {
+      setShowAgreedError(true);
+      setTimeout(() => setShowAgreedError(false), 3000);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -135,18 +140,44 @@ export default function Login() {
                 </div>
               )}
 
-              <button
-                onClick={() => handleLogin(false)}
-                disabled={loading}
-                className="w-full purple-gradient text-white font-black py-4 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-xl shadow-purple-500/40 active:scale-95 transition-all text-sm uppercase tracking-widest disabled:opacity-50"
-              >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
-                Sign In with Google
-              </button>
+              <div className="flex flex-col gap-4">
+                <div 
+                  onClick={() => setAgreed(!agreed)}
+                  className="flex items-start gap-3 cursor-pointer group p-2 rounded-xl hover:bg-white/5 transition-colors"
+                >
+                  <div className={`mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                    agreed ? 'bg-purple-600 border-purple-600' : 'border-white/20 group-hover:border-purple-500/50'
+                  }`}>
+                    {agreed && <Check size={14} className="text-white" />}
+                  </div>
+                  <p className="text-[10px] text-gray-500 leading-relaxed text-left">
+                    I agree to NoteVix's <Link to="/terms" className="text-purple-400 hover:underline" onClick={e => e.stopPropagation()}>Terms</Link> and <Link to="/privacy" className="text-purple-400 hover:underline" onClick={e => e.stopPropagation()}>Privacy Policy</Link>.
+                  </p>
+                </div>
 
-              <p className="text-[10px] text-gray-500 leading-relaxed px-4">
-                By continuing, you agree to NoteVix's <Link to="/terms" className="text-purple-400 hover:underline">Terms</Link> and <Link to="/privacy" className="text-purple-400 hover:underline">Privacy Policy</Link>.
-              </p>
+                <button
+                  onClick={() => handleLogin(false)}
+                  disabled={loading}
+                  className={`w-full font-black py-4 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-xl transition-all text-sm uppercase tracking-widest disabled:opacity-50 ${
+                    agreed 
+                      ? 'purple-gradient text-white shadow-purple-500/40 active:scale-95' 
+                      : 'bg-white/10 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
+                  Sign In with Google
+                </button>
+                
+                {showAgreedError && (
+                  <motion.p 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-red-400 text-[9px] font-black uppercase tracking-widest text-center"
+                  >
+                    Please agree to the terms first
+                  </motion.p>
+                )}
+              </div>
 
               <div className="relative pt-4">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/5"></div></div>
