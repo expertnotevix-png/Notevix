@@ -38,6 +38,31 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
+// Quota & Cache Management
+const CACHE_PREFIX = 'fs_cache_';
+
+// Smart Cache: Stores data for X minutes to save reads
+export const getCachedData = <T>(key: string): T | null => {
+  const cached = window.localStorage.getItem(CACHE_PREFIX + key);
+  if (!cached) return null;
+  
+  try {
+    const { data, expiry } = JSON.parse(cached);
+    if (Date.now() > expiry) {
+      window.localStorage.removeItem(CACHE_PREFIX + key);
+      return null;
+    }
+    return data as T;
+  } catch (e) {
+    return null;
+  }
+};
+
+export const setCachedData = (key: string, data: any, ttlMinutes: number = 10) => {
+  const expiry = Date.now() + (ttlMinutes * 60 * 1000);
+  window.localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ data, expiry }));
+};
+
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
