@@ -59,6 +59,7 @@ export default function Community({ user }: { user: UserProfile | null }) {
   const { isBanned, banReason } = useModeration(user);
   const [activeTab, setActiveTab] = useState<'chat' | 'discussions' | 'groups'>('chat');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [pendingMessages, setPendingMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [posts, setPosts] = useState<any[]>([]);
@@ -76,8 +77,22 @@ export default function Community({ user }: { user: UserProfile | null }) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<any | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
-  const [isLiveChat, setIsLiveChat] = useState(false);
+  const [isLiveChat, setIsLiveChat] = useState(true); 
+
+  // Helpers for Smart Scroll
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior });
+    }
+  };
+
+  const isNearBottom = () => {
+    if (!listRef.current) return true;
+    const { scrollTop, scrollHeight, clientHeight } = listRef.current;
+    return scrollHeight - scrollTop - clientHeight < 150;
+  };
 
   // 1. Fetch Stats - Only once on mount
   useEffect(() => {
@@ -118,7 +133,7 @@ export default function Community({ user }: { user: UserProfile | null }) {
       const snapshot = await getDocs(chatQuery);
       const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ChatMessage[];
       setMessages([...msgs].reverse());
-      setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      setTimeout(() => scrollToBottom('auto'), 50);
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, 'community_chat');
     }
@@ -135,8 +150,15 @@ export default function Community({ user }: { user: UserProfile | null }) {
       );
       const chatUnsub = onSnapshot(chatQuery, (snapshot) => {
         const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ChatMessage[];
-        setMessages([...msgs].reverse());
-        setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+        const reversed = [...msgs].reverse();
+        setMessages(reversed);
+        
+        // Remove from pending if server has it now
+        setPendingMessages(prev => prev.filter(p => !reversed.some(m => m.content === p.content && m.userId === p.userId)));
+
+        if (isNearBottom()) {
+          setTimeout(() => scrollToBottom('smooth'), 50);
+        }
       }, (error) => {
         handleFirestoreError(error, OperationType.LIST, 'community_chat');
         setIsLiveChat(false);
@@ -185,20 +207,41 @@ export default function Community({ user }: { user: UserProfile | null }) {
     e.preventDefault();
     if (!user || !newMessage.trim() || isBanned) return;
 
-    const messageData = {
+    const tempId = 'temp-' + Date.now();
+    const messageContent = newMessage.trim();
+    
+    const optimisticMessage = {
+      id: tempId,
       userId: user.uid,
       userName: user.displayName,
       userPhoto: user.photoURL,
-      content: newMessage.trim(),
-      timestamp: serverTimestamp()
+      content: messageContent,
+      timestamp: null,
+      status: 'sending'
     };
 
+    setPendingMessages(prev => [...prev, optimisticMessage]);
     setNewMessage('');
     setShowEmoji(false);
+    
+    // Always scroll to bottom when user sends a message
+    setTimeout(() => scrollToBottom('smooth'), 50);
+
     try {
-      await addDoc(collection(db, 'community_chat'), messageData);
+      if (checkQuotaLock()) {
+        throw new Error("Quota Lock active. Cannot send.");
+      }
+      await addDoc(collection(db, 'community_chat'), {
+        userId: user.uid,
+        userName: user.displayName,
+        userPhoto: user.photoURL,
+        content: messageContent,
+        timestamp: serverTimestamp()
+      });
     } catch (error) {
       console.error("Failed to send message:", error);
+      // Mark as error in local state
+      setPendingMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
     }
   };
 
@@ -260,7 +303,7 @@ export default function Community({ user }: { user: UserProfile | null }) {
       )}
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col">
+      <div className="flex-1 overflow-hidden relative flex flex-col">
         <AnimatePresence mode="wait">
           {selectedGroup ? (
             <motion.div
@@ -282,14 +325,19 @@ export default function Community({ user }: { user: UserProfile | null }) {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="max-w-4xl mx-auto h-full flex flex-col w-full"
+              className="max-w-4xl mx-auto h-full flex flex-col w-full relative"
             >
               {activeTab === 'groups' && (
-                <StudyGroupList user={user} onSelectGroup={setSelectedGroup} />
+                <div className="flex-1 overflow-y-auto no-scrollbar">
+                  <StudyGroupList user={user} onSelectGroup={setSelectedGroup} />
+                </div>
               )}
               
               {activeTab === 'chat' && (
-                <div className="flex-1 flex flex-col p-4 space-y-4">
+                <div 
+                  ref={listRef}
+                  className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar"
+                >
                   <div className="bg-purple-500/5 border border-purple-500/20 p-4 rounded-3xl space-y-3 mb-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -317,38 +365,56 @@ export default function Community({ user }: { user: UserProfile | null }) {
                     <p className="text-[10px] text-gray-600 leading-tight">Public beam for quick questions. {isLiveChat ? 'Stream is live!' : 'Refresh to see latest.'}</p>
                   </div>
 
-                  <AnimatePresence>
-                    {messages.map((msg) => (
-                      <motion.div 
-                        key={msg.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`flex gap-3 ${msg.userId === user?.uid ? 'flex-row-reverse' : ''}`}
-                      >
-                        <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-white/10 mt-1 bg-white/5">
-                          <img 
-                            src={msg.userPhoto || 'https://img.icons8.com/fluency/96/user.png'} 
-                            alt="" 
-                            className="w-full h-full object-cover" 
-                            referrerPolicy="no-referrer"
-                            loading="lazy"
-                          />
-                        </div>
-                        <div className={`max-w-[80%] space-y-1 ${msg.userId === user?.uid ? 'items-end' : ''}`}>
-                          <div className="flex items-center gap-2 px-1">
-                            <span className="text-[9px] font-bold text-gray-500">{msg.userName}</span>
-                            <span className="text-[7px] text-gray-600 uppercase">
-                              {msg.timestamp?.toDate ? formatDistanceToNow(msg.timestamp.toDate(), { addSuffix: true }) : 'just now'}
-                            </span>
+                  <AnimatePresence initial={false}>
+                    {[...messages, ...pendingMessages].map((msg, idx, arr) => {
+                      const isMe = msg.userId === user?.uid;
+                      const showAvatar = idx === 0 || arr[idx - 1].userId !== msg.userId;
+
+                      return (
+                        <motion.div 
+                          key={msg.id}
+                          layout
+                          initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          className={`flex gap-3 ${isMe ? 'flex-row-reverse' : ''} ${!showAvatar ? 'mt-[-12px]' : 'mt-4'}`}
+                        >
+                          <div className={`w-8 h-8 rounded-full overflow-hidden shrink-0 border border-white/10 bg-white/5 ${!showAvatar ? 'opacity-0' : ''}`}>
+                            <img 
+                              src={msg.userPhoto || 'https://img.icons8.com/fluency/96/user.png'} 
+                              alt="" 
+                              className="w-full h-full object-cover" 
+                              referrerPolicy="no-referrer"
+                              loading="lazy"
+                            />
                           </div>
-                          <div className={`p-3 rounded-2xl text-sm leading-relaxed ${msg.userId === user?.uid ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-white/5 border border-white/10 rounded-tl-none'}`}>
-                            {msg.content}
+                          <div className={`max-w-[80%] space-y-1 ${isMe ? 'items-end' : ''}`}>
+                            {showAvatar && (
+                              <div className={`flex items-center gap-2 px-1 ${isMe ? 'flex-row-reverse' : ''}`}>
+                                <span className="text-[9px] font-bold text-gray-500">{msg.userName}</span>
+                                <span className="text-[7px] text-gray-600 uppercase">
+                                  {msg.timestamp?.toDate ? formatDistanceToNow(msg.timestamp.toDate(), { addSuffix: true }) : msg.status === 'sending' ? 'sending...' : 'just now'}
+                                </span>
+                              </div>
+                            )}
+                            <div className={`p-3 rounded-2xl text-sm leading-relaxed relative ${
+                              isMe ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-white/5 border border-white/10 rounded-tl-none'
+                            } ${msg.status === 'sending' ? 'opacity-70 animate-pulse' : ''} ${msg.status === 'error' ? 'border-red-500/50 text-red-200' : ''}`}>
+                              {msg.content}
+                              {msg.status === 'error' && (
+                                <button 
+                                  onClick={() => handleSendMessage({ preventDefault: () => {} } as any)}
+                                  className="absolute -left-10 top-1/2 -translate-y-1/2 p-2 text-red-500 hover:scale-110 transition-transform"
+                                >
+                                  <Clock size={16} />
+                                </button>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      </motion.div>
-                    ))}
+                        </motion.div>
+                      );
+                    })}
                   </AnimatePresence>
-                  <div ref={scrollRef} />
+                  <div ref={scrollRef} className="h-4" />
                 </div>
               )}
 

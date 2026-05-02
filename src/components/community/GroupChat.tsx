@@ -26,11 +26,26 @@ export default function GroupChat({
   onBack: () => void 
 }) {
   const [messages, setMessages] = useState<GroupMessage[]>([]);
+  const [pendingMessages, setPendingMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [isBanned, setIsBanned] = useState(false);
-  const [isLive, setIsLive] = useState(false);
+  const [isLive, setIsLive] = useState(true);
+
+  // Smart Scroll Helpers
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior });
+    }
+  };
+
+  const isNearBottom = () => {
+    if (!listRef.current) return true;
+    const { scrollTop, scrollHeight, clientHeight } = listRef.current;
+    return scrollHeight - scrollTop - clientHeight < 150;
+  };
 
   const fetchMessagesManual = async () => {
     if (!group?.id) return;
@@ -44,7 +59,7 @@ export default function GroupChat({
       const snapshot = await getDocs(q);
       const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as GroupMessage[];
       setMessages([...msgs].reverse());
-      setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      setTimeout(() => scrollToBottom('auto'), 50);
     } catch (err) {
       handleFirestoreError(err, OperationType.LIST, `study_groups/${group.id}/messages`);
     }
@@ -62,8 +77,15 @@ export default function GroupChat({
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as GroupMessage[];
-        setMessages([...msgs].reverse());
-        setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+        const reversed = [...msgs].reverse();
+        setMessages(reversed);
+        
+        // Match optimization
+        setPendingMessages(prev => prev.filter(p => !reversed.some(m => m.text === p.text && m.userId === p.userId)));
+
+        if (isNearBottom()) {
+          setTimeout(() => scrollToBottom('smooth'), 50);
+        }
       }, (error) => {
         handleFirestoreError(error, OperationType.LIST, `study_groups/${group.id}/messages`);
         setIsLive(false);
@@ -79,22 +101,39 @@ export default function GroupChat({
     e.preventDefault();
     if (!user || !newMessage.trim() || !group) return;
 
-    const messageData = {
-      groupId: group.id,
+    const tempId = 'temp-' + Date.now();
+    const textContent = newMessage.trim();
+
+    const optimisticMessage = {
+      id: tempId,
       userId: user.uid,
       userName: user.displayName,
       userPhoto: user.photoURL || '',
-      text: newMessage.trim(),
-      timestamp: serverTimestamp()
+      text: textContent,
+      timestamp: null,
+      status: 'sending'
     };
 
+    setPendingMessages(prev => [...prev, optimisticMessage]);
     setNewMessage('');
     setShowEmoji(false);
     
+    // Always scroll when sending
+    setTimeout(() => scrollToBottom('smooth'), 50);
+
     try {
-      await addDoc(collection(db, 'study_groups', group.id, 'messages'), messageData);
+      if (checkQuotaLock()) throw new Error("Quota active");
+      await addDoc(collection(db, 'study_groups', group.id, 'messages'), {
+        groupId: group.id,
+        userId: user.uid,
+        userName: user.displayName,
+        userPhoto: user.photoURL || '',
+        text: textContent,
+        timestamp: serverTimestamp()
+      });
     } catch (err) {
       console.error("Send message error:", err);
+      setPendingMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
     }
   };
 
@@ -143,44 +182,57 @@ export default function GroupChat({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+      <div 
+        ref={listRef}
+        className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar"
+      >
         <div className="text-center py-10 space-y-2 opacity-50">
           <Sparkles className="w-8 h-8 mx-auto text-purple-500" />
           <p className="text-[10px] font-black uppercase tracking-[0.2em]">Start of Study Circle #{group.name.replace(/\s+/g, '')}</p>
         </div>
 
-        {messages.map((msg, idx) => {
-          const isMe = msg.userId === user?.uid;
-          const showInfo = idx === 0 || messages[idx-1].userId !== msg.userId;
+        <AnimatePresence initial={false}>
+          {[...messages, ...pendingMessages].map((msg, idx, arr) => {
+            const isMe = msg.userId === user?.uid;
+            const showAvatar = idx === 0 || arr[idx - 1].userId !== msg.userId;
 
-          return (
-            <div key={msg.id} className={`flex gap-2.5 ${isMe ? 'flex-row-reverse' : ''}`}>
-              {!isMe && showInfo && (
-                <div className="w-7 h-7 rounded-xl overflow-hidden shrink-0 border border-white/10 mt-1">
-                  <img src={msg.userPhoto || 'https://img.icons8.com/fluency/96/user.png'} alt="" className="w-full h-full object-cover" />
-                </div>
-              )}
-              {!isMe && !showInfo && <div className="w-7 shrink-0" />}
-              
-              <div className={`max-w-[75%] space-y-0.5 ${isMe ? 'items-end' : 'items-start'}`}>
-                {showInfo && !isMe && (
-                  <span className="text-[9px] font-bold text-gray-500 ml-1 uppercase">{msg.userName}</span>
+            return (
+              <motion.div 
+                key={msg.id}
+                layout
+                initial={{ opacity: 0, scale: 0.95, y: 5 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                className={`flex gap-2.5 ${isMe ? 'flex-row-reverse' : ''} ${!showAvatar ? 'mt-[-12px]' : 'mt-4'}`}
+              >
+                {!isMe && (
+                  <div className={`w-7 h-7 rounded-xl overflow-hidden shrink-0 border border-white/10 mt-1 transition-opacity ${!showAvatar ? 'opacity-0' : 'opacity-100'}`}>
+                    <img src={msg.userPhoto || 'https://img.icons8.com/fluency/96/user.png'} alt="" className="w-full h-full object-cover" />
+                  </div>
                 )}
-                <div className={`p-3 px-4 rounded-2xl text-[13px] leading-relaxed break-words shadow-sm ${
-                  isMe ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-white/5 border border-white/5 rounded-tl-none'
-                }`}>
-                  {msg.text}
+                
+                <div className={`max-w-[75%] space-y-0.5 ${isMe ? 'items-end' : 'items-start'}`}>
+                  {showAvatar && !isMe && (
+                    <span className="text-[9px] font-bold text-gray-500 ml-1 uppercase">{msg.userName}</span>
+                  )}
+                  <div className={`p-3 px-4 rounded-2xl text-[13px] leading-relaxed break-words shadow-sm relative ${
+                    isMe ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-white/5 border border-white/5 rounded-tl-none'
+                  } ${msg.status === 'sending' ? 'opacity-70 animate-pulse font-italic' : ''} ${msg.status === 'error' ? 'border-red-500 text-red-100' : ''}`}>
+                    {msg.text}
+                    {msg.status === 'error' && (
+                       <span className="absolute -left-6 top-1/2 -translate-y-1/2 text-red-500 text-[8px]">!</span>
+                    )}
+                  </div>
+                  {showAvatar && isMe && (
+                    <span className="text-[8px] text-gray-600 block text-right pr-1">
+                      {msg.timestamp?.toDate ? formatDistanceToNow(msg.timestamp.toDate(), { addSuffix: true }) : msg.status === 'sending' ? 'sending...' : 'just now'}
+                    </span>
+                  )}
                 </div>
-                {showInfo && isMe && (
-                  <span className="text-[8px] text-gray-600 block text-right pr-1">
-                    {msg.timestamp?.toDate ? formatDistanceToNow(msg.timestamp.toDate(), { addSuffix: true }) : 'just now'}
-                  </span>
-                )}
-              </div>
-            </div>
-          );
-        })}
-        <div ref={scrollRef} />
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+        <div ref={scrollRef} className="h-4" />
       </div>
 
       {/* Input */}
