@@ -119,7 +119,7 @@ export default function Login() {
                 <motion.div 
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl text-red-400 text-[10px] text-left space-y-2"
+                  className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl text-red-500 text-[10px] text-left space-y-2"
                 >
                   <p className="font-bold flex items-center gap-2 uppercase tracking-widest"><Info size={12}/> Connection Failed</p>
                   <p>{error}</p>
@@ -127,16 +127,30 @@ export default function Login() {
               )}
 
               {isInAppBrowser && (
-                <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-2xl text-blue-400 text-[10px] text-left space-y-3">
-                  <p className="font-bold uppercase tracking-widest">Mobile Browser Detected 📱</p>
-                  <p>In-app browsers (Instagram/Telegram) often block sign-in. For the fastest experience, use Chrome or Safari.</p>
-                  <button 
-                    onClick={copyLink}
-                    className="w-full bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 py-3 rounded-xl flex items-center justify-center gap-2 font-black uppercase tracking-widest transition-all border border-blue-500/30 text-[10px]"
-                  >
-                    {copied ? <Check size={14} /> : <Copy size={14} />}
-                    {copied ? 'Link Copied!' : 'Copy Link for Chrome'}
-                  </button>
+                <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-2xl text-indigo-400 text-[10px] text-left space-y-3">
+                  <p className="font-bold uppercase tracking-widest text-indigo-400 flex items-center gap-2">
+                    <ExternalLink size={14} /> Instagram Browser detected
+                  </p>
+                  <p>Google blocks sign-ins inside Instagram for your safety. To continue, click the button below to open NoteVix in your main browser.</p>
+                  
+                  <div className="flex flex-col gap-2">
+                    {navigator.userAgent.includes('Android') ? (
+                      <a 
+                        href={`intent://${window.location.host}${window.location.pathname}#Intent;scheme=https;package=com.android.chrome;end`}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl flex items-center justify-center gap-2 font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20 text-[10px]"
+                      >
+                        Open in Chrome
+                      </a>
+                    ) : (
+                      <button 
+                        onClick={copyLink}
+                        className="w-full bg-white/10 hover:bg-white/20 text-white py-3 rounded-xl flex items-center justify-center gap-2 font-black uppercase tracking-widest transition-all border border-white/10 text-[10px]"
+                      >
+                        {copied ? <Check size={14} /> : <Copy size={14} />}
+                        {copied ? 'Link Copied!' : 'Copy Link for Safari'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -146,21 +160,21 @@ export default function Login() {
                   className="flex items-start gap-3 cursor-pointer group p-2 rounded-xl hover:bg-white/5 transition-colors"
                 >
                   <div className={`mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                    agreed ? 'bg-purple-600 border-purple-600' : 'border-white/20 group-hover:border-purple-500/50'
+                    agreed ? 'bg-indigo-600 border-indigo-600' : 'border-white/20 group-hover:border-indigo-500/50'
                   }`}>
                     {agreed && <Check size={14} className="text-white" />}
                   </div>
-                  <p className="text-[10px] text-gray-500 leading-relaxed text-left">
-                    I agree to NoteVix's <Link to="/terms" className="text-purple-400 hover:underline" onClick={e => e.stopPropagation()}>Terms</Link> and <Link to="/privacy" className="text-purple-400 hover:underline" onClick={e => e.stopPropagation()}>Privacy Policy</Link>.
+                  <p className="text-[10px] text-gray-400 leading-relaxed text-left">
+                    I agree to the <Link to="/terms" className="text-indigo-400 hover:underline" onClick={e => e.stopPropagation()}>Terms</Link> & <Link to="/privacy" className="text-indigo-400 hover:underline" onClick={e => e.stopPropagation()}>Privacy Policy</Link>
                   </p>
                 </div>
 
                 <button
-                  onClick={() => handleLogin(false)}
+                  onClick={() => handleLogin(isInAppBrowser)} // Auto-use redirect in in-app browser
                   disabled={loading}
                   className={`w-full font-black py-4 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-xl transition-all text-sm uppercase tracking-widest disabled:opacity-50 ${
                     agreed 
-                      ? 'purple-gradient text-white shadow-purple-500/40 active:scale-95' 
+                      ? 'blue-purple-gradient text-white shadow-indigo-500/40 active:scale-95' 
                       : 'bg-white/10 text-gray-500 cursor-not-allowed'
                   }`}
                 >
@@ -181,7 +195,7 @@ export default function Login() {
 
               <div className="relative pt-4">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/5"></div></div>
-                <div className="relative flex justify-center text-[9px] uppercase tracking-[0.2em] text-gray-600"><span className="bg-[#050505] px-4">Problem Signing In?</span></div>
+                <div className="relative flex justify-center text-[9px] uppercase tracking-[0.2em] text-gray-600"><span className="bg-[#050505] px-4">Other Methods</span></div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -208,18 +222,18 @@ export default function Login() {
             { label: '1 Page', sub: 'Notes' },
             { label: 'AI', sub: 'Doubts' },
           ].map((item) => (
-            <div key={item.label} className="glass-card p-3 rounded-xl">
-              <div className="text-purple-400 font-bold">{item.label}</div>
+            <div key={item.label} className="glass-card p-3 rounded-xl border border-white/5">
+              <div className="text-indigo-400 font-bold">{item.label}</div>
               <div className="text-[10px] text-gray-500 uppercase tracking-wider">{item.sub}</div>
             </div>
           ))}
         </div>
 
         <div className="pt-8 flex flex-wrap justify-center gap-x-6 gap-y-2 text-[10px] uppercase tracking-widest text-gray-500">
-          <Link to="/about" className="hover:text-purple-400 transition-colors">About Us</Link>
-          <Link to="/contact" className="hover:text-purple-400 transition-colors">Contact Us</Link>
-          <Link to="/privacy" className="hover:text-purple-400 transition-colors">Privacy</Link>
-          <Link to="/terms" className="hover:text-purple-400 transition-colors">Terms</Link>
+          <Link to="/about" className="hover:text-indigo-400 transition-colors">About</Link>
+          <Link to="/contact" className="hover:text-indigo-400 transition-colors">Support</Link>
+          <Link to="/privacy" className="hover:text-indigo-400 transition-colors">Privacy</Link>
+          <Link to="/terms" className="hover:text-indigo-400 transition-colors">Terms</Link>
         </div>
 
         {window.location.hostname !== 'localhost' && !window.location.hostname.endsWith('.run.app') && (

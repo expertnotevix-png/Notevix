@@ -307,8 +307,9 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto pt-16 mt-16 border-t border-white/5 flex flex-col md:row items-center justify-between gap-4 text-gray-600 text-xs">
           <p>© 2026 NoteVix. All rights reserved.</p>
           <div className="flex items-center gap-6">
-            <a href="https://instagram.com/studyhacks100" target="_blank" rel="noreferrer" className="hover:text-white">Instagram</a>
-            <a href="https://studysparks100" target="_blank" rel="noreferrer" className="hover:text-white">Twitter</a>
+            <a href="/about" className="hover:text-white">About</a>
+            <a href="/privacy" className="hover:text-white">Privacy</a>
+            <a href="/terms" className="hover:text-white">Terms</a>
           </div>
         </div>
       </footer>
