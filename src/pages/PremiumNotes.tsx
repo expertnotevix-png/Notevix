@@ -499,14 +499,14 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                       <div className="absolute inset-4 bg-indigo-500/10 rounded-full animate-pulse" />
                     </div>
                     <div className="mt-8 text-center px-6">
-                      <p className="text-white font-black text-xs uppercase tracking-[0.2em] mb-2 animate-pulse">Running Forensic Audit</p>
+                      <p className="text-white font-black text-xs uppercase tracking-[0.2em] mb-2 animate-pulse">Running Forensic Scan</p>
                       <p className="text-white/40 text-[7px] font-bold uppercase tracking-widest leading-relaxed">
-                        NVIDIA Vision Engine Analyzing Receipt... <br /> This may take up to 60s for high precision
+                        AI is verifying payment authenticity... <br /> This takes about 5-10 seconds.
                       </p>
                     </div>
                   </div>
                 )}
-                <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar pb-16">
+                <div className="p-8 space-y-8 overflow-y-auto flex-1 custom-scrollbar pb-10">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <h2 className="text-2xl font-black tracking-tight">{selectedPlan.name}</h2>
@@ -541,12 +541,12 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                     </div>
                   </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-4 pb-10">
                     <input 
                       type="tel" 
                       value={whatsapp}
                       onChange={(e) => setWhatsapp(e.target.value)}
-                      placeholder="WhatsApp Number (for delivery)"
+                      placeholder="WhatsApp Number"
                       className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-all"
                     />
 
@@ -555,7 +555,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                         type="email" 
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="Email Address (for delivery)"
+                        placeholder="Email (for delivery)"
                         className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-all"
                       />
                     )}
@@ -592,16 +592,19 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                       </div>
                     </div>
 
-                    <button
-                      onClick={handlePurchase}
-                      disabled={isSubmitting || aiVerifying}
-                      className="w-full h-16 bg-indigo-600 text-white rounded-3xl font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50"
-                    >
-                      {aiVerifying ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-                      {aiVerifying ? 'Running Forensic Scan...' : 'Verify Payment & Unlock'}
-                    </button>
                   </div>
                 </div>
+              </div>
+
+              <div className="p-8 pt-0 flex-shrink-0">
+                <button
+                  onClick={handlePurchase}
+                  disabled={isSubmitting || aiVerifying}
+                  className="w-full h-16 bg-indigo-600 text-white rounded-3xl font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {aiVerifying ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
+                  {aiVerifying ? 'Verifying...' : 'Verify Payment & Unlock'}
+                </button>
               </div>
             </motion.div>
           </div>

@@ -353,7 +353,7 @@ export default function Landing() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="relative w-full max-w-lg bg-[#0A0A0B] border border-white/10 rounded-[40px] shadow-2xl p-8 sm:p-12 overflow-hidden"
+              className="relative w-full max-w-lg bg-[#0A0A0B] border border-white/10 rounded-[40px] shadow-2xl p-8 sm:p-12 overflow-hidden flex flex-col max-h-[90vh]"
             >
               <div className="absolute top-0 inset-x-0 h-1.5 bg-indigo-600" />
               
@@ -365,15 +365,15 @@ export default function Landing() {
                     <div className="absolute inset-4 bg-indigo-500/10 rounded-full animate-pulse" />
                   </div>
                   <div className="mt-8 text-center px-6">
-                    <p className="text-white font-black text-xs uppercase tracking-[0.2em] mb-2 animate-pulse">Running Forensic Audit</p>
+                    <p className="text-white font-black text-xs uppercase tracking-[0.2em] mb-2 animate-pulse">Running Forensic Scan</p>
                     <p className="text-white/40 text-[7px] font-bold uppercase tracking-widest leading-relaxed">
-                      NVIDIA Vision Engine Analyzing Receipt... <br /> This may take up to 60s for high precision
+                      AI is verifying payment authenticity... <br /> This usually takes 5-10 seconds.
                     </p>
                   </div>
                 </div>
               )}
               
-              <div className="flex justify-between items-center mb-10">
+              <div className="flex justify-between items-center mb-8 flex-shrink-0">
                 <div className="space-y-1">
                   <h2 className="text-3xl font-black">{selectedPlan.name}</h2>
                   {selectedPlan.subject && (
@@ -387,71 +387,75 @@ export default function Landing() {
                 </button>
               </div>
 
-              <div className="p-6 rounded-3xl bg-indigo-500/5 border border-indigo-500/10 flex flex-col items-center gap-6 mb-8">
-                <div className="w-full flex items-center gap-5">
-                  <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-600/30">
-                    <QrCode className="text-white" size={28} />
+              <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 -mr-2 space-y-8 pb-4">
+                <div className="p-6 rounded-3xl bg-indigo-500/5 border border-indigo-500/10 flex flex-col items-center gap-6">
+                  <div className="w-full flex items-center gap-5">
+                    <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-600/30">
+                      <QrCode className="text-white" size={28} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none mb-1">Pay with UPI</p>
+                      <p className="text-lg font-black text-white">9236489649@mbk</p>
+                    </div>
+                    <div className="ml-auto text-2xl font-black text-white">₹{selectedPlan.price}</div>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none mb-1">Pay with UPI</p>
-                    <p className="text-lg font-black text-white">9236489649@mbk</p>
+                  
+                  <div className="p-4 bg-white rounded-3xl">
+                    <img 
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=9236489649@mbk&pn=NoteVix&am=${selectedPlan.price}&cu=INR`}
+                      alt="Scan to Pay"
+                      className="w-32 h-32"
+                    />
                   </div>
-                  <div className="ml-auto text-2xl font-black text-white">₹{selectedPlan.price}</div>
+                  <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Scan or Pay to the ID above</p>
                 </div>
-                
-                <div className="p-4 bg-white rounded-3xl">
-                  <img 
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=9236489649@mbk&pn=NoteVix&am=${selectedPlan.price}&cu=INR`}
-                    alt="Scan to Pay"
-                    className="w-32 h-32"
+
+                <div className="space-y-4">
+                  <input 
+                    type="email" 
+                    placeholder="Delivery Email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
                   />
+                  <input 
+                    type="text" 
+                    placeholder="WhatsApp Number"
+                    value={whatsapp}
+                    onChange={e => setWhatsapp(e.target.value)}
+                    className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
+                  />
+                  <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full h-40 border-2 border-dashed border-indigo-500/20 rounded-2xl flex flex-col items-center justify-center gap-3 bg-indigo-500/[0.02] hover:border-indigo-500/50 cursor-pointer overflow-hidden relative"
+                  >
+                    {screenshotPreview ? (
+                      <>
+                        <img src={screenshotPreview} className="w-full h-full object-contain" />
+                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                          <span className="text-[10px] font-black uppercase text-white tracking-[0.3em]">Change Receipt</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={24} className="text-indigo-400/50" />
+                        <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest text-center px-6">Upload Payment Screenshot<br/><span className="text-[8px] text-indigo-400 group-hover:text-white transition-colors">AI Forensic Scan Enabled</span></span>
+                      </>
+                    )}
+                  </div>
+                  <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*" />
                 </div>
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Scan or Pay to the ID above</p>
               </div>
 
-              <div className="space-y-4 mb-10">
-                <input 
-                  type="email" 
-                  placeholder="Delivery Email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
-                />
-                <input 
-                  type="text" 
-                  placeholder="WhatsApp Number"
-                  value={whatsapp}
-                  onChange={e => setWhatsapp(e.target.value)}
-                  className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
-                />
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full h-40 border-2 border-dashed border-indigo-500/20 rounded-2xl flex flex-col items-center justify-center gap-3 bg-indigo-500/[0.02] hover:border-indigo-500/50 cursor-pointer overflow-hidden relative"
+              <div className="mt-6 pt-6 border-t border-white/5 flex-shrink-0">
+                <button
+                  disabled={isSubmitting || aiVerifying}
+                  onClick={handleGuestPurchase}
+                  className="w-full h-16 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-indigo-700 transition-all disabled:opacity-50 active:scale-95 shadow-xl shadow-indigo-600/20"
                 >
-                  {screenshotPreview ? (
-                    <>
-                      <img src={screenshotPreview} className="w-full h-full object-contain" />
-                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                        <span className="text-[10px] font-black uppercase text-white tracking-[0.3em]">Change Receipt</span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <Upload size={24} className="text-indigo-400/50" />
-                      <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest text-center px-6">Upload Payment Screenshot<br/><span className="text-[8px] text-indigo-400 group-hover:text-white transition-colors">AI Forensic Scan Enabled</span></span>
-                    </>
-                  )}
-                </div>
-                <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*" />
+                  {aiVerifying ? 'Verifying...' : isSubmitting ? 'Processing...' : 'Complete Purchase'}
+                </button>
               </div>
-
-              <button
-                disabled={isSubmitting || aiVerifying}
-                onClick={handleGuestPurchase}
-                className="w-full h-16 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-indigo-700 transition-all disabled:opacity-50"
-              >
-                {aiVerifying ? 'AI Processing...' : isSubmitting ? 'Submitting...' : 'Complete Purchase'}
-              </button>
             </motion.div>
           </div>
         )}
