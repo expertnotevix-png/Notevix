@@ -282,13 +282,16 @@ export const geminiService = {
   },
 
   async verifyPaymentScreenshot(imageData: string): Promise<{ isValid: boolean, transactionId?: string, amount?: number, error?: string }> {
-    const prompt = `Analyze this digital payment receipt screenshot (GPay, PhonePe, Paytm, or BHIM).
-    YOUR GOAL: Extract forensic data to prevent fraud.
+    const prompt = `ALPHANUMERIC AUDIT TASK:
+    Analyze this digital payment receipt screenshot (Paytm, GPay, PhonePe, BHIM, Amazon Pay, etc.).
     
-    1. EXTRACT "transactionId": Look for 'TXN ID', 'UTR', 'Transaction ID', 'Ref No', 'Ref', or 'ID'. 
-       Note: It can be a 12-digit number (UTR) OR an alphanumeric string (e.g., FMPIB5344248147).
-    2. EXTRACT "amount": Look for the currency symbol ₹ or Rs. Extract the actual numeric value (e.g., 39).
-    3. CHECK "isValid": Is the payment status 'Success', 'Completed', or 'Paid'? 
+    1. EXTRACT "transactionId": Look for 'TXN ID', 'UTR', 'Transaction ID', 'Ref No', 'Ref', 'Order ID', or 'ID'. 
+       Note: It can be a 12-digit numeric UTR OR an alphanumeric string (e.g., FMPIB5344248147, TXN12345, T240503...).
+       Look very closely for alphanumeric patterns starting with 'FMPIB', 'TXN', 'T24', etc.
+    2. EXTRACT "amount": Look for the currency symbol ₹ or Rs. Extract the actual numeric value (e.g., 39, 99).
+    3. CHECK "isValid": Is it clearly a payment? Look for status 'Success', 'Completed', 'Paid', 'Sent', or a Green Tick / Shield icon. 
+    
+    IMPORTANT: If you find a Transaction ID/UTR, assume isValid is true unless the receipt explicitly says "RECORD FAILED" or "FAILED".
 
     Return ONLY RAW JSON:
     {
@@ -298,15 +301,14 @@ export const geminiService = {
       "error": "Brief reason if invalid/unclear"
     }`;
 
-    const system = "You are a professional payment auditor for NoteVix. You extract alphanumeric Transaction IDs (like FMPIB...) and amounts from Indian receipts with 100% precision. Return ONLY raw JSON.";
+    const system = "You are the NoteVix Forensic Auditor. You are an expert at OCR for Indian payment receipts. You detect alphanumeric Transaction IDs (like FMPIB...) and UTRs with 100% precision. You return ONLY raw JSON. Do not include markdown blocks or text.";
 
     try {
       const { apiKey, nvidiaKey } = getAI();
       let res: string | undefined;
 
-      // PRIORITY 1: NVIDIA Forensic Logic (Slower but more accurate for Vision)
+      // Try NVIDIA first (Vision optimization)
       if (nvidiaKey) {
-        console.log("AI: Running NVIDIA Forensic Check (60s timeout)...");
         try {
           res = await this.callNvidiaAPI(
             prompt, 
@@ -317,13 +319,12 @@ export const geminiService = {
             imageData
           );
         } catch (err) {
-          console.error("NVIDIA Forensic Check timed out or failed:", err);
+          console.error("NVIDIA Forensic Check failed:", err);
         }
       }
 
-      // PRIORITY 2: Gemini Fallback (Only if NVIDIA fails)
+      // Gemini Fallback
       if (!res && apiKey) {
-        console.warn("AI: NVIDIA failed, attempting Gemini secondary check...");
         const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateContent({
           model: GEMINI_MODEL,
@@ -337,11 +338,23 @@ export const geminiService = {
         res = response.text;
       }
 
-      if (!res) throw new Error("No AI Forensic service responded.");
+      if (!res) throw new Error("No response from AI Forensic engine. Please try again.");
 
-      // RESILIENT JSON PARSING: Look for { ... } anywhere in the string
+      // RESILIENT PARSING
       const jsonMatch = res.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("AI returned invalid forensic format.");
+      if (!jsonMatch) {
+         // Fallback: try to extract ID and amount using regex if JSON fails
+         const idMatch = res.match(/(FMPIB[A-Z0-9]+|[0-9]{12})/i);
+         const amtMatch = res.match(/(?:₹|Rs\.?)\s*([0-9]+)/i);
+         if (idMatch) {
+           return {
+             isValid: true,
+             transactionId: idMatch[0].toUpperCase(),
+             amount: amtMatch ? Number(amtMatch[1]) : 0
+           };
+         }
+         throw new Error("Could not parse AI response. Ensure UTR is visible.");
+      }
       
       const data = JSON.parse(jsonMatch[0]);
 
@@ -351,11 +364,11 @@ export const geminiService = {
         amount: Number(data.amount || 0),
         error: data.error
       };
-    } catch (error) {
-      console.error("Payment Verification Hard Error:", error);
+    } catch (error: any) {
+      console.error("Forensic Hardware Failure:", error);
       return { 
         isValid: false, 
-        error: "Forensic analysis failed. Please ensure the screenshot clearly shows the TXN ID / UTR." 
+        error: error.message || "Forensic analysis failed. Ensure the TXN ID / UTR is clearly visible in the screenshot." 
       };
     }
   },

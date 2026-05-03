@@ -387,15 +387,26 @@ export default function Landing() {
                 </button>
               </div>
 
-              <div className="p-6 rounded-3xl bg-indigo-500/5 border border-indigo-500/10 flex items-center gap-5 mb-8">
-                <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-600/30">
-                  <QrCode className="text-white" size={28} />
+              <div className="p-6 rounded-3xl bg-indigo-500/5 border border-indigo-500/10 flex flex-col items-center gap-6 mb-8">
+                <div className="w-full flex items-center gap-5">
+                  <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-600/30">
+                    <QrCode className="text-white" size={28} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none mb-1">Pay with UPI</p>
+                    <p className="text-lg font-black text-white">9236489649@mbk</p>
+                  </div>
+                  <div className="ml-auto text-2xl font-black text-white">₹{selectedPlan.price}</div>
                 </div>
-                <div>
-                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none mb-1">Pay with UPI</p>
-                  <p className="text-lg font-black text-white">9236489649@mbk</p>
+                
+                <div className="p-4 bg-white rounded-3xl">
+                  <img 
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=9236489649@mbk&pn=NoteVix&am=${selectedPlan.price}&cu=INR`}
+                    alt="Scan to Pay"
+                    className="w-32 h-32"
+                  />
                 </div>
-                <div className="ml-auto text-2xl font-black text-white">₹{selectedPlan.price}</div>
+                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Scan or Pay to the ID above</p>
               </div>
 
               <div className="space-y-4 mb-10">
