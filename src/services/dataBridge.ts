@@ -70,11 +70,17 @@ export const dataBridge = {
         return { success: true, provider: 'supabase' };
       } catch (err: any) {
         console.error("Supabase payment save failed:", err);
-        return { success: false, provider: 'none', error: err.message };
+        return { success: false, provider: 'none', error: `Supabase Error: ${err.message}` };
       }
     }
 
-    return { success: false, provider: 'none', error: "Supabase not configured" };
+    // Fallback info
+    console.warn("Payment triggered but Supabase is not configured (Missing VITE_SUPABASE_URL)");
+    return { 
+      success: false, 
+      provider: 'none', 
+      error: "Supabase connection missing. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your env settings." 
+    };
   },
 
   /**

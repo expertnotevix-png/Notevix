@@ -253,6 +253,28 @@ export default function App() {
 
           if (userData) {
             setUser(userData);
+          } else if (firebaseUser) {
+            // Task 3: Emergency fallback Profile if Firestore is Down & No Cache
+            const fallbackProfile: UserProfile = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              displayName: firebaseUser.displayName || 'Student',
+              photoURL: firebaseUser.photoURL || '',
+              role: firebaseUser.email === 'expertraj8@gmail.com' ? 'admin' : 'student',
+              savedNotes: [],
+              notificationsEnabled: true,
+              totalFocusMinutes: 0,
+              totalPoints: 0,
+              referralCode: 'OFFLINE',
+              referralCount: 0,
+              isPremium: false,
+              createdAt: new Date().toISOString(),
+              streak: { currentCount: 0, lastUpdateDate: '' }
+            };
+            setUser(fallbackProfile);
+            if (quotaLockRef.current) {
+              toast.info("Logged in limited mode (Cloud limits reached)");
+            }
           }
 
         } catch (err: any) {
