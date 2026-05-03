@@ -281,6 +281,51 @@ export const geminiService = {
     }
   },
 
+  async verifyPaymentScreenshot(imageData: string): Promise<{ isValid: boolean, transactionId?: string, amount?: number, error?: string }> {
+    const prompt = `Analyze this receipt screenshot. Extract the transaction ID (UTR/Ref) and the amount paid. Return ONLY JSON: { "isValid": boolean, "transactionId": "string", "amount": number, "error": "string if invalid" }`;
+    const system = "Payment Forensics Expert. Return ONLY JSON.";
+
+    try {
+      const { apiKey, nvidiaKey } = getAI();
+      
+      let res;
+      if (nvidiaKey) {
+        try {
+          res = await this.callNvidiaAPI(prompt, system, true, "nvidia/llama-3.2-11b-vision-instruct", 30000, imageData);
+        } catch (err) {
+          console.warn("NVIDIA Vision failed, falling back to Gemini...", err);
+        }
+      }
+
+      if (!res && apiKey) {
+        const ai = new GoogleGenAI({ apiKey });
+        const response = await ai.models.generateContent({
+          model: "gemini-3-flash-preview",
+          contents: {
+            parts: [
+              { inlineData: { mimeType: "image/jpeg", data: imageData.split(',')[1] } },
+              { text: `${system}\n\n${prompt}` }
+            ]
+          }
+        });
+        res = response.text;
+      }
+
+      if (!res) throw new Error("No AI service available");
+
+      const data = JSON.parse(res.replace(/```json|```/g, '').trim());
+      return {
+        isValid: data.isValid,
+        transactionId: data.transactionId,
+        amount: data.amount,
+        error: data.error
+      };
+    } catch (error) {
+      console.error("Payment Verification Error:", error);
+      return { isValid: false, error: "Verification failed. Please try again or enter details manually." };
+    }
+  },
+
   async callNvidiaAPI(prompt: string, systemInstruction: string, isJson: boolean = false, model: string = MODEL_POWER, customTimeout: number = 25000, imageData?: string) {
     const { nvidiaKey } = getAI();
     console.log(`AI Transition: Attempting NVIDIA call with model ${model}...`);

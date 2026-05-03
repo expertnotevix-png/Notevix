@@ -1,329 +1,458 @@
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, FlaskConical, Globe, Languages, Shield, Zap, Trophy, Users, ChevronRight, Star, Crown } from 'lucide-react';
+import { BookOpen, FlaskConical, Globe, Languages, Shield, Zap, Trophy, ChevronRight, Crown, Upload, QrCode } from 'lucide-react';
 import { Logo } from '../components/Logo';
+import { useState, useEffect, useRef } from 'react';
+import { db } from '../lib/firebase';
+import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
+import { toast } from 'sonner';
+import { geminiService } from '../services/geminiService';
 
-const features = [
+const CLASSES = ['8', '9', '10'];
+
+const PREMIUM_PLANS = [
   {
-    icon: Zap,
-    title: 'One-Page Notes',
-    description: 'Master complex topics in minutes with our scientifically designed one-page summaries. Perfect for last-minute revision.'
+    id: 'individual_subject',
+    name: 'Individual Subject',
+    price: 39,
+    description: 'Single Subject PDF Note',
+    features: ['Chapter-wise One Page Notes', 'Important Questions PDF', 'Topic-wise AI Solver'],
+    color: 'from-blue-600 to-indigo-600',
+    type: 'one-time'
   },
   {
-    icon: Trophy,
-    title: 'Exam Oriented',
-    description: 'Our content is curated by toppers and experts, focusing on the most important questions that actually appear in exams.'
+    id: 'class_8_master',
+    name: 'Class 8 Master Pack',
+    class: '8',
+    price: 99,
+    features: ['All Class 8 Subjects', 'Full Notes & PYQs', '24/7 AI Tutor Access'],
+    color: 'from-cyan-600 to-blue-600',
+    type: 'one-time'
   },
   {
-    icon: Shield,
-    title: 'AI Doubt Solving',
-    description: 'Stuck on a problem? Our AI-powered tutor is available 24/7 to explain concepts and solve your doubts instantly.'
+    id: 'class_9_master',
+    name: 'Class 9 Master Pack',
+    class: '9',
+    price: 99,
+    features: ['All Class 9 Subjects', 'Full Notes & PYQs', '24/7 AI Tutor Access'],
+    color: 'from-emerald-600 to-teal-600',
+    type: 'one-time'
+  },
+  {
+    id: 'class_10_master',
+    name: 'Class 10 Master Pack',
+    class: '10',
+    price: 99,
+    features: ['All Class 10 Subjects', 'Full Notes & PYQs', '24/7 AI Tutor Access'],
+    color: 'from-orange-600 to-pink-600',
+    type: 'one-time'
   }
 ];
 
-const subjects = [
-  { id: 'maths', name: 'Mathematics', icon: BookOpen, color: 'text-blue-500' },
-  { id: 'science', name: 'Science', icon: FlaskConical, color: 'text-green-500' },
-  { id: 'sst', name: 'Social Science', icon: Globe, color: 'text-orange-500' },
-  { id: 'english', name: 'English', icon: Languages, color: 'text-pink-500' }
-];
+const SUBJECT_COLORS: Record<string, string> = {
+  science: 'bg-emerald-500',
+  maths: 'bg-blue-500',
+  sst: 'bg-orange-500',
+  english: 'bg-purple-500'
+};
+
+const SUBJECT_ICONS: Record<string, any> = {
+  science: FlaskConical,
+  maths: Zap,
+  sst: Globe,
+  english: Languages
+};
 
 export default function Landing() {
   const navigate = useNavigate();
+  const [activeClass, setActiveClass] = useState<'8' | '9' | '10'>('10');
+  const [resources, setResources] = useState<any[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
+  
+  // Purchase Form State
+  const [whatsapp, setWhatsapp] = useState('');
+  const [email, setEmail] = useState('');
+  const [transactionId, setTransactionId] = useState('');
+  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [aiVerifying, setAiVerifying] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch('/data/resources.json')
+      .then(res => res.json())
+      .then(data => {
+        const filtered = data.resources.filter((r: any) => r.class === activeClass);
+        setResources(filtered);
+      })
+      .catch(() => {});
+  }, [activeClass]);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error("File size must be less than 2MB");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => setScreenshotPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleGuestPurchase = async () => {
+    if (isSubmitting || aiVerifying || !whatsapp || !email || (!transactionId && !screenshotPreview)) {
+      toast.error('Please enter WhatsApp, Email and Transaction Details');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      
+      let aiDetectedTxId = '';
+      let aiDetectedAmount = 0;
+
+      if (screenshotPreview) {
+        setAiVerifying(true);
+        const result = await geminiService.verifyPaymentScreenshot(screenshotPreview);
+        setAiVerifying(false);
+        
+        if (result.isValid) {
+          aiDetectedTxId = result.transactionId || '';
+          aiDetectedAmount = result.amount || 0;
+        } else {
+          throw new Error(result.error || "AI could not verify screenshot. Enter ID manually.");
+        }
+      }
+
+      const finalTxId = transactionId || aiDetectedTxId;
+      if (!finalTxId) throw new Error("Transaction ID required");
+
+      await addDoc(collection(db, 'purchase_requests'), {
+        email,
+        whatsapp,
+        userId: 'GUEST',
+        transactionId: finalTxId,
+        planId: selectedPlan?.id,
+        planName: selectedPlan?.name,
+        amount: aiDetectedAmount || selectedPlan?.price || 0,
+        status: 'pending',
+        isGuest: true,
+        timestamp: new Date().toISOString()
+      });
+
+      await setDoc(doc(db, 'transaction_id_registry', finalTxId), { 
+        email,
+        redeemedAt: new Date().toISOString(),
+        planId: selectedPlan?.id,
+        isGuest: true
+      });
+
+      toast.success("Payment Received! We will contact you with details soon.");
+      setSelectedPlan(null);
+      setScreenshotPreview(null);
+      setTransactionId('');
+    } catch (error: any) {
+      toast.error(error.message || "Failed");
+    } finally {
+      setIsSubmitting(false);
+      setAiVerifying(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-purple-500/30">
-      {/* Hero Section */}
-      <header className="relative overflow-hidden pt-16 pb-24 px-6">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-full bg-purple-600/10 blur-[120px] -z-10" />
+    <div className="min-h-screen bg-[#050505] text-white selection:bg-indigo-500/30 font-sans">
+      {/* Hero Header */}
+      <header className="relative pt-16 pb-24 px-6 overflow-hidden">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-6xl h-[500px] bg-indigo-600/5 blur-[120px] -z-10 rounded-full" />
         
-        <nav className="max-w-7xl mx-auto flex items-center justify-between mb-16">
+        <nav className="max-w-7xl mx-auto flex items-center justify-between mb-24">
           <div className="flex items-center gap-2">
-            <Logo className="w-10 h-10" />
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20">
+              <Logo className="w-6 h-6 text-white" />
+            </div>
             <span className="text-xl font-black tracking-tighter">NOTEVIX</span>
           </div>
-          <button 
-            onClick={() => navigate('/login')}
-            className="px-6 py-2.5 glass-card rounded-xl text-sm font-bold hover:bg-white/10 transition-all active:scale-95"
-          >
-            Login
-          </button>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => navigate('/premium-notes')}
+              className="px-5 py-2.5 rounded-xl text-xs font-black bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 transition-all flex items-center gap-2"
+            >
+              <Crown size={14} /> PREMIUM
+            </button>
+            <button 
+              onClick={() => navigate('/login')}
+              className="px-6 py-2.5 rounded-xl text-sm font-bold bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
+            >
+              Login
+            </button>
+          </div>
         </nav>
 
-        <div className="max-w-4xl mx-auto text-center space-y-8">
+        <div className="max-w-5xl mx-auto text-center space-y-10">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-bold uppercase tracking-widest"
-          >
-            <Star className="w-4 h-4 fill-purple-400" />
-            Trusted by 10,000+ Students
-          </motion.div>
-
-          {/* New Premium CTA for Guests */}
-          <motion.button
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            whileHover={{ scale: 1.05 }}
-            onClick={() => navigate('/premium-notes')}
-            className="mx-auto flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/20 border border-indigo-500/20 text-indigo-400 text-[10px] font-black uppercase tracking-[0.2em] animate-pulse"
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-gray-400 text-[10px] font-black uppercase tracking-[0.2em]"
           >
-            <Crown size={12} />
-            Buy Premium Notes without Signup
-          </motion.button>
-          
+            🔥 Trusted by 10k+ CBSE Students
+          </motion.div>
+
           <motion.h1 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-5xl md:text-7xl font-black tracking-tight leading-[1.1]"
+            className="text-6xl md:text-8xl font-black tracking-tighter leading-[0.9] uppercase"
           >
-            Master Your Exams with <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500">NoteVix</span>
+            Digital <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
+              Library
+            </span>
           </motion.h1>
 
           <motion.p 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed"
+            transition={{ delay: 0.1 }}
+            className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto font-medium"
           >
-            The ultimate study companion for CBSE Class 8, 9, and 10. Get premium one-page notes, important questions, and AI-powered doubt solving.
+            Access high-yield one-page notes and master packs for Class 8-10. No signup required for premium notes.
           </motion.p>
 
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4"
+            transition={{ delay: 0.2 }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
             <button 
-              onClick={() => navigate('/login')}
-              className="w-full sm:w-auto px-10 py-4 purple-gradient rounded-2xl font-black text-lg shadow-2xl shadow-purple-500/40 hover:scale-105 transition-all active:scale-95 flex items-center justify-center gap-2"
+              onClick={() => document.getElementById('digital-library')?.scrollIntoView({ behavior: 'smooth' })}
+              className="w-full sm:w-auto px-12 py-5 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-2xl shadow-indigo-600/40 hover:scale-105 transition-all"
             >
-              Start Studying Now
-              <ChevronRight className="w-5 h-5" />
+              Get Premium Notes 📔
             </button>
             <button 
-              onClick={() => navigate('/about')}
-              className="w-full sm:w-auto px-10 py-4 glass-card rounded-2xl font-bold text-lg hover:bg-white/10 transition-all active:scale-95"
+              onClick={() => navigate('/login')}
+              className="w-full sm:w-auto px-12 py-5 bg-white/5 text-white border border-white/10 rounded-2xl font-bold text-lg hover:bg-white/10 transition-colors"
             >
-              Learn More
+              Sign Up Free
             </button>
           </motion.div>
         </div>
       </header>
 
-      {/* Subjects Section */}
-      <section className="py-24 px-6 bg-white/[0.02]">
-        <div className="max-w-7xl mx-auto space-y-16">
-          <div className="text-center space-y-4">
-            <h2 className="text-3xl md:text-4xl font-black">Comprehensive Coverage</h2>
-            <p className="text-gray-500 max-w-xl mx-auto">We provide high-quality resources for all major subjects following the latest CBSE curriculum.</p>
+      {/* Digital Library Section */}
+      <section id="digital-library" className="py-24 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col items-center text-center mb-16">
+            <h2 className="text-4xl md:text-6xl font-black mb-8 uppercase tracking-tighter">
+              CHOOSE YOUR <span className="text-indigo-500">CLASS</span>
+            </h2>
+            
+            <div className="p-1.5 rounded-3xl bg-white/5 border border-white/10 flex gap-2">
+              {CLASSES.map(cls => (
+                <button
+                  key={cls}
+                  onClick={() => setActiveClass(cls as any)}
+                  className={`px-10 py-5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
+                    activeClass === cls ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-gray-500 hover:text-white'
+                  }`}
+                >
+                  Class {cls}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {subjects.map((subject, i) => (
-              <motion.button
-                key={i}
-                whileHover={{ y: -5 }}
-                onClick={() => navigate(`/class/10/${subject.id}`)}
-                className="glass-card p-8 rounded-3xl text-center space-y-4 border-white/5 hover:border-purple-500/30 transition-all"
-              >
-                <div className={`w-16 h-16 mx-auto rounded-2xl bg-white/5 flex items-center justify-center ${subject.color}`}>
-                  <subject.icon className="w-8 h-8" />
-                </div>
-                <h3 className="font-bold text-lg">{subject.name}</h3>
-              </motion.button>
-            ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            {resources.map((res: any) => {
+              const Icon = SUBJECT_ICONS[res.subject.toLowerCase()] || BookOpen;
+              const masterPlan = PREMIUM_PLANS.find(p => p.class === res.class);
+              const subjectPlan = PREMIUM_PLANS.find(p => p.id === 'individual_subject');
+              
+              return (
+                <motion.div
+                  key={res.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  className="group relative"
+                >
+                  {/* Book Design Card */}
+                  <div className="aspect-[3/4.5] rounded-[32px] overflow-hidden relative shadow-2xl transition-all duration-500 group-hover:-translate-y-4 border border-white/10 bg-[#0A0A0B]">
+                    {res.coverUrl ? (
+                      <img src={res.coverUrl} className="absolute inset-0 w-full h-full object-cover" />
+                    ) : (
+                      <div className={`absolute inset-0 ${SUBJECT_COLORS[res.subject.toLowerCase()] || 'bg-indigo-600'}`} />
+                    )}
+                    
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
+                    
+                    {/* Book Spine Detail */}
+                    <div className="absolute inset-y-0 left-0 w-4 bg-black/30 backdrop-blur-md border-r border-white/5 shadow-2xl" />
+                    
+                    <div className="absolute top-8 right-8 w-12 h-12 rounded-full bg-black/20 backdrop-blur-xl border border-white/20 flex items-center justify-center">
+                      <Crown size={20} className="text-indigo-400" />
+                    </div>
+
+                    <div className="absolute inset-0 p-8 flex flex-col justify-end">
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                           <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-md">
+                             <Icon size={14} className="text-white" />
+                           </div>
+                           <span className="px-3 py-1 rounded-full bg-white/10 text-white text-[9px] font-black uppercase tracking-widest backdrop-blur-md border border-white/10">
+                            {res.subject}
+                          </span>
+                        </div>
+                        
+                        <div>
+                          <h3 className="text-2xl font-black text-white leading-none tracking-tighter uppercase mb-1">
+                            {res.subject === 'maths' ? 'MATHS' : res.subject.toUpperCase()} NOTES
+                          </h3>
+                          <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest">
+                            Class {res.class} • Topic Pack
+                          </p>
+                        </div>
+                        
+                        <div className="flex flex-col gap-2 pt-4">
+                          <button 
+                            onClick={() => setSelectedPlan({ ...subjectPlan, subject: res.subject, class: res.class, resourceId: res.id })}
+                            className="w-full py-3.5 rounded-xl bg-white text-black font-black text-[10px] uppercase tracking-widest hover:bg-gray-100 transition-all shadow-xl active:scale-95"
+                          >
+                            Buy PDF ₹39
+                          </button>
+                          <button 
+                            onClick={() => setSelectedPlan({ ...masterPlan, class: res.class })}
+                            className="w-full py-3.5 rounded-xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600/30 transition-all active:scale-95"
+                          >
+                            Get All Subjects ₹99
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Glossy Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent pointer-events-none" />
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-24 px-6">
-        <div className="max-w-7xl mx-auto space-y-16">
-          <div className="text-center space-y-4">
-            <h2 className="text-3xl md:text-4xl font-black">Why Choose NoteVix?</h2>
-            <p className="text-gray-500 max-w-xl mx-auto">We combine traditional learning methods with modern technology to give you the best study experience.</p>
-          </div>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            {features.map((feature, i) => (
-              <div key={i} className="glass-card p-10 rounded-[40px] space-y-6 border-white/5 hover:border-purple-500/30 transition-colors">
-                <div className="w-14 h-14 bg-purple-500/10 rounded-2xl flex items-center justify-center">
-                  <feature.icon className="w-7 h-7 text-purple-500" />
+      {/* Guest Modal */}
+      <AnimatePresence>
+        {selectedPlan && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="relative w-full max-w-lg bg-[#0A0A0B] border border-white/10 rounded-[40px] shadow-2xl p-8 sm:p-12 overflow-hidden"
+            >
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-indigo-600" />
+              
+              <div className="flex justify-between items-center mb-10">
+                <div className="space-y-1">
+                  <h2 className="text-3xl font-black">{selectedPlan.name}</h2>
+                  {selectedPlan.subject && (
+                    <p className="text-xs font-bold text-indigo-400 capitalize tracking-wider">
+                      Subject: {selectedPlan.subject} (Class {selectedPlan.class})
+                    </p>
+                  )}
                 </div>
-                <h3 className="text-2xl font-black">{feature.title}</h3>
-                <p className="text-gray-400 leading-relaxed">{feature.description}</p>
+                <button onClick={() => setSelectedPlan(null)} className="text-gray-500 hover:text-white transition-colors">
+                  <ChevronRight size={28} className="rotate-90" />
+                </button>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      {/* Popular Resources Section for SEO */}
-      <section className="py-24 px-6 bg-white/[0.01]">
-        <div className="max-w-7xl mx-auto space-y-12">
-          <div className="text-center space-y-4">
-            <h2 className="text-3xl md:text-4xl font-black">Popular Study Resources</h2>
-            <p className="text-gray-500">Quick access to the most searched CBSE study materials.</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              { title: 'CBSE Class 9 Science Notes', path: '/class/9/science', desc: 'Comprehensive one-page summaries for Physics, Chemistry, and Biology.' },
-              { title: 'Class 10 Maths Important Questions', path: '/class/10/maths', desc: 'Handpicked questions that are most likely to appear in board exams.' },
-              { title: 'Class 8 Social Science Summaries', path: '/class/8/sst', desc: 'Easy-to-understand notes for History, Geography, and Civics.' },
-              { title: 'NCERT Solutions Class 10', path: '/explore?q=ncert', desc: 'Detailed explanations for all NCERT textbook exercises.' },
-              { title: 'Class 9 English Grammar Guide', path: '/class/9/english', desc: 'Master grammar rules with our simplified guides and practice sets.' },
-              { title: 'Class 10 Science Sample Papers', path: '/class/10/science', desc: 'Practice with the latest pattern sample papers for 2025-26.' }
-            ].map((resource, i) => (
-              <button 
-                key={i} 
-                onClick={() => navigate(resource.path)}
-                className="glass-card p-6 rounded-2xl border-white/5 hover:border-purple-500/30 transition-all text-left"
+              <div className="p-6 rounded-3xl bg-indigo-500/5 border border-indigo-500/10 flex items-center gap-5 mb-8">
+                <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-600/30">
+                  <QrCode className="text-white" size={28} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none mb-1">Pay with UPI</p>
+                  <p className="text-lg font-black text-white">9236489649@mbk</p>
+                </div>
+                <div className="ml-auto text-2xl font-black text-white">₹{selectedPlan.price}</div>
+              </div>
+
+              <div className="space-y-3 mb-10">
+                <input 
+                  type="email" 
+                  placeholder="Delivery Email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
+                />
+                <input 
+                  type="text" 
+                  placeholder="WhatsApp Number"
+                  value={whatsapp}
+                  onChange={e => setWhatsapp(e.target.value)}
+                  className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
+                />
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full h-32 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center gap-3 bg-white/[0.02] hover:border-indigo-500/50 cursor-pointer overflow-hidden relative"
+                >
+                  {screenshotPreview ? (
+                    <img src={screenshotPreview} className="w-full h-full object-cover opacity-50" />
+                  ) : (
+                    <>
+                      <Upload size={24} className="text-gray-500" />
+                      <span className="text-[10px] font-black uppercase text-gray-500">Upload Screenshot</span>
+                    </>
+                  )}
+                </div>
+                <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} />
+                <input 
+                  type="text" 
+                  placeholder="Transaction ID (UTR)"
+                  value={transactionId}
+                  onChange={e => setTransactionId(e.target.value)}
+                  className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
+                />
+              </div>
+
+              <button
+                disabled={isSubmitting || aiVerifying}
+                onClick={handleGuestPurchase}
+                className="w-full h-16 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-indigo-700 transition-all disabled:opacity-50"
               >
-                <h3 className="font-bold text-purple-400 mb-2">{resource.title}</h3>
-                <p className="text-sm text-gray-500">{resource.desc}</p>
+                {aiVerifying ? 'AI Processing...' : isSubmitting ? 'Submitting...' : 'Complete Purchase'}
               </button>
-            ))}
+            </motion.div>
           </div>
-        </div>
-      </section>
+        )}
+      </AnimatePresence>
 
-      {/* How it Works */}
-      <section className="py-24 px-6 bg-white/[0.01]">
-        <div className="max-w-7xl mx-auto space-y-16">
-          <div className="text-center space-y-4">
-            <h2 className="text-3xl md:text-4xl font-black">How It Works</h2>
-            <p className="text-gray-500 max-w-xl mx-auto">Three simple steps to academic excellence.</p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-12">
-            {[
-              { step: '01', title: 'Create Account', desc: 'Sign up with your Google account and select your class (8, 9, or 10).' },
-              { step: '02', title: 'Access Resources', desc: 'Browse through our extensive library of one-page notes and important questions.' },
-              { step: '03', title: 'Track Progress', desc: 'Use our focus timer and daily streaks to stay motivated and consistent.' }
-            ].map((item, i) => (
-              <div key={i} className="space-y-4">
-                <div className="text-5xl font-black text-purple-500/20">{item.step}</div>
-                <h3 className="text-xl font-bold">{item.title}</h3>
-                <p className="text-gray-500 leading-relaxed">{item.desc}</p>
+      {/* Features */}
+      <section className="py-24 px-6 border-t border-white/5">
+        <div className="max-w-7xl mx-auto grid md:grid-cols-3 gap-12">
+          {[
+            { icon: Zap, title: "One Page Notes", desc: "Scientific summaries that cover 100% of the syllabus." },
+            { icon: Trophy, title: "Exam Tested", desc: "Used by thousands of toppers to score 95%+" },
+            { icon: Shield, title: "AI Tutor", desc: "Instant doubt solving with local exam context." }
+          ].map((f, i) => (
+            <div key={i} className="p-10 rounded-[40px] bg-white/[0.02] border border-white/5 space-y-6">
+              <div className="w-14 h-14 bg-indigo-500/10 rounded-2xl flex items-center justify-center">
+                <f.icon className="w-7 h-7 text-indigo-500" />
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section className="py-24 px-6 bg-purple-600/5 border-y border-white/5">
-        <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-12 text-center">
-          <div className="space-y-2">
-            <div className="text-4xl font-black text-purple-500">10k+</div>
-            <div className="text-xs text-gray-500 uppercase tracking-widest font-bold">Active Students</div>
-          </div>
-          <div className="space-y-2">
-            <div className="text-4xl font-black text-purple-500">500+</div>
-            <div className="text-xs text-gray-500 uppercase tracking-widest font-bold">Premium Notes</div>
-          </div>
-          <div className="space-y-2">
-            <div className="text-4xl font-black text-purple-500">98%</div>
-            <div className="text-xs text-gray-500 uppercase tracking-widest font-bold">Success Rate</div>
-          </div>
-          <div className="space-y-2">
-            <div className="text-4xl font-black text-purple-500">24/7</div>
-            <div className="text-xs text-gray-500 uppercase tracking-widest font-bold">AI Support</div>
-          </div>
-        </div>
-      </section>
-
-      {/* Study Tips Section */}
-      <section className="py-24 px-6">
-        <div className="max-w-7xl mx-auto space-y-16">
-          <div className="text-center space-y-4">
-            <h2 className="text-3xl md:text-4xl font-black">Expert Study Tips</h2>
-            <p className="text-gray-500 max-w-xl mx-auto">Learn how to study more effectively with our expert-backed strategies.</p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-8">
-            {[
-              { title: 'The Pomodoro Technique', desc: 'Study for 25 minutes, then take a 5-minute break. This keeps your brain fresh and focused throughout your study session.' },
-              { title: 'Active Recall', desc: 'Instead of just reading, test yourself. Try to explain a concept in your own words without looking at your notes.' },
-              { title: 'Spaced Repetition', desc: 'Review your notes at increasing intervals (1 day, 3 days, 1 week) to move information into your long-term memory.' },
-              { title: 'Visual Learning', desc: 'Use diagrams, mind maps, and our one-page notes to visualize complex processes and relationships between topics.' }
-            ].map((tip, i) => (
-              <div key={i} className="glass-card p-8 rounded-3xl border-white/5 space-y-3">
-                <h3 className="text-lg font-bold text-purple-400">{tip.title}</h3>
-                <p className="text-sm text-gray-400 leading-relaxed">{tip.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ Section */}
-      <section className="py-24 px-6 bg-white/[0.01]">
-        <div className="max-w-3xl mx-auto space-y-12">
-          <div className="text-center space-y-4">
-            <h2 className="text-3xl md:text-4xl font-black">Frequently Asked Questions</h2>
-            <p className="text-gray-500">Everything you need to know about NoteVix.</p>
-          </div>
-
-          <div className="space-y-6">
-            {[
-              { q: 'Are the notes based on the latest CBSE syllabus?', a: 'Yes, all our notes and important questions are updated regularly to align with the latest NCERT and CBSE curriculum for the 2025-26 academic year.' },
-              { q: 'How can I unlock Premium Notes?', a: 'You can unlock premium content by subscribing to our Pro plan or by referring 3 friends to join NoteVix using your unique referral link.' },
-              { q: 'Is the AI Tutor really available 24/7?', a: 'Absolutely! Our AI-powered doubt solver is available around the clock to help you with any academic queries you might have.' },
-              { q: 'Can I download the notes for offline use?', a: 'Yes, Pro members can download high-quality PDF versions of all our notes and question banks for offline study.' }
-            ].map((faq, i) => (
-              <div key={i} className="glass-card p-6 rounded-2xl border-white/5 space-y-2">
-                <h4 className="font-bold text-white">{faq.q}</h4>
-                <p className="text-sm text-gray-400 leading-relaxed">{faq.a}</p>
-              </div>
-            ))}
-          </div>
+              <h3 className="text-2xl font-black">{f.title}</h3>
+              <p className="text-gray-400 leading-relaxed font-medium">{f.desc}</p>
+            </div>
+          ))}
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-16 px-6 border-t border-white/5">
-        <div className="max-w-7xl mx-auto grid md:grid-cols-4 gap-12">
-          <div className="col-span-2 space-y-6">
-            <div className="flex items-center gap-2">
-              <Logo className="w-8 h-8" />
-              <span className="text-lg font-black tracking-tighter">NOTEVIX</span>
-            </div>
-            <p className="text-gray-500 max-w-sm leading-relaxed">
-              NoteVix is dedicated to making quality education accessible to every student. Our mission is to simplify learning through technology and expert-curated content.
-            </p>
-          </div>
-          
-          <div className="space-y-6">
-            <h4 className="font-bold uppercase text-xs tracking-widest text-gray-400">Legal</h4>
-            <ul className="space-y-4 text-sm text-gray-500">
-              <li><button onClick={() => navigate('/privacy')} className="hover:text-purple-400">Privacy Policy</button></li>
-              <li><button onClick={() => navigate('/terms')} className="hover:text-purple-400">Terms of Service</button></li>
-              <li><button onClick={() => navigate('/disclaimer')} className="hover:text-purple-400">Disclaimer</button></li>
-            </ul>
-          </div>
-
-          <div className="space-y-6">
-            <h4 className="font-bold uppercase text-xs tracking-widest text-gray-400">Resources</h4>
-            <ul className="space-y-4 text-sm text-gray-500">
-              <li><button onClick={() => navigate('/articles')} className="hover:text-purple-400">Study Insights</button></li>
-              <li><button onClick={() => navigate('/about')} className="hover:text-purple-400">About Us</button></li>
-              <li><button onClick={() => navigate('/contact')} className="hover:text-purple-400">Contact Us</button></li>
-            </ul>
-          </div>
-        </div>
-        
-        <div className="max-w-7xl mx-auto pt-16 mt-16 border-t border-white/5 flex flex-col md:row items-center justify-between gap-4 text-gray-600 text-xs">
-          <p>© 2026 NoteVix. All rights reserved.</p>
-          <div className="flex items-center gap-6">
-            <a href="/about" className="hover:text-white">About</a>
-            <a href="/privacy" className="hover:text-white">Privacy</a>
-            <a href="/terms" className="hover:text-white">Terms</a>
-          </div>
-        </div>
+      <footer className="py-12 px-6 border-t border-white/5 text-center">
+        <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">
+          © 2026 NoteVix Academy • All Rights Reserved
+        </p>
       </footer>
     </div>
   );

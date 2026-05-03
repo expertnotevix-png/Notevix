@@ -84,7 +84,8 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
       // Task 5: Use static JSON for resources
       const response = await fetch('/data/resources.json');
-      const allResources: SubjectResource[] = await response.json();
+      const json = await response.json();
+      const allResources: SubjectResource[] = json.resources || [];
       
       const data = allResources
         .filter(res => res.class === activeClass && res.isFree !== true);
