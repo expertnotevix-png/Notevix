@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { UserProfile } from '../types';
 import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Trophy, Bell, Calendar, Sparkles, MessageSquare, BrainCircuit, FileText, Users, Instagram } from 'lucide-react';
 import { collection, query, where, getDocs, limit, addDoc, updateDoc, doc, setDoc } from 'firebase/firestore';
-import { db, checkQuotaLock, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
 
 interface HomeProps {
   user: UserProfile;

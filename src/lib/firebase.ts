@@ -1,8 +1,9 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeFirestore, doc, getDocFromServer, enableIndexedDbPersistence, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { toast } from 'sonner';
 
 // Ensure we only initialize once
 console.log("Initializing Firebase with project:", firebaseConfig.projectId);
@@ -25,13 +26,22 @@ export const analytics = isSupported().then(yes => {
 
 // Use robust Firestore settings for various network environments
 console.log("Connecting to Firestore Database:", firebaseConfig.firestoreDatabaseId || '(default)');
-if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('TODO')) {
-  console.warn("Firebase API Key is missing or invalid!");
-}
 
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
+  cacheSizeBytes: CACHE_SIZE_UNLIMITED,
 }, firebaseConfig.firestoreDatabaseId);
+
+// Enable persistence for offline access (Crucial for reducing reads)
+if (typeof window !== 'undefined') {
+  enableIndexedDbPersistence(db).catch((err) => {
+    if (err.code === 'failed-precondition') {
+      console.warn("Firestore Persistence: Multiple tabs open, persistence can only be enabled in one tab at a time.");
+    } else if (err.code === 'unimplemented') {
+      console.warn("Firestore Persistence: The current browser doesn't support all of the features needed to enable persistence");
+    }
+  });
+}
 
 export const auth = getAuth(app);
 
@@ -59,11 +69,7 @@ export const getCachedData = <T>(key: string): T | null => {
 };
 
 export const setCachedData = (key: string, data: any, ttlMinutes: number = 10) => {
-  // If we are under high load (quota lock), we cache much longer (6 hours)
-  const isLocked = checkQuotaLock();
-  const effectiveTTL = isLocked ? Math.max(ttlMinutes, 360) : ttlMinutes;
-  
-  const expiry = Date.now() + (effectiveTTL * 60 * 1000);
+  const expiry = Date.now() + (ttlMinutes * 60 * 1000);
   window.localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ data, expiry }));
 };
 
@@ -88,13 +94,7 @@ export const checkQuotaLock = (): boolean => {
     const lockTime = parseInt(lockout);
     // If lock is older than duration, remove it
     if (Date.now() - lockTime > QUOTA_LOCK_DURATION) {
-      // AUTO-RECOVERY: Clear lock and all related caches
       localStorage.removeItem(QUOTA_LOCK_KEY);
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith(CACHE_PREFIX)) {
-          localStorage.removeItem(key);
-        }
-      });
       window.dispatchEvent(new Event(QUOTA_EVENT));
       return false;
     }
@@ -104,7 +104,7 @@ export const checkQuotaLock = (): boolean => {
 };
 
 export const setQuotaLock = () => {
-  // Prevent resetting the timer if a lock is already active
+  if (typeof window === 'undefined') return;
   const existing = localStorage.getItem(QUOTA_LOCK_KEY);
   if (existing) {
     const time = parseInt(existing);
@@ -116,11 +116,13 @@ export const setQuotaLock = () => {
 };
 
 export const clearQuotaLock = () => {
+  if (typeof window === 'undefined') return;
   localStorage.removeItem(QUOTA_LOCK_KEY);
   window.dispatchEvent(new Event(QUOTA_EVENT));
 };
 
 export const listenToQuotaLock = (callback: (isLocked: boolean) => void) => {
+  if (typeof window === 'undefined') return () => {};
   const handler = () => callback(checkQuotaLock());
   window.addEventListener(QUOTA_EVENT, handler);
   window.addEventListener('storage', (e) => {
@@ -185,8 +187,8 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  if (shouldThrow) {
-    throw new Error(JSON.stringify(errInfo));
+  if (shouldThrow || errorMsg.includes('insufficient permissions')) {
+    toast.error("Access Denied", { description: "You don't have permission to perform this action." });
   }
 }
 

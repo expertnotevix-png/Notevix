@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
-import { db, checkQuotaLock } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { UserProfile } from '../types';
 
 export function useModeration(user: UserProfile | null) {
@@ -18,13 +18,6 @@ export function useModeration(user: UserProfile | null) {
     const checkModeration = async () => {
       try {
         setLoading(true);
-
-        if (checkQuotaLock()) {
-          console.warn("Moderation: Quota lockout active. Assuming safe for now.");
-          setIsBanned(false);
-          setLoading(false);
-          return;
-        }
 
         const docSnap = await getDoc(doc(db, 'user_moderation', user.uid));
         

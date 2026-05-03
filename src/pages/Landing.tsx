@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, FlaskConical, Globe, Languages, Shield, Zap, Trophy, Users, ChevronRight, Star } from 'lucide-react';
+import { BookOpen, FlaskConical, Globe, Languages, Shield, Zap, Trophy, Users, ChevronRight, Star, Crown } from 'lucide-react';
 import { Logo } from '../components/Logo';
 
 const features = [
@@ -60,6 +60,18 @@ export default function Landing() {
             Trusted by 10,000+ Students
           </motion.div>
 
+          {/* New Premium CTA for Guests */}
+          <motion.button
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            whileHover={{ scale: 1.05 }}
+            onClick={() => navigate('/premium-notes')}
+            className="mx-auto flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/20 border border-indigo-500/20 text-indigo-400 text-[10px] font-black uppercase tracking-[0.2em] animate-pulse"
+          >
+            <Crown size={12} />
+            Buy Premium Notes without Signup
+          </motion.button>
+          
           <motion.h1 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

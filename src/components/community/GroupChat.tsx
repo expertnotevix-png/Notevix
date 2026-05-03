@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, limit, getDocs } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Smile, Info, ChevronLeft, MapPin, Sparkles, Hash } from 'lucide-react';
 import { UserProfile } from '../../types';
@@ -32,7 +32,7 @@ export default function GroupChat({
   const scrollRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [isBanned, setIsBanned] = useState(false);
-  const [isLive, setIsLive] = useState(!checkQuotaLock());
+  const [isLive, setIsLive] = useState(true);
 
   // Smart Scroll Helpers
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
@@ -50,7 +50,6 @@ export default function GroupChat({
   const fetchMessagesManual = async () => {
     if (!group?.id) return;
     try {
-      if (checkQuotaLock()) return;
       const q = query(
         collection(db, 'study_groups', group.id, 'messages'),
         orderBy('timestamp', 'desc'),
@@ -122,7 +121,6 @@ export default function GroupChat({
     setTimeout(() => scrollToBottom('smooth'), 50);
 
     try {
-      if (checkQuotaLock()) throw new Error("Quota active");
       await addDoc(collection(db, 'study_groups', group.id, 'messages'), {
         groupId: group.id,
         userId: user.uid,

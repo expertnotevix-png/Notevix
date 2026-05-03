@@ -7,7 +7,7 @@ import {
   SearchCheck, FilePlus, AlertCircle
 } from 'lucide-react';
 import { UserProfile, SubjectResource, ValidPayment } from '../types';
-import { db, handleFirestoreError, OperationType, checkQuotaLock, getCachedData, setCachedData } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, addDoc, getDoc, setDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { GoogleGenAI } from "@google/genai";
@@ -15,7 +15,7 @@ import { useRef } from 'react';
 import { geminiService } from '../services/geminiService';
 
 interface PremiumNotesProps {
-  user: UserProfile;
+  user: UserProfile | null;
 }
 
 const CLASSES = ['8', '9', '10'];
@@ -60,11 +60,12 @@ const PREMIUM_PLANS = [
 ];
 
 export default function PremiumNotes({ user }: PremiumNotesProps) {
-  const [activeClass, setActiveClass] = useState<'8' | '9' | '10'>(user.class as any || '10');
+  const [activeClass, setActiveClass] = useState<'8' | '9' | '10'>(user?.class as any || '10');
   const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
   const [resources, setResources] = useState<SubjectResource[]>([]);
   const [loading, setLoading] = useState(true);
   const [whatsapp, setWhatsapp] = useState('');
+  const [email, setEmail] = useState('');
   const [transactionId, setTransactionId] = useState('');
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -78,32 +79,18 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   }, [activeClass]);
 
   const fetchResources = async () => {
-    const cacheKey = `resources_${activeClass}`;
     try {
       setLoading(true);
 
-      // Check Cache First
-      const cached = getCachedData<SubjectResource[]>(cacheKey);
-      if (cached) {
-        setResources(cached);
-        setLoading(false);
-        return;
-      }
-
-      if (checkQuotaLock()) {
-        setLoading(false);
-        return;
-      }
-      const q = query(collection(db, 'subject_resources'), where('class', '==', activeClass));
-      const snap = await getDocs(q);
-      const data = snap.docs
-        .map(d => ({ id: d.id, ...d.data() } as SubjectResource))
-        .filter(res => res.isFree !== true); // Filter out free resources
+      // Task 5: Use static JSON for resources
+      const response = await fetch('/data/resources.json');
+      const allResources: SubjectResource[] = await response.json();
+      
+      const data = allResources
+        .filter(res => res.class === activeClass && res.isFree !== true);
       
       setResources(data);
-      setCachedData(cacheKey, data, 10); // Cache for 10 minutes
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'subject_resources');
       console.error("Error fetching resources:", error);
     } finally {
       setLoading(false);
@@ -111,6 +98,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   };
 
   const isUnlocked = (res: SubjectResource) => {
+    if (!user) return false;
     if (user.isPremium && user.planType === 'monthly_sub') return true;
     if (user.unlockedClasses?.includes(res.class)) return true;
     return user.unlockedResources?.includes(res.id);
@@ -166,8 +154,8 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   };
 
   const handlePurchase = async () => {
-    if (isSubmitting || aiVerifying || !whatsapp || (!transactionId && !screenshotPreview)) {
-      toast.error('Please enter Transaction ID or upload screenshot');
+    if (isSubmitting || aiVerifying || !whatsapp || (!user && !email) || (!transactionId && !screenshotPreview)) {
+      toast.error('Please enter required fields (Email/WhatsApp and Transaction ID or Screenshot)');
       return;
     }
 
@@ -257,52 +245,79 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         throw new Error("This Transaction ID has already been redeemed.");
       }
       
-      // --- 3. AUTO-UNLOCK ---
-      // Mark TX ID as used by creating the document with the TX ID as document name
-      try {
-        await setDoc(doc(db, 'transaction_id_registry', finalTxId), { 
+      // --- 3. PURCHASE RECORDING ---
+      if (user) {
+        // Logged-in user flow
+        try {
+          await setDoc(doc(db, 'transaction_id_registry', finalTxId), { 
+            userId: user.uid,
+            redeemedAt: new Date().toISOString(),
+            planId: selectedPlan?.id,
+            amount: aiDetectedAmount || selectedPlan?.price || 0
+          });
+        } catch (e: any) {
+          if (e.message?.includes('permission-denied')) {
+            throw new Error("Transaction verification error. This ID might be pending review.");
+          }
+          throw e;
+        }
+        
+        await addDoc(collection(db, 'transaction_ledger'), {
+          transactionId: finalTxId,
           userId: user.uid,
+          whatsapp: whatsapp,
+          amount: aiDetectedAmount || selectedPlan?.price || 0,
+          planId: selectedPlan?.id,
+          timestamp: new Date().toISOString()
+        });
+
+        const updateData: any = { isPremium: true, planType: selectedPlan?.id || 'individual_resource' };
+        
+        if (selectedPlan?.class && selectedPlan.type === 'one-time') {
+          const currentUnlocked = user.unlockedClasses || [];
+          if (!currentUnlocked.includes(selectedPlan.class)) {
+            updateData.unlockedClasses = [...currentUnlocked, selectedPlan.class];
+          }
+        }
+        
+        if (selectedPlan?.resourceId) {
+          const currentRes = user.unlockedResources || [];
+          if (!currentRes.includes(selectedPlan.resourceId)) {
+            updateData.unlockedResources = [...currentRes, selectedPlan.resourceId];
+          }
+        }
+
+        await updateDoc(doc(db, 'users', user.uid), updateData);
+        toast.success("AI Verified Successfully! Access Granted.");
+        setTimeout(() => window.location.reload(), 2000);
+      } else {
+        // Guest user flow
+        await addDoc(collection(db, 'purchase_requests'), {
+          email: email,
+          whatsapp: whatsapp,
+          userId: 'GUEST',
+          transactionId: finalTxId,
+          planName: selectedPlan?.name,
+          planId: selectedPlan?.id,
+          targetClass: selectedPlan?.class || '',
+          amount: aiDetectedAmount || selectedPlan?.price || 0,
+          status: 'pending',
+          isGuest: true,
+          timestamp: new Date().toISOString()
+        });
+
+        await setDoc(doc(db, 'transaction_id_registry', finalTxId), { 
+          email: email,
           redeemedAt: new Date().toISOString(),
           planId: selectedPlan?.id,
-          amount: aiDetectedAmount || selectedPlan?.price || 0
+          amount: aiDetectedAmount || selectedPlan?.price || 0,
+          isGuest: true
         });
-      } catch (e: any) {
-        if (e.message?.includes('permission-denied')) {
-          throw new Error("Transaction verification error. This ID might be pending review.");
-        }
-        throw e;
-      }
-      
-      // Log for Admin Audit
-      await addDoc(collection(db, 'transaction_ledger'), {
-        transactionId: finalTxId,
-        userId: user.uid,
-        whatsapp: whatsapp,
-        amount: aiDetectedAmount || selectedPlan?.price || 0,
-        planId: selectedPlan?.id,
-        timestamp: new Date().toISOString()
-      });
 
-      const updateData: any = { isPremium: true, planType: selectedPlan?.id || 'individual_resource' };
-      
-      if (selectedPlan?.class && selectedPlan.type === 'one-time') {
-        const currentUnlocked = user.unlockedClasses || [];
-        if (!currentUnlocked.includes(selectedPlan.class)) {
-          updateData.unlockedClasses = [...currentUnlocked, selectedPlan.class];
-        }
+        toast.success("Payment request submitted! Admin will contact you on WhatsApp/Email with the download links within 2-4 hours.");
+        setSelectedPlan(null);
       }
       
-      if (selectedPlan?.resourceId) {
-        const currentRes = user.unlockedResources || [];
-        if (!currentRes.includes(selectedPlan.resourceId)) {
-          updateData.unlockedResources = [...currentRes, selectedPlan.resourceId];
-        }
-      }
-
-      await updateDoc(doc(db, 'users', user.uid), updateData);
-      
-      toast.success("AI Verified Successfully! Access Granted.");
-      setTimeout(() => window.location.reload(), 2000);
     } catch (error: any) {
       console.error("Verification Error:", error);
       toast.error(error.message || "Verification failed. Try again.");
@@ -477,15 +492,6 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                 <h3 className="text-2xl font-black text-white uppercase tracking-tight">Curating Resources</h3>
                 <p className="text-gray-500 text-xs font-medium uppercase tracking-[0.3em]">Class {activeClass} Premium Hub arriving shortly.</p>
               </div>
-              <button 
-                onClick={() => {
-                  window.localStorage.removeItem(`fs_cache_resources_${activeClass}`);
-                  fetchResources();
-                }}
-                className="px-6 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-white/50 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all border border-white/5"
-              >
-                Force Refresh Library
-              </button>
             </div>
           )}
         </div>
@@ -595,6 +601,16 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                       placeholder="WhatsApp Number (for delivery)"
                       className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-all"
                     />
+
+                    {!user && (
+                      <input 
+                        type="email" 
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="Email Address (for delivery)"
+                        className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-all"
+                      />
+                    )}
 
                     <div 
                       onClick={() => fileInputRef.current?.click()}

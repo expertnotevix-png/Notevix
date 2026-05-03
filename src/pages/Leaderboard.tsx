@@ -23,23 +23,30 @@ export default function Leaderboard({ user }: LeaderboardProps) {
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
-      try {
-        setLoading(true);
+      // Check cache first
+      const cached = localStorage.getItem(CACHED_LEADERBOARD_KEY);
+      const cacheTimestamp = localStorage.getItem(CACHED_LEADERBOARD_KEY + '_time');
+      
+      // If cache is less than 5 mins old, use it
+      if (cached && cacheTimestamp && Date.now() - parseInt(cacheTimestamp) < 5 * 60 * 1000) {
+        setTopUsers(JSON.parse(cached));
+        setLoading(false);
+        return;
+      }
 
+      try {
+        if (!cached) setLoading(true);
         if (checkQuotaLock()) {
-          console.warn("Leaderboard: Quota lockout active. Using cache.");
+          setLoading(false);
           setIsQuotaLimited(true);
-          const cached = localStorage.getItem(CACHED_LEADERBOARD_KEY);
-          if (cached) {
-            setTopUsers(JSON.parse(cached));
-          }
+          if (cached) setTopUsers(JSON.parse(cached));
           return;
         }
 
         const q = query(
           collection(db, 'leaderboard'),
           orderBy('totalPoints', 'desc'),
-          limit(30)
+          limit(10) // Limit to top 10 as requested
         );
         const snapshot = await getDocs(q);
         const users = snapshot.docs
@@ -49,6 +56,7 @@ export default function Leaderboard({ user }: LeaderboardProps) {
         
         // Cache successful fetch
         localStorage.setItem(CACHED_LEADERBOARD_KEY, JSON.stringify(users));
+        localStorage.setItem(CACHED_LEADERBOARD_KEY + '_time', Date.now().toString());
         
         // Also fetch stats
         const statsDoc = await getDoc(doc(db, 'system_stats', 'leaderboard'));
@@ -58,8 +66,6 @@ export default function Leaderboard({ user }: LeaderboardProps) {
       } catch (error: any) {
         handleFirestoreError(error, OperationType.LIST, 'leaderboard');
         setIsQuotaLimited(true);
-        // Try to load cache on error
-        const cached = localStorage.getItem(CACHED_LEADERBOARD_KEY);
         if (cached) {
           setTopUsers(JSON.parse(cached));
         }
@@ -69,6 +75,8 @@ export default function Leaderboard({ user }: LeaderboardProps) {
     };
 
     fetchLeaderboard();
+    const interval = setInterval(fetchLeaderboard, 5 * 60 * 1000); // 5 minute polling
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {

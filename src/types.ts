@@ -135,17 +135,20 @@ export interface SubjectResource {
 export interface PurchaseRequest {
   id: string;
   userId: string;
-  userEmail: string;
-  userName: string;
+  userEmail?: string;
+  userName?: string;
+  email?: string; // For guests
+  whatsapp?: string; // For guests
   planId: string;
   planName: string;
   amount: number;
   transactionId: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'processed';
   timestamp: string;
   whatsappNumber?: string;
   planType?: 'subscription' | 'one-time';
   targetClass?: string;
   instagramUsername?: string;
   screenshotUrl?: string;
+  isGuest?: boolean;
 }

@@ -1,12 +1,46 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Play, Pause, RotateCcw, Timer as TimerIcon, Brain } from 'lucide-react';
+import { doc, updateDoc, increment, setDoc } from 'firebase/firestore';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { toast } from 'sonner';
 
 export function FocusTimerWidget() {
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isActive, setIsActive] = useState(false);
   const [mode, setMode] = useState<'focus' | 'break'>('focus');
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
+
+  // Load state from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('notevix_focus_session');
+    if (saved) {
+      const { timeLeft: sTimeLeft, mode: sMode, lastUpdate } = JSON.parse(saved);
+      const elapsed = Math.floor((Date.now() - lastUpdate) / 1000);
+      const remaining = sTimeLeft - elapsed;
+      
+      if (remaining > 0) {
+        setTimeLeft(remaining);
+        setMode(sMode);
+        // We don't auto-start for safety
+      }
+    }
+  }, []);
+
+  // Save state to localStorage periodically when active
+  useEffect(() => {
+    if (isActive) {
+      const interval = setInterval(() => {
+        localStorage.setItem('notevix_focus_session', JSON.stringify({
+          timeLeft,
+          mode,
+          lastUpdate: Date.now()
+        }));
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [isActive, timeLeft, mode]);
 
   useEffect(() => {
     if (isActive && timeLeft > 0) {
@@ -15,12 +49,15 @@ export function FocusTimerWidget() {
       }, 1000);
     } else if (timeLeft === 0) {
       setIsActive(false);
+      handleSessionEnd();
       if (mode === 'focus') {
         setMode('break');
         setTimeLeft(5 * 60);
+        toast.success("Focus session complete! Take a break.");
       } else {
         setMode('focus');
         setTimeLeft(25 * 60);
+        toast.info("Break over. Back to focus!");
       }
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -31,10 +68,44 @@ export function FocusTimerWidget() {
     };
   }, [isActive, timeLeft, mode]);
 
-  const toggleTimer = () => setIsActive(!isActive);
+  const handleSessionEnd = async () => {
+    if (mode === 'focus' && auth.currentUser) {
+      try {
+        const fullDuration = 25; // 25 mins
+        const points = fullDuration * 10;
+        
+        const userRef = doc(db, 'users', auth.currentUser.uid);
+        const leaderboardRef = doc(db, 'leaderboard', auth.currentUser.uid);
+        
+        await updateDoc(userRef, {
+          totalFocusMinutes: increment(fullDuration),
+          totalPoints: increment(points)
+        });
+
+        await setDoc(leaderboardRef, {
+          totalPoints: increment(points),
+          totalFocusMinutes: increment(fullDuration)
+        }, { merge: true });
+
+        console.log("Focus session saved to Cloud");
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, 'focus_timer_sync');
+      }
+    }
+    localStorage.removeItem('notevix_focus_session');
+  };
+
+  const toggleTimer = () => {
+    if (!isActive && mode === 'focus') {
+      setSessionStartTime(Date.now());
+    }
+    setIsActive(!isActive);
+  };
+
   const resetTimer = () => {
     setIsActive(false);
     setTimeLeft(mode === 'focus' ? 25 * 60 : 5 * 60);
+    localStorage.removeItem('notevix_focus_session');
   };
 
   const formatTime = (seconds: number) => {

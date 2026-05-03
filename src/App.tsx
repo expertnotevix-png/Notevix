@@ -3,8 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { onAuthStateChanged, getRedirectResult, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, query, collection, where, getDocs, addDoc, increment, orderBy, limit } from 'firebase/firestore';
 import { logEvent } from 'firebase/analytics';
-import { auth, db, handleFirestoreError, OperationType, analytics, checkQuotaLock, setQuotaLock, listenToQuotaLock } from './lib/firebase';
+import { auth, db, handleFirestoreError, OperationType, analytics, checkQuotaLock, listenToQuotaLock, setQuotaLock } from './lib/firebase';
 import { UserProfile } from './types';
+import { Zap } from 'lucide-react';
 
 const CACHED_USER_KEY = 'notevix_user_profile_v1';
 
@@ -41,7 +42,6 @@ import BottomNav from './components/BottomNav';
 import { FloatingChatbot } from './components/FloatingChatbot';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
-import { Zap } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -58,17 +58,9 @@ export default function App() {
       quotaLockRef.current = locked;
       if (locked) {
         toast.error("Daily Data Limit Reached", {
-          description: "Simplified mode active for 24h. Use 'Emergency Refresh' if app feels stuck.",
+          description: "Simplified mode active for 24h. Use 'Restore Full Mode' in the banner to retry.",
           id: 'quota-lock-toast',
-          duration: Infinity,
-          action: {
-            label: 'Refresh App',
-            onClick: () => {
-              window.localStorage.clear();
-              window.sessionStorage.clear();
-              window.location.reload();
-            }
-          }
+          duration: Infinity
         });
       } else {
         toast.dismiss('quota-lock-toast');
@@ -122,92 +114,102 @@ export default function App() {
           const userRef = doc(db, 'users', firebaseUser.uid);
           let userData: UserProfile | null = null;
           
+          // Task 2: Cache-first profile loading (10 min expiry)
+          const cached = localStorage.getItem(CACHED_USER_KEY);
+          const cachedTime = localStorage.getItem(CACHED_USER_KEY + '_time');
+          const isCacheValid = cached && cachedTime && (Date.now() - parseInt(cachedTime) < 10 * 60 * 1000);
+
+          if (isCacheValid) {
+            userData = JSON.parse(cached);
+            setUser(userData);
+            setIsAuthReady(true);
+            setLoading(false);
+          }
+          
           try {
             if (quotaLockRef.current) {
-              throw new Error("Quota exceeded lockout active");
+              if (!userData) throw new Error("Quota exceeded lockout active");
+              return; // Use cache if present
             }
-            const userDoc = await getDoc(userRef);
-            
-            if (userDoc.exists()) {
-              userData = userDoc.data() as UserProfile;
-              // Cache for quota protection
-              localStorage.setItem(CACHED_USER_KEY, JSON.stringify(userData));
+
+            // If cache invalid or not present, fetch from server
+            if (!isCacheValid) {
+              const userDoc = await getDoc(userRef);
               
-              // Streak Logic
-              const today = new Date().toISOString().split('T')[0];
-              const lastUpdate = userData.streak?.lastUpdateDate;
-              
-              if (lastUpdate !== today) {
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
-                const yesterdayStr = yesterday.toISOString().split('T')[0];
-                
-                let newCount = userData.streak?.currentCount || 0;
-                if (lastUpdate === yesterdayStr) {
-                  newCount += 1;
-                } else {
-                  newCount = 1; 
-                }
-                
-                await updateDoc(userRef, {
-                  'streak.currentCount': newCount,
-                  'streak.lastUpdateDate': today
-                }).catch(e => console.warn("Streak update failed:", e));
-                userData.streak = { currentCount: newCount, lastUpdateDate: today };
-                toast.success(`Welcome back! Your streak is now ${newCount} days! 🔥`);
+              if (userDoc.exists()) {
+                userData = userDoc.data() as UserProfile;
                 localStorage.setItem(CACHED_USER_KEY, JSON.stringify(userData));
+                localStorage.setItem(CACHED_USER_KEY + '_time', Date.now().toString());
+                
+                // Streak Logic (Crucial so we only do this once a day)
+                const today = new Date().toISOString().split('T')[0];
+                const lastUpdate = userData.streak?.lastUpdateDate;
+                
+                if (lastUpdate !== today) {
+                  const yesterday = new Date();
+                  yesterday.setDate(yesterday.getDate() - 1);
+                  const yesterdayStr = yesterday.toISOString().split('T')[0];
+                  
+                  let newCount = userData.streak?.currentCount || 0;
+                  if (lastUpdate === yesterdayStr) {
+                    newCount += 1;
+                  } else {
+                    newCount = 1; 
+                  }
+                  
+                  await updateDoc(userRef, {
+                    'streak.currentCount': newCount,
+                    'streak.lastUpdateDate': today
+                  }).catch(e => console.warn("Streak update failed:", e));
+                  
+                  userData.streak = { currentCount: newCount, lastUpdateDate: today };
+                  toast.success(`Welcome back! Your streak is now ${newCount} days! 🔥`);
+                  localStorage.setItem(CACHED_USER_KEY, JSON.stringify(userData));
+                }
+              } else {
+                console.log("App: Creating new user document...");
+                const referredBy = localStorage.getItem('referredBy');
+                const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+                userData = {
+                  uid: firebaseUser.uid,
+                  email: firebaseUser.email || '',
+                  displayName: firebaseUser.displayName || 'Student',
+                  photoURL: firebaseUser.photoURL || '',
+                  role: firebaseUser.email === 'expertraj8@gmail.com' ? 'admin' : 'student',
+                  savedNotes: [],
+                  notificationsEnabled: true,
+                  studyModeEnabled: false,
+                  streak: { currentCount: 1, lastUpdateDate: new Date().toISOString().split('T')[0] },
+                  totalFocusMinutes: 0,
+                  totalPoints: 0,
+                  referralCode,
+                  referralCount: 0,
+                  isPremium: false,
+                  createdAt: new Date().toISOString(),
+                  ...(referredBy ? { referredBy } : {}),
+                };
+
+                await setDoc(userRef, userData);
+                localStorage.setItem(CACHED_USER_KEY, JSON.stringify(userData));
+                localStorage.setItem(CACHED_USER_KEY + '_time', Date.now().toString());
               }
-            } else {
-              console.log("App: Creating new user document...");
-              const referredBy = localStorage.getItem('referredBy');
-              const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-
-              userData = {
-                uid: firebaseUser.uid,
-                email: firebaseUser.email || '',
-                displayName: firebaseUser.displayName || 'Student',
-                photoURL: firebaseUser.photoURL || '',
-                role: firebaseUser.email === 'expertraj8@gmail.com' ? 'admin' : 'student',
-                savedNotes: [],
-                notificationsEnabled: true,
-                studyModeEnabled: false,
-                streak: { currentCount: 1, lastUpdateDate: new Date().toISOString().split('T')[0] },
-                totalFocusMinutes: 0,
-                totalPoints: 0,
-                referralCode,
-                referralCount: 0,
-                isPremium: false,
-                createdAt: new Date().toISOString(),
-                ...(referredBy ? { referredBy } : {}),
-              };
-
-              await setDoc(userRef, userData);
-              localStorage.setItem(CACHED_USER_KEY, JSON.stringify(userData));
             }
           } catch (docError: any) {
             const isQuotaError = docError.message?.toLowerCase().includes('quota') || 
                                 docError.message?.toLowerCase().includes('lockout active');
-            
+                                
             if (!isQuotaError) {
               console.error("App: Firestore error fetching profile:", docError);
-            } else if (!quotaLockRef.current) {
-              quotaLockRef.current = true;
             }
-
+            
             const cached = localStorage.getItem(CACHED_USER_KEY);
             if (cached) {
               userData = JSON.parse(cached);
-              if (isMounted) {
+              if (isMounted && isQuotaError) {
                 toast.info("Using cached profile (Cloud limits reached)");
               }
             } else {
-              if (isQuotaError) {
-                toast.error("Cloud Quota Met: Accessing degraded mode.", {
-                  duration: 6000,
-                  id: 'quota-error'
-                });
-              }
-              
               userData = {
                 uid: firebaseUser.uid,
                 email: firebaseUser.email || '',
@@ -272,7 +274,7 @@ export default function App() {
     userRefForInterval.current = user;
   }, [user]);
 
-  // Global Time Tracking (5 min = 50 points) + Activity Tracking
+  // Global Activity Tracking (Every 10 mins to save writes)
   useEffect(() => {
     if (!user) return;
 
@@ -290,55 +292,19 @@ export default function App() {
       const currentUser = userRefForInterval.current;
       if (!currentUser) return;
 
-      if (checkQuotaLock()) {
-        console.warn("App: Quota lockout active. Skipping activity tracking sync.");
-        return;
-      }
+      if (checkQuotaLock()) return;
 
       const userRef = doc(db, 'users', currentUser.uid);
-      const updates: any = {
-        lastActive: new Date().toISOString()
-      };
-
-      if (currentUser.role !== 'admin') {
-        const pointGain = 50;
-        const minuteGain = 5;
-
-        const newFocusMinutes = (currentUser.totalFocusMinutes || 0) + minuteGain;
-        const newPoints = (currentUser.totalPoints || 0) + pointGain;
-        
-        updates.totalFocusMinutes = increment(minuteGain);
-        updates.totalPoints = increment(pointGain);
-
-        // Update local state immediately
-        setUser(prev => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            totalFocusMinutes: newFocusMinutes,
-            totalPoints: newPoints
-          };
-        });
-
-        // Sync with Leaderboard - Use increment here too for multi-tab safety
-        const leaderboardRef = doc(db, 'leaderboard', currentUser.uid);
-        setDoc(leaderboardRef, {
-          uid: currentUser.uid,
-          displayName: currentUser.displayName,
-          photoURL: currentUser.photoURL,
-          totalPoints: increment(pointGain),
-          totalFocusMinutes: increment(minuteGain),
-          class: currentUser.class || '',
-          streakCount: currentUser.streak?.currentCount || 0
-        }, { merge: true }).catch(err => console.error("Leaderboard periodic sync failed:", err));
-      }
-
+      
+      // Only sync lastActive periodically to save writes/reads
       try {
-        await updateDoc(userRef, updates);
+        await updateDoc(userRef, {
+          lastActive: new Date().toISOString()
+        });
       } catch (err) {
-        console.error("Global tracking failed:", err);
+        console.warn("Activity sync failed:", err);
       }
-    }, 300000); // Reduced to 5 minutes to save writes
+    }, 10 * 60 * 1000); // 10 minutes session tracking (was 1 min)
 
     return () => clearInterval(interval);
   }, [user?.uid]);
@@ -431,13 +397,13 @@ export default function App() {
             >
               <div className="flex items-center gap-2 flex-1 justify-center">
                 <Zap size={10} fill="currentColor" />
-                High Viral Traffic: App is running in Static Optimization Mode
+                NoteVix Viral Mode: Data limit nearly reached. App is using optimized cache.
                 <Zap size={10} fill="currentColor" />
               </div>
               <button 
                 onClick={() => {
                   window.localStorage.removeItem('firestore_quota_lockout');
-                  window.localStorage.clear(); // Clear all caches to be sure
+                  window.localStorage.clear();
                   window.location.reload();
                 }}
                 className="bg-black text-yellow-500 px-3 py-1 rounded-sm border border-black/10 active:scale-95 transition-transform"
@@ -473,7 +439,7 @@ export default function App() {
             
             <Route path="/class/:classId/:subjectId" element={<ChapterList />} />
             <Route path="/note/:noteId" element={<NoteView user={user} />} />
-            <Route path="/premium-notes" element={user ? <PremiumNotes user={user} /> : <Navigate to="/login" />} />
+            <Route path="/premium-notes" element={<PremiumNotes user={user} />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/about" element={<AboutUs />} />
             <Route path="/contact" element={<Contact user={user} />} />

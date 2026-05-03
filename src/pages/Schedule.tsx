@@ -25,18 +25,14 @@ export default function Schedule({ user }: ScheduleProps) {
     const fetchTasks = async () => {
       try {
         setLoading(true);
-
         if (checkQuotaLock()) {
-          console.warn("Schedule: Quota lockout active. Using cache.");
+          setLoading(false);
           const cached = localStorage.getItem(CACHED_SCHEDULE_KEY);
           if (cached) {
             const parsed = JSON.parse(cached);
-            if (parsed.date === today) {
-              setTasks(parsed.tasks);
-              setLoading(false);
-              return;
-            }
+            if (parsed.date === today) setTasks(parsed.tasks);
           }
+          return;
         }
 
         const q = query(

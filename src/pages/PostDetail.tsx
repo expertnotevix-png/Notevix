@@ -45,7 +45,6 @@ export default function PostDetail({ user }: { user: UserProfile | null }) {
       try {
         setLoading(true);
         if (checkQuotaLock()) {
-          setError("Data limit reached. Please try again tomorrow.");
           setLoading(false);
           return;
         }

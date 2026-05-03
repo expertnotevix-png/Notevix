@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
-import { db, getCachedData, setCachedData, checkQuotaLock, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Chapter } from '../types';
 import { Search, Filter, BookOpen, Lock, X, Sparkles, GraduationCap, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -19,21 +19,10 @@ export default function Explore() {
     }
     setLoading(true);
     try {
-      // Use Cached All Chapters if available
-      let allChapters = getCachedData<Chapter[]>('explore_chapters');
-
-      if (!allChapters) {
-        if (checkQuotaLock()) {
-          setLoading(false);
-          return;
-        }
-        const q = query(collection(db, 'chapters'), limit(100)); // Increased limit to fetch once
-        const querySnapshot = await getDocs(q);
-        allChapters = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Chapter));
-        setCachedData('explore_chapters', allChapters, 60); // Cache for 60 mins (Increased for viral mode)
-      }
-
-      const filtered = (allChapters || []).filter(c => 
+      const q = query(collection(db, 'chapters'), limit(30));
+      const querySnapshot = await getDocs(q);
+      const allChapters = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Chapter));
+      const filtered = allChapters.filter(c => 
         c.title.toLowerCase().includes(term.toLowerCase()) ||
         c.subject.toLowerCase().includes(term.toLowerCase())
       );

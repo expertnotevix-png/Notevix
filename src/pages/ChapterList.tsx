@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db, checkQuotaLock, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { SubjectResource } from '../types';
 import { motion } from 'motion/react';
 import { ChevronLeft, FileText, Book, HelpCircle, Calculator, History, ChevronRight, RefreshCw } from 'lucide-react';
@@ -16,37 +16,22 @@ export default function ChapterList() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      if (checkQuotaLock()) {
-        const cached = localStorage.getItem(`notevix_resources_${classId}_${subjectId}`);
-        if (cached) {
-          setResources(JSON.parse(cached));
-          setLoading(false);
-          return;
-        }
-      }
+      // Fetch from static JSON to save Firestore reads
+      const response = await fetch('/data/resources.json');
+      const json = await response.json();
+      const allResources: SubjectResource[] = json.resources;
 
-      let qResources;
+      let filtered;
       if (subjectId === 'all') {
-        qResources = query(
-          collection(db, 'subject_resources'),
-          where('class', '==', classId),
-          where('isFree', '==', true)
-        );
+        filtered = allResources.filter(r => r.class === classId);
       } else {
-        qResources = query(
-          collection(db, 'subject_resources'),
-          where('class', '==', classId),
-          where('subject', '==', subjectId),
-          where('isFree', '==', true)
-        );
+        filtered = allResources.filter(r => r.class === classId && r.subject === subjectId);
       }
 
-      const resourceSnapshot = await getDocs(qResources);
-      const data = resourceSnapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as SubjectResource));
-      setResources(data);
-      localStorage.setItem(`notevix_resources_${classId}_${subjectId}`, JSON.stringify(data));
+      setResources(filtered);
+      localStorage.setItem(`notevix_resources_${classId}_${subjectId}`, JSON.stringify(filtered));
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'subject_resources');
+      console.error("Error fetching static resources:", error);
       const cached = localStorage.getItem(`notevix_resources_${classId}_${subjectId}`);
       if (cached) setResources(JSON.parse(cached));
     }

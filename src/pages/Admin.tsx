@@ -58,11 +58,6 @@ export default function Admin() {
   const [notifData, setNotifData] = useState({ title: '', message: '', type: 'info' as const });
 
   useEffect(() => {
-    if (checkQuotaLock()) {
-      console.warn("Admin: Quota lockout active. Skipping data fetch.");
-      setLoading(false);
-      return;
-    }
     if (activeTab === 'analytics') fetchAnalytics();
     if (activeTab === 'chapters') fetchChapters();
     if (activeTab === 'messages') fetchMessages();
@@ -80,7 +75,6 @@ export default function Admin() {
 
   const fetchTransactionLedger = async () => {
     try {
-      if (checkQuotaLock()) return;
       const q = query(collection(db, 'transaction_ledger'), orderBy('timestamp', 'desc'));
       const snap = await getDocs(q);
       setTransactionLedger(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TransactionLedger)));
@@ -93,7 +87,6 @@ export default function Admin() {
   const fetchValidPayments = async () => {
     setLoading(true);
     try {
-      if (checkQuotaLock()) return;
       const q = query(collection(db, 'valid_payments'), orderBy('createdAt', 'desc'));
       const snap = await getDocs(q);
       setValidPayments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ValidPayment)));
@@ -658,6 +651,14 @@ export default function Admin() {
 
   const handleApprovePurchase = async (req: PurchaseRequest) => {
     try {
+      if (req.isGuest || req.userId === 'GUEST') {
+        // Guest user approval: Just mark as approved
+        await updateDoc(doc(db, 'purchase_requests', req.id), { status: 'approved' });
+        toast.success("Guest purchase approved! Please contact them via WhatsApp/Email with the link.");
+        fetchPurchaseRequests();
+        return;
+      }
+
       // 1. Reference the user document directly by UID (as used in App.tsx)
       const userRef = doc(db, 'users', req.userId);
       const userSnap = await getDoc(userRef);
@@ -912,7 +913,7 @@ export default function Admin() {
             </p>
           </div>
           
-            <div className="flex flex-col gap-3 w-full max-w-xs">
+          <div className="flex flex-col gap-3 w-full max-w-xs">
             <button 
               onClick={() => {
                 clearQuotaLock();

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, where, limit, doc, getDoc, updateDoc, increment, addDoc, serverTimestamp, setDoc, getDocs } from 'firebase/firestore';
-import { db, auth, checkQuotaLock, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   MessageSquare, 
@@ -79,7 +79,7 @@ export default function Community({ user }: { user: UserProfile | null }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const [isLiveChat, setIsLiveChat] = useState(!checkQuotaLock()); 
+  const [isLiveChat, setIsLiveChat] = useState(true); 
 
   // Helpers for Smart Scroll
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
@@ -98,11 +98,7 @@ export default function Community({ user }: { user: UserProfile | null }) {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        if (checkQuotaLock()) {
-          const cached = localStorage.getItem(CACHED_STATS_KEY);
-          if (cached) setStats(JSON.parse(cached));
-          return;
-        }
+        if (checkQuotaLock()) return;
         const docSnap = await getDoc(doc(db, 'community_stats', 'global'));
         if (docSnap.exists()) {
           const data = docSnap.data() as CommunityStats;
@@ -121,10 +117,7 @@ export default function Community({ user }: { user: UserProfile | null }) {
   // 2. Fetch Global Chat Messages
   const fetchMessagesManual = async () => {
     try {
-      if (checkQuotaLock()) {
-        console.warn("Chat: Quota lockout active. Use refresh later.");
-        return;
-      }
+      if (checkQuotaLock()) return;
       const chatQuery = query(
         collection(db, 'community_chat'),
         orderBy('timestamp', 'desc'),
@@ -143,6 +136,10 @@ export default function Community({ user }: { user: UserProfile | null }) {
     if (activeTab !== 'chat') return;
     
     if (isLiveChat) {
+      if (checkQuotaLock()) {
+        setIsLiveChat(false);
+        return;
+      }
       const chatQuery = query(
         collection(db, 'community_chat'),
         orderBy('timestamp', 'desc'),
@@ -175,12 +172,11 @@ export default function Community({ user }: { user: UserProfile | null }) {
       setLoading(true);
       try {
         if (checkQuotaLock()) {
+          setLoading(false);
           const cached = localStorage.getItem(CACHED_POSTS_KEY);
           if (cached) setPosts(JSON.parse(cached));
-          setLoading(false);
           return;
         }
-
         let postsQuery = query(collection(db, 'posts'), where('status', '==', 'approved'), limit(50));
         if (filterSubject !== 'All') postsQuery = query(postsQuery, where('subject', '==', filterSubject));
         if (filterClass !== 'All') postsQuery = query(postsQuery, where('class', '==', filterClass));
@@ -228,9 +224,6 @@ export default function Community({ user }: { user: UserProfile | null }) {
     setTimeout(() => scrollToBottom('smooth'), 50);
 
     try {
-      if (checkQuotaLock()) {
-        throw new Error("Quota Lock active. Cannot send.");
-      }
       await addDoc(collection(db, 'community_chat'), {
         userId: user.uid,
         userName: user.displayName,
