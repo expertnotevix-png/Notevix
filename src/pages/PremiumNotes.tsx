@@ -74,7 +74,6 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   const [loading, setLoading] = useState(true);
   const [whatsapp, setWhatsapp] = useState('');
   const [email, setEmail] = useState('');
-  const [transactionId, setTransactionId] = useState('');
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiVerifying, setAiVerifying] = useState(false);

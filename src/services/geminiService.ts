@@ -285,10 +285,10 @@ export const geminiService = {
     const prompt = `Analyze this digital payment receipt screenshot (GPay, PhonePe, Paytm, or BHIM).
     YOUR GOAL: Extract forensic data to prevent fraud.
     
-    1. EXTRACT "transactionId": Look for 'UTR', 'Transaction ID', 'Ref No', 'Ref', or 'ID'. 
+    1. EXTRACT "transactionId": Look for 'TXN ID', 'UTR', 'Transaction ID', 'Ref No', 'Ref', or 'ID'. 
        Note: It can be a 12-digit number (UTR) OR an alphanumeric string (e.g., FMPIB5344248147).
-    2. EXTRACT "amount": The numeric value paid (e.g., 39, 99).
-    3. CHECK "isValid": Is the status 'Success', 'Completed', or 'Paid'? 
+    2. EXTRACT "amount": Look for the currency symbol ₹ or Rs. Extract the actual numeric value (e.g., 39).
+    3. CHECK "isValid": Is the payment status 'Success', 'Completed', or 'Paid'? 
 
     Return ONLY RAW JSON:
     {
@@ -298,7 +298,7 @@ export const geminiService = {
       "error": "Brief reason if invalid/unclear"
     }`;
 
-    const system = "You are a professional payment auditor for NoteVix. You extract alphanumeric Transaction IDs and amounts from Indian payment receipts with 100% precision. Return ONLY raw JSON.";
+    const system = "You are a professional payment auditor for NoteVix. You extract alphanumeric Transaction IDs (like FMPIB...) and amounts from Indian receipts with 100% precision. Return ONLY raw JSON.";
 
     try {
       const { apiKey, nvidiaKey } = getAI();
@@ -313,7 +313,7 @@ export const geminiService = {
             system, 
             true, 
             "nvidia/llama-3.2-11b-vision-instruct", 
-            60000, // Increased to 60s as requested
+            60000, 
             imageData
           );
         } catch (err) {
@@ -339,13 +339,15 @@ export const geminiService = {
 
       if (!res) throw new Error("No AI Forensic service responded.");
 
-      // Clean the response (handle markdown blocks if AI includes them)
-      const cleaned = res.replace(/```json|```/g, '').trim();
-      const data = JSON.parse(cleaned);
+      // RESILIENT JSON PARSING: Look for { ... } anywhere in the string
+      const jsonMatch = res.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("AI returned invalid forensic format.");
+      
+      const data = JSON.parse(jsonMatch[0]);
 
       return {
         isValid: Boolean(data.isValid),
-        transactionId: String(data.transactionId || "").toUpperCase(),
+        transactionId: String(data.transactionId || "").toUpperCase().replace(/[^A-Z0-9]/g, ''),
         amount: Number(data.amount || 0),
         error: data.error
       };
@@ -353,7 +355,7 @@ export const geminiService = {
       console.error("Payment Verification Hard Error:", error);
       return { 
         isValid: false, 
-        error: "Forensic analysis failed. Please ensure the screenshot clearly shows the UTR/Ref Number." 
+        error: "Forensic analysis failed. Please ensure the screenshot clearly shows the TXN ID / UTR." 
       };
     }
   },
