@@ -4,7 +4,7 @@ import { BookOpen, FlaskConical, Globe, Languages, Shield, Zap, Trophy, ChevronR
 import { Logo } from '../components/Logo';
 import { useState, useEffect, useRef } from 'react';
 import { db } from '../lib/firebase';
-import { collection, addDoc, doc, setDoc, getDocs, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, getDocs, query, orderBy, onSnapshot, where } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { geminiService } from '../services/geminiService';
 
@@ -104,32 +104,38 @@ export default function Landing() {
   };
 
   const handleGuestPurchase = async () => {
-    if (isSubmitting || aiVerifying || !whatsapp || !email || (!transactionId && !screenshotPreview)) {
-      toast.error('Please enter WhatsApp, Email and Transaction Details');
+    if (isSubmitting || aiVerifying || !whatsapp || !email || !screenshotPreview) {
+      toast.error('Please provide Email, WhatsApp, and Payment Screenshot.');
       return;
     }
 
     try {
       setIsSubmitting(true);
+      setAiVerifying(true);
       
-      let aiDetectedTxId = '';
-      let aiDetectedAmount = 0;
-
-      if (screenshotPreview) {
-        setAiVerifying(true);
-        const result = await geminiService.verifyPaymentScreenshot(screenshotPreview);
-        setAiVerifying(false);
-        
-        if (result.isValid) {
-          aiDetectedTxId = result.transactionId || '';
-          aiDetectedAmount = result.amount || 0;
-        } else {
-          throw new Error(result.error || "AI could not verify screenshot. Enter ID manually.");
-        }
+      const result = await geminiService.verifyPaymentScreenshot(screenshotPreview);
+      setAiVerifying(false);
+      
+      if (!result.isValid) {
+        throw new Error(result.error || "AI could not verify this receipt. Please ensure UTR/Ref ID is visible.");
       }
 
-      const finalTxId = transactionId || aiDetectedTxId;
-      if (!finalTxId) throw new Error("Transaction ID required");
+      if (result.amount && result.amount < (selectedPlan?.price || 0)) {
+        throw new Error(`Amount mismatch: Detected ₹${result.amount} but required ₹${selectedPlan?.price}.`);
+      }
+
+      const finalTxId = result.transactionId?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
+      
+      if (!finalTxId || finalTxId.length < 6) {
+        throw new Error("Could not extract a valid Transaction ID. Please try another screenshot.");
+      }
+
+      // Check double-spend
+      const registryDoc = doc(db, 'transaction_id_registry', finalTxId);
+      const registrySnap = await getDocs(query(collection(db, 'purchase_requests'), where('transactionId', '==', finalTxId)));
+      if (!registrySnap.empty) {
+        throw new Error("This Transaction ID has already been redeemed.");
+      }
 
       await addDoc(collection(db, 'purchase_requests'), {
         email,
@@ -140,23 +146,17 @@ export default function Landing() {
         planName: selectedPlan?.name,
         subject: selectedPlan?.subject || null,
         class: selectedPlan?.class || null,
-        amount: aiDetectedAmount || selectedPlan?.price || 0,
+        amount: result.amount || selectedPlan?.price || 0,
         status: 'pending',
         isGuest: true,
         timestamp: new Date().toISOString()
       });
 
-      await setDoc(doc(db, 'transaction_id_registry', finalTxId), { 
-        email,
-        redeemedAt: new Date().toISOString(),
-        planId: selectedPlan?.id,
-        isGuest: true
-      });
-
-      toast.success("Payment Received! We will contact you with details soon.");
+      toast.success("AI Verified Successfully! We will contact you soon.");
       setSelectedPlan(null);
       setScreenshotPreview(null);
-      setTransactionId('');
+      setWhatsapp('');
+      setEmail('');
     } catch (error: any) {
       toast.error(error.message || "Failed");
     } finally {
@@ -399,7 +399,7 @@ export default function Landing() {
                 <div className="ml-auto text-2xl font-black text-white">₹{selectedPlan.price}</div>
               </div>
 
-              <div className="space-y-3 mb-10">
+              <div className="space-y-4 mb-10">
                 <input 
                   type="email" 
                   placeholder="Delivery Email"
@@ -416,25 +416,23 @@ export default function Landing() {
                 />
                 <div 
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full h-32 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center gap-3 bg-white/[0.02] hover:border-indigo-500/50 cursor-pointer overflow-hidden relative"
+                  className="w-full h-40 border-2 border-dashed border-indigo-500/20 rounded-2xl flex flex-col items-center justify-center gap-3 bg-indigo-500/[0.02] hover:border-indigo-500/50 cursor-pointer overflow-hidden relative"
                 >
                   {screenshotPreview ? (
-                    <img src={screenshotPreview} className="w-full h-full object-cover opacity-50" />
+                    <>
+                      <img src={screenshotPreview} className="w-full h-full object-contain" />
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                        <span className="text-[10px] font-black uppercase text-white tracking-[0.3em]">Change Receipt</span>
+                      </div>
+                    </>
                   ) : (
                     <>
-                      <Upload size={24} className="text-gray-500" />
-                      <span className="text-[10px] font-black uppercase text-gray-500">Upload Screenshot</span>
+                      <Upload size={24} className="text-indigo-400/50" />
+                      <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest text-center px-6">Upload Payment Screenshot<br/><span className="text-[8px] text-indigo-400 group-hover:text-white transition-colors">AI Forensic Scan Enabled</span></span>
                     </>
                   )}
                 </div>
-                <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} />
-                <input 
-                  type="text" 
-                  placeholder="Transaction ID (UTR)"
-                  value={transactionId}
-                  onChange={e => setTransactionId(e.target.value)}
-                  className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
-                />
+                <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*" />
               </div>
 
               <button

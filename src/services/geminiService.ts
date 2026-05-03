@@ -285,12 +285,11 @@ export const geminiService = {
     const prompt = `Analyze this digital payment receipt screenshot (GPay, PhonePe, Paytm, or BHIM).
     YOUR GOAL: Extract forensic data to prevent fraud.
     
-    1. EXTRACT "transactionId": Look for 'UTR', 'Transaction ID', 'Ref No', or 'Measurement ID'. It is usually a 12-digit number or alphanumeric string.
-    2. EXTRACT "amount": The large numeric value paid. Do NOT include currency symbols.
-    3. CHECK "isValid": Is the status CLEARLY 'Success', 'Completed', or 'Paid'? Is there a green checkmark icon?
-    
-    CRITICAL: If the screenshot is blurry or does not show a clear transaction ID, set isValid: false.
-    
+    1. EXTRACT "transactionId": Look for 'UTR', 'Transaction ID', 'Ref No', 'Ref', or 'ID'. 
+       Note: It can be a 12-digit number (UTR) OR an alphanumeric string (e.g., FMPIB5344248147).
+    2. EXTRACT "amount": The numeric value paid (e.g., 39, 99).
+    3. CHECK "isValid": Is the status 'Success', 'Completed', or 'Paid'? 
+
     Return ONLY RAW JSON:
     {
       "isValid": boolean,
@@ -299,7 +298,7 @@ export const geminiService = {
       "error": "Brief reason if invalid/unclear"
     }`;
 
-    const system = "You are the NoteVix Secure Auditor. You are an expert at reading Indian payment receipts. You return ONLY raw JSON. No conversational text, no markdown blocks.";
+    const system = "You are a professional payment auditor for NoteVix. You extract alphanumeric Transaction IDs and amounts from Indian payment receipts with 100% precision. Return ONLY raw JSON.";
 
     try {
       const { apiKey, nvidiaKey } = getAI();

@@ -153,8 +153,8 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   };
 
   const handlePurchase = async () => {
-    if (isSubmitting || aiVerifying || !whatsapp || (!user && !email) || (!transactionId && !screenshotPreview)) {
-      toast.error('Please enter WhatsApp and Transaction Details.');
+    if (isSubmitting || aiVerifying || !whatsapp || (!user && !email) || !screenshotPreview) {
+      toast.error('Please provide WhatsApp and Payment Screenshot.');
       return;
     }
 
@@ -162,30 +162,21 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     setAiVerifying(true);
 
     try {
-      let finalTxId = transactionId.trim().toUpperCase();
-      let aiDetectedAmount = 0;
-
-      if (screenshotPreview) {
-        const result = await geminiService.verifyPaymentScreenshot(screenshotPreview);
-        
-        if (!result.isValid) {
-          throw new Error(result.error || "AI could not verify this receipt. Enter ID manually.");
-        }
-
-        if (result.amount && result.amount < (selectedPlan?.price || 0)) {
-           throw new Error(`Payment mismatch: AI detected ₹${result.amount} but required ₹${selectedPlan?.price}.`);
-        }
-
-        if (result.transactionId) {
-          finalTxId = result.transactionId.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        }
-        aiDetectedAmount = result.amount || 0;
+      const result = await geminiService.verifyPaymentScreenshot(screenshotPreview);
+      setAiVerifying(false);
+      
+      if (!result.isValid) {
+        throw new Error(result.error || "AI could not verify this receipt. Please ensure UTR/Ref ID is visible.");
       }
 
-      setAiVerifying(false);
+      if (result.amount && result.amount < (selectedPlan?.price || 0)) {
+         throw new Error(`Amount mismatch: Detected ₹${result.amount} but required ₹${selectedPlan?.price}.`);
+      }
 
+      const finalTxId = result.transactionId?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
+      
       if (!finalTxId || finalTxId.length < 6) {
-        throw new Error("Invalid Transaction ID. Please enter manually.");
+        throw new Error("Invalid Transaction ID extracted. Please try again with a clearer screenshot.");
       }
 
       // DOUBLE-SPEND PROTECTION
@@ -198,25 +189,18 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       // --- 3. PURCHASE RECORDING ---
       if (user) {
         // Logged-in user flow
-        try {
-          await setDoc(doc(db, 'transaction_id_registry', finalTxId), { 
-            userId: user.uid,
-            redeemedAt: new Date().toISOString(),
-            planId: selectedPlan?.id,
-            amount: aiDetectedAmount || selectedPlan?.price || 0
-          });
-        } catch (e: any) {
-          if (e.message?.includes('permission-denied')) {
-            throw new Error("Transaction verification error. This ID might be pending review.");
-          }
-          throw e;
-        }
+        await setDoc(doc(db, 'transaction_id_registry', finalTxId), { 
+          userId: user.uid,
+          redeemedAt: new Date().toISOString(),
+          planId: selectedPlan?.id,
+          amount: result.amount || selectedPlan?.price || 0
+        });
         
         await addDoc(collection(db, 'transaction_ledger'), {
           transactionId: finalTxId,
           userId: user.uid,
           whatsapp: whatsapp,
-          amount: aiDetectedAmount || selectedPlan?.price || 0,
+          amount: result.amount || selectedPlan?.price || 0,
           planId: selectedPlan?.id,
           timestamp: new Date().toISOString()
         });
@@ -250,7 +234,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           planName: selectedPlan?.name,
           planId: selectedPlan?.id,
           targetClass: selectedPlan?.class || '',
-          amount: aiDetectedAmount || selectedPlan?.price || 0,
+          amount: result.amount || selectedPlan?.price || 0,
           status: 'pending',
           isGuest: true,
           timestamp: new Date().toISOString()
@@ -260,11 +244,11 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           email: email,
           redeemedAt: new Date().toISOString(),
           planId: selectedPlan?.id,
-          amount: aiDetectedAmount || selectedPlan?.price || 0,
+          amount: result.amount || selectedPlan?.price || 0,
           isGuest: true
         });
 
-        toast.success("Payment request submitted! Admin will contact you on WhatsApp/Email with the download links within 2-4 hours.");
+        toast.success("Payment request submitted! Admin will contact you on WhatsApp/Email within 2-4 hours.");
         setSelectedPlan(null);
       }
       
@@ -579,7 +563,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
                     <div 
                       onClick={() => fileInputRef.current?.click()}
-                      className="w-full aspect-video rounded-3xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-3 hover:border-indigo-500/50 cursor-pointer overflow-hidden relative group bg-white/[0.02]"
+                      className="w-full aspect-[2/1] rounded-3xl border-2 border-dashed border-indigo-500/20 flex flex-col items-center justify-center gap-3 hover:border-indigo-500/50 cursor-pointer overflow-hidden relative group bg-indigo-500/[0.02]"
                     >
                        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
                        {screenshotPreview ? (
@@ -591,30 +575,20 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                          </>
                        ) : (
                          <>
-                           <ImageIcon className="w-8 h-8 text-gray-700 group-hover:text-indigo-500 transition-colors" />
-                           <span className="text-[10px] font-black uppercase text-gray-600 group-hover:text-indigo-400 tracking-widest text-center px-4">Upload Payment Screenshot for AI Scan</span>
+                           <ImageIcon className="w-8 h-8 text-indigo-400 group-hover:text-indigo-500 transition-colors" />
+                           <div className="text-center px-4">
+                             <p className="text-[10px] font-black uppercase text-white tracking-widest mb-1">Upload Receipt Screenshot</p>
+                             <p className="text-[8px] font-bold text-indigo-400 uppercase tracking-widest">AI Forensic Verification Active</p>
+                           </div>
                          </>
                        )}
-                    </div>
-                    
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none">
-                        <FilePlus className="w-4 h-4 text-gray-600" />
-                      </div>
-                      <input 
-                        type="text" 
-                        value={transactionId}
-                        onChange={(e) => setTransactionId(e.target.value)}
-                        placeholder="Or Type Transaction ID (UTR)"
-                        className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl pl-12 pr-5 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-all placeholder:text-gray-600"
-                      />
                     </div>
 
                     <div className="p-5 bg-indigo-500/5 rounded-3xl border border-indigo-500/10 space-y-3">
                       <div className="flex items-start gap-3">
                         <AlertCircle className="w-4 h-4 text-indigo-400 mt-0.5" />
                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
-                          Verification takes <span className="text-white">minimum 2 minutes</span>. Please be patient while AI scans and verifies with our backend.
+                          AI will automatically extract your <span className="text-white">Transaction ID</span> from the screenshot. Please ensure it is clear.
                         </p>
                       </div>
                     </div>
@@ -625,7 +599,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                       className="w-full h-16 bg-indigo-600 text-white rounded-3xl font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50"
                     >
                       {aiVerifying ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-                      {aiVerifying ? 'AI Verification in Progress...' : 'Verify & Unlock Now'}
+                      {aiVerifying ? 'Running Forensic Scan...' : 'Verify Payment & Unlock'}
                     </button>
                   </div>
                 </div>
