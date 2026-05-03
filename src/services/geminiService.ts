@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 let aiInstance: any = null;
 
@@ -37,6 +37,10 @@ function handleAIError(error: any): never {
     throw new Error(`AI Limit Reached: ${service} is busy. Please wait a moment! ⏳`);
   }
   
+  if (errorString.includes('404') || errorString.includes('not found')) {
+    throw new Error("AI Model Error: The requested AI model is currently unavailable in your region or key type.");
+  }
+  
   if (errorString.includes('failed to fetch') || errorString.includes('method not allowed') || errorString.includes('405')) {
     throw new Error("AI Connection Error: Server proxy issue. Reconnecting... 🔄");
   }
@@ -51,12 +55,11 @@ function handleAIError(error: any): never {
 export const geminiService = {
   async callGeminiDirect(prompt: string, system: string, key: string) {
     try {
-      const ai = new GoogleGenAI({ apiKey: key });
-      const response = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: `${system}\n\nUser: ${prompt}`,
-      });
-      return response.text;
+      const genAI = new GoogleGenerativeAI(key);
+      const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+      const result = await model.generateContent(`${system}\n\nUser: ${prompt}`);
+      const response = await result.response;
+      return response.text();
     } catch (err) {
       console.error("Gemini Direct Error:", err);
       throw err;
@@ -302,22 +305,19 @@ export const geminiService = {
       const { apiKey } = getAI();
       if (!apiKey) throw new Error("Our AI verification engine is currently offline. Please manually enter details or wait.");
 
-      const ai = new GoogleGenAI({ apiKey });
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
       // Clean base64
       const base64Data = imageData.includes(',') ? imageData.split(',')[1] : imageData;
       
-      const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
-        contents: {
-          parts: [
-            { inlineData: { mimeType: "image/jpeg", data: base64Data } },
-            { text: `${system}\n\n${prompt}` }
-          ]
-        }
-      });
+      const result = await model.generateContent([
+        { text: `${system}\n\n${prompt}` },
+        { inlineData: { data: base64Data, mimeType: "image/jpeg" } }
+      ]);
 
-      const res = response.text;
+      const response = await result.response;
+      const res = response.text();
       console.log("Gemini Forensic RAW:", res);
 
       // RESILIENT PARSING
