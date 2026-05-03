@@ -19,6 +19,16 @@ export default function Login() {
     localStorage.setItem('login_agreed', agreed.toString());
   }, [agreed]);
 
+  useEffect(() => {
+    // If user is already logged in, redirect them home
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        window.location.href = '/';
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Detect In-App Browsers (Instagram, FB, etc.)
   const isInAppBrowser = /Instagram|FBAN|FBAV|Twitter|Telegram/i.test(navigator.userAgent);
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -56,28 +66,33 @@ export default function Login() {
       setTimeout(() => setShowAgreedError(false), 3000);
       return;
     }
+    
+    // Prevent redundant calls to avoid "auth/cancelled-popup-request"
+    if (loading) return;
+
     setLoading(true);
     setError(null);
     try {
       // Root Fix: Ensure persistence is set before any auth action
       await setPersistence(auth, browserLocalPersistence);
 
-      // Change: Default to Popup even on mobile. 
-      // Redirect often fails with "missing initial state" on mobile browsers that block 3rd party cookies.
       if (useRedirect) {
         console.log("Triggering Redirect Login...");
         await signInWithRedirect(auth, googleProvider);
       } else {
         console.log("Triggering Popup Login...");
         await signInWithPopup(auth, googleProvider);
-        // If popup succeeds, the App.tsx listener will handle the rest
       }
     } catch (error: any) {
       setLoading(false);
       console.error("Login execution error:", error);
       
-      if (error.code === 'auth/popup-closed-by-user') return;
-      if (error.code === 'auth/cancelled-by-user') return;
+      // Silently handle expected user-cancellation errors
+      if (error.code === 'auth/popup-closed-by-user' || 
+          error.code === 'auth/cancelled-by-user' ||
+          error.code === 'auth/cancelled-popup-request') {
+        return;
+      }
       
       if (error.code === 'auth/unauthorized-domain') {
         setError(`Domain Not Authorized: Please add "${window.location.hostname}" to Authorized Domains in Firebase Console.`);
@@ -125,18 +140,31 @@ export default function Login() {
         </div>
 
         <div className="space-y-6">
-              {error && (
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl text-red-500 text-[10px] text-left space-y-2"
-                >
-                  <p className="font-bold flex items-center gap-2 uppercase tracking-widest"><Info size={12}/> Connection Failed</p>
-                  <p>{error}</p>
-                </motion.div>
-              )}
+                  {error && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl text-red-500 text-[10px] text-left space-y-2"
+                    >
+                      <p className="font-bold flex items-center gap-2 uppercase tracking-widest"><Info size={12}/> Connection Failed</p>
+                      <p>{error}</p>
+                      <button 
+                        onClick={() => window.location.reload()}
+                        className="text-white bg-red-500/20 px-2 py-1 rounded text-[9px] hover:bg-red-500/40"
+                      >
+                        Try Refresh
+                      </button>
+                    </motion.div>
+                  )}
 
-              {isInAppBrowser && (
+                  {!import.meta.env.VITE_SUPABASE_URL && (
+                    <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-xl text-yellow-500 text-[9px] text-left">
+                      <p className="font-bold uppercase mb-1 flex items-center gap-1">⚠️ Maintenance Mode</p>
+                      <p>Payment systems are temporarily limited. If you just added Supabase secrets, please restart the server or refresh after 1 minute.</p>
+                    </div>
+                  )}
+
+                  {isInAppBrowser && (
                 <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-2xl text-indigo-400 text-[10px] text-left space-y-3">
                   <p className="font-bold uppercase tracking-widest text-indigo-400 flex items-center gap-2">
                     <ExternalLink size={14} /> Instagram Browser detected

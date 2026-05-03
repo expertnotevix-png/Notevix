@@ -72,12 +72,13 @@ export default function App() {
   useEffect(() => {
     // Safety timeout for loading state
     const timeout = setTimeout(() => {
-      if (loading) {
-        console.warn("App loading timed out after 12s");
+      if (loading || !isAuthReady) {
+        console.warn("App loading timed out - forcing load");
         setLoading(false);
-        setLoadingError("The app is taking longer than usual to load. Please check your connection or refresh.");
+        setIsAuthReady(true);
+        // Don't set error here, just let it try to render what it can
       }
-    }, 12000);
+    }, 8000); // reduced to 8s for snappier fallback
 
     return () => clearTimeout(timeout);
   }, [loading]);
@@ -353,7 +354,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [user?.uid]);
 
-  if (loading || !isAuthReady) {
+  if (loading && !isAuthReady && !loadingError) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
         <motion.div
@@ -367,6 +368,15 @@ export default function App() {
         <div className="mt-12 pt-12 border-t border-white/5 space-y-4">
           <p className="text-[10px] text-gray-600 uppercase tracking-widest">Taking too long?</p>
           <div className="flex flex-col gap-3">
+            <button 
+              onClick={() => {
+                setLoading(false);
+                setIsAuthReady(true);
+              }}
+              className="px-6 py-3 blue-purple-gradient rounded-xl text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-purple-500/20 active:scale-95 transition-transform"
+            >
+              Skip Loading (Enter Now)
+            </button>
             <button 
               onClick={() => {
                 window.localStorage.clear();

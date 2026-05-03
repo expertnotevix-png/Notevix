@@ -6,6 +6,8 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn("Supabase configuration is missing in environment variables. Payments will fall back to limited mode.");
+} else {
+  console.log("Supabase client initialized successfully with URL:", supabaseUrl.substring(0, 15) + "...");
 }
 
 export const supabase = (supabaseUrl && supabaseAnonKey) 
