@@ -8,6 +8,8 @@ import { collection, addDoc, doc, setDoc, getDocs, query, orderBy, onSnapshot, w
 import { toast } from 'sonner';
 import { geminiService } from '../services/geminiService';
 
+import { dataBridge } from '../services/dataBridge';
+
 const CLASSES = ['8', '9', '10'];
 
 const PREMIUM_PLANS = [
@@ -78,13 +80,20 @@ export default function Landing() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    const fetchResources = async () => {
+      const data = await dataBridge.getResources(activeClass);
+      setResources(data);
+    };
+    fetchResources();
+    
+    // Also keep real-time if firebase is working, but it might fail so we rely on fetchResources
     const q = query(collection(db, 'subject_resources'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snap) => {
       const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const filtered = data.filter((r: any) => r.class === activeClass);
-      setResources(filtered);
+      if (filtered.length > 0) setResources(filtered);
     }, (error) => {
-      console.error("Error fetching resources:", error);
+      console.warn("Firestore snapshot failed, falling back to one-time data fetch");
     });
     return () => unsubscribe();
   }, [activeClass]);
@@ -129,14 +138,13 @@ export default function Landing() {
         throw new Error("Could not extract a valid Transaction ID. Please try another screenshot.");
       }
 
-      // Check double-spend
-      const registryDoc = doc(db, 'transaction_id_registry', finalTxId);
-      const registrySnap = await getDocs(query(collection(db, 'purchase_requests'), where('transactionId', '==', finalTxId)));
-      if (!registrySnap.empty) {
+      // Check double-spend using bridge
+      const isRedeemed = await dataBridge.isTransactionRedeemed(finalTxId);
+      if (isRedeemed) {
         throw new Error("This Transaction ID has already been redeemed.");
       }
-
-      await addDoc(collection(db, 'purchase_requests'), {
+      
+      const saveResult = await dataBridge.savePurchaseRequest({
         email,
         whatsapp,
         userId: 'GUEST',
@@ -147,11 +155,14 @@ export default function Landing() {
         class: selectedPlan?.class || null,
         amount: result.amount || selectedPlan?.price || 0,
         status: 'pending',
-        isGuest: true,
-        timestamp: new Date().toISOString()
+        isGuest: true
       });
 
-      toast.success("AI Verified Successfully! We will contact you soon.");
+      if (!saveResult.success) {
+        throw new Error(saveResult.error || "Failed to save purchase request. Please contact support.");
+      }
+
+      toast.success(`AI Verified! Saved via ${saveResult.provider.toUpperCase()}. We will contact you soon.`);
       setSelectedPlan(null);
       setScreenshotPreview(null);
       setWhatsapp('');

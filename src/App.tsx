@@ -5,6 +5,7 @@ import { doc, getDoc, setDoc, updateDoc, onSnapshot, query, collection, where, g
 import { logEvent } from 'firebase/analytics';
 import { auth, db, handleFirestoreError, OperationType, analytics, checkQuotaLock, listenToQuotaLock, setQuotaLock } from './components/firebase';
 import { UserProfile } from './types';
+import { dataBridge } from './services/dataBridge';
 import { Zap } from 'lucide-react';
 
 const CACHED_USER_KEY = 'notevix_user_profile_v1';
@@ -128,8 +129,18 @@ export default function App() {
           
           try {
             if (quotaLockRef.current) {
-              if (!userData) throw new Error("Quota exceeded lockout active");
-              return; // Use cache if present
+              // If quota locked, check Supabase for premium status to override cache if needed
+              const isPremium = await dataBridge.checkPremiumStatus(firebaseUser.uid);
+              if (userData) {
+                userData.isPremium = isPremium || userData.isPremium;
+                setUser(userData);
+              } else if (isPremium) {
+                // If no user data but is premium in Supabase, we can't fully construct profile but we can allow premium access
+                setUser({ uid: firebaseUser.uid, isPremium: true } as any);
+              }
+              setIsAuthReady(true);
+              setLoading(false);
+              return;
             }
 
             // If cache invalid or not present, fetch from server
@@ -138,6 +149,17 @@ export default function App() {
               
               if (userDoc.exists()) {
                 userData = userDoc.data() as UserProfile;
+                
+                // Double check Supabase to ensure isPremium is true even if Firestore update failed earlier
+                if (!userData.isPremium) {
+                  const isPremium = await dataBridge.checkPremiumStatus(firebaseUser.uid);
+                  if (isPremium) {
+                    userData.isPremium = true;
+                    // No need to await updateDoc here, just update state for now
+                    updateDoc(userRef, { isPremium: true }).catch(() => {});
+                  }
+                }
+
                 localStorage.setItem(CACHED_USER_KEY, JSON.stringify(userData));
                 localStorage.setItem(CACHED_USER_KEY + '_time', Date.now().toString());
                 

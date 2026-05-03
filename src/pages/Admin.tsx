@@ -18,6 +18,8 @@ import {
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell 
 } from 'recharts';
 
+import { supabase } from '../lib/supabase';
+
 export default function Admin() {
   const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources' | 'valid_payments' | 'settings' | 'banners'>('analytics');
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -178,7 +180,7 @@ export default function Admin() {
 
     setLoading(true);
     try {
-      await addDoc(collection(db, 'subject_resources'), {
+      const resourceData = {
         subject: resourceFormData.subject,
         class: resourceFormData.class,
         price: Number(resourceFormData.price) || 0,
@@ -188,9 +190,18 @@ export default function Admin() {
         features: ['Chapter-wise Notes', 'PYQs Included', 'AI Doubt Support'],
         isFree: Number(resourceFormData.price) === 0,
         createdAt: new Date().toISOString()
-      });
+      };
+
+      // 1. Primary Save to Supabase
+      if (supabase) {
+        const { error } = await supabase.from('subject_resources').insert([resourceData]);
+        if (error) throw error;
+      } else {
+        // Fallback to Firestore if Supabase fails/not set
+        await addDoc(collection(db, 'subject_resources'), resourceData);
+      }
       
-      toast.success("Book Created!");
+      toast.success("Book Created (Saved to Supabase)!");
       setIsAddingResource(false);
       setResourceCoverPreview(null);
       setResourceFormData({
@@ -202,6 +213,7 @@ export default function Admin() {
       });
       fetchSubjectResources();
     } catch (error) {
+      console.error(error);
       toast.error("Failed to create book.");
     } finally {
       setLoading(false);
@@ -310,11 +322,27 @@ export default function Admin() {
   const fetchSubjectResources = async () => {
     setLoading(true);
     try {
-      if (checkQuotaLock()) return;
-      const snap = await getDocs(collection(db, 'subject_resources'));
-      setSubjectResources(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      let data = [];
+      // 1. Try Supabase
+      if (supabase) {
+        const { data: sbData } = await supabase.from('subject_resources').select('*').order('subject', { ascending: true });
+        if (sbData && sbData.length > 0) {
+          data = sbData;
+        }
+      }
+
+      // 2. Try Firestore fallback
+      if (data.length === 0 && !checkQuotaLock()) {
+        try {
+          const snap = await getDocs(collection(db, 'subject_resources'));
+          data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        } catch (error) {
+          console.warn("Firestore resources skipped (quota)");
+        }
+      }
+      
+      setSubjectResources(data);
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'subject_resources');
       console.error(error);
     } finally {
       setLoading(false);
@@ -324,14 +352,33 @@ export default function Admin() {
   const fetchAnalytics = async () => {
     setLoading(true);
     try {
-      if (checkQuotaLock()) {
-        setLoading(false);
-        return;
-      }
-      const q = query(collection(db, 'purchase_requests'), where('status', '==', 'approved'), orderBy('timestamp', 'desc'), limit(500));
-      const snap = await getDocs(q);
-      const docs = snap.docs.map(d => d.data());
+      let docs: any[] = [];
       
+      // 1. Try Supabase for payments (Primary)
+      if (supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('purchase_requests')
+            .select('*')
+            .eq('status', 'approved');
+          if (error) throw error;
+          docs = data || [];
+        } catch (err) {
+          console.warn("Supabase analytics fetch failed, falling back to firebase...");
+        }
+      }
+
+      // 2. Try Firestore fallback (if Supabase failed or returned nothing)
+      if (docs.length === 0 && !checkQuotaLock()) {
+        try {
+          const q = query(collection(db, 'purchase_requests'), where('status', '==', 'approved'), orderBy('timestamp', 'desc'), limit(500));
+          const snap = await getDocs(q);
+          docs = snap.docs.map(d => d.data());
+        } catch (err) {
+          console.warn("Firestore analytics check skipped (quota)");
+        }
+      }
+
       let total = 0;
       const dailyMap: Record<string, number> = {};
       const planMap: Record<string, number> = {};
@@ -357,8 +404,7 @@ export default function Admin() {
         planDistribution
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'purchase_requests');
-      console.error("Analytics fetch error:", error);
+      console.error("Analytics calculation error:", error);
     } finally {
       setLoading(false);
     }
@@ -615,7 +661,7 @@ export default function Admin() {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
       setMessages(data);
     } catch (error: any) {
-      handleFirestoreError(error, OperationType.LIST, 'messages');
+      console.warn("Firestore messages fetch failed (likely quota)");
     } finally {
       setLoading(false);
     }
@@ -629,7 +675,7 @@ export default function Admin() {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
       setNotifications(data);
     } catch (error: any) {
-      handleFirestoreError(error, OperationType.LIST, 'notifications');
+      console.warn("Firestore notifications fetch failed (likely quota)");
     } finally {
       setLoading(false);
     }
@@ -638,28 +684,70 @@ export default function Admin() {
   const fetchPurchaseRequests = async () => {
     setLoading(true);
     try {
-      const q = query(collection(db, 'purchase_requests'), orderBy('timestamp', 'desc'), limit(100));
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PurchaseRequest));
-      setPurchaseRequests(data);
+      let fsData: any[] = [];
+      let sbData: any[] = [];
+
+      // 1. Fetch from Firestore
+      if (!checkQuotaLock()) {
+        try {
+          const q = query(collection(db, 'purchase_requests'), orderBy('timestamp', 'desc'), limit(100));
+          const snapshot = await getDocs(q);
+          fsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, source: 'firebase' } as PurchaseRequest));
+        } catch (e) {
+          console.warn("Firestore purchase fetch failed:", e);
+        }
+      }
+
+      // 2. Fetch from Supabase
+      if (supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('purchase_requests')
+            .select('*')
+            .order('timestamp', { ascending: false })
+            .limit(100);
+          
+          if (data) {
+            sbData = data.map(d => ({ ...d, source: 'supabase' } as unknown as PurchaseRequest));
+          }
+        } catch (e) {
+          console.warn("Supabase purchase fetch failed:", e);
+        }
+      }
+
+      // Merge and sort
+      const merged = [...fsData, ...sbData].sort((a, b) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+
+      setPurchaseRequests(merged);
     } catch (error: any) {
-      handleFirestoreError(error, OperationType.LIST, 'purchase_requests');
+      console.error("Error fetching purchase requests:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleApprovePurchase = async (req: PurchaseRequest) => {
+  const handleApprovePurchase = async (req: any) => {
     try {
+      // 1. Update request status in the correct database
+      if (req.source === 'supabase' && supabase) {
+        await supabase.from('purchase_requests').update({ status: 'approved' }).eq('id', req.id);
+      } else {
+        try {
+          await updateDoc(doc(db, 'purchase_requests', req.id), { status: 'approved' });
+        } catch (e) {
+          console.error("Firestore status update failed:", e);
+        }
+      }
+
       if (req.isGuest || req.userId === 'GUEST') {
-        // Guest user approval: Just mark as approved
-        await updateDoc(doc(db, 'purchase_requests', req.id), { status: 'approved' });
-        toast.success("Guest purchase approved! Please contact them via WhatsApp/Email with the link.");
+        toast.success("Guest purchase approved!");
         fetchPurchaseRequests();
         return;
       }
 
-      // 1. Reference the user document directly by UID (as used in App.tsx)
+      // 2. Grant access to user in Firestore (Profile management stays in Firebase as requested)
       const userRef = doc(db, 'users', req.userId);
       const userSnap = await getDoc(userRef);
       
@@ -667,19 +755,16 @@ export default function Admin() {
       let userData = userSnap.data();
 
       if (!userSnap.exists()) {
-        console.warn("User document not found at UID: " + req.userId + ". Attempting fallback query...");
         const userQuery = query(collection(db, 'users'), where('uid', '==', req.userId));
         const qSnap = await getDocs(userQuery);
         if (qSnap.empty) {
-          toast.error("Could not find user record. They might have deleted their account.");
+          toast.error("Could not find user record.");
           return;
         }
-        // Fallback to the found document
         finalUserRef = doc(db, 'users', qSnap.docs[0].id);
         userData = qSnap.docs[0].data();
       }
 
-      // 2. Grant access to user
       if (req.planType === 'subscription') {
         await updateDoc(finalUserRef, { 
           isPremium: true,
@@ -695,21 +780,8 @@ export default function Admin() {
       } else {
         await updateDoc(finalUserRef, { isPremium: true });
       }
-
-      // 3. Update request status (and clear any other pending for this user to avoid stale UI)
-      await updateDoc(doc(db, 'purchase_requests', req.id), { status: 'approved' });
       
-      // Optional: Cleanup other pending requests for the same user to avoid "Pending" stuck UI
-      const otherRequestsQuery = query(
-        collection(db, 'purchase_requests'), 
-        where('userId', '==', req.userId),
-        where('status', '==', 'pending')
-      );
-      const otherSnap = await getDocs(otherRequestsQuery);
-      const cleanupPromises = otherSnap.docs.map(d => updateDoc(d.ref, { status: 'processed' }));
-      await Promise.all(cleanupPromises);
-      
-      // 4. Notify user
+      // 3. Notify user
       await addDoc(collection(db, 'notifications'), {
         userId: req.userId,
         title: 'Premium Activated! 👑',
@@ -719,33 +791,37 @@ export default function Admin() {
         timestamp: new Date().toISOString()
       });
 
-      // 5. Refresh Admin View
       if (activeTab === 'users') fetchUsers();
       if (activeTab === 'payments') fetchPurchaseRequests();
 
       toast.success("Purchase approved and student upgraded!");
     } catch (error) {
       console.error(error);
-      handleFirestoreError(error, OperationType.UPDATE, `purchase_requests/${req.id}`);
       toast.error("Verification failed");
     }
   };
 
-  const handleRejectPurchase = async (req: PurchaseRequest) => {
+  const handleRejectPurchase = async (req: any) => {
     const reason = window.prompt("Reason for rejection?");
     if (reason === null) return;
 
     try {
-      await updateDoc(doc(db, 'purchase_requests', req.id), { status: 'rejected' });
+      if (req.source === 'supabase' && supabase) {
+        await supabase.from('purchase_requests').update({ status: 'rejected' }).eq('id', req.id);
+      } else {
+        await updateDoc(doc(db, 'purchase_requests', req.id), { status: 'rejected' });
+      }
       
-      await addDoc(collection(db, 'notifications'), {
-        userId: req.userId,
-        title: 'Payment Rejected',
-        message: `Your payment verification failed. Reason: ${reason}. Please contact support with Transaction ID.`,
-        type: 'info',
-        read: false,
-        timestamp: new Date().toISOString()
-      });
+      if (req.userId && req.userId !== 'GUEST') {
+        await addDoc(collection(db, 'notifications'), {
+          userId: req.userId,
+          title: 'Payment Rejected',
+          message: `Your payment verification failed. Reason: ${reason}. Please contact support with Transaction ID.`,
+          type: 'info',
+          read: false,
+          timestamp: new Date().toISOString()
+        });
+      }
 
       toast.success("Purchase rejected.");
     } catch (error) {
@@ -1232,13 +1308,27 @@ export default function Admin() {
                 <button 
                   onClick={async () => {
                     const typeLabel = viewResourceMode === 'free' ? 'FREE' : 'PREMIUM';
-                    if(!window.confirm(`Delete ALL ${typeLabel} resources? This cannot be undone.`)) return;
+                    if(!window.confirm(`Delete ALL ${typeLabel} resources from BOTH databases? This cannot be undone.`)) return;
                     setLoading(true);
                     try {
-                      const q = query(collection(db, 'subject_resources'), where('isFree', '==', viewResourceMode === 'free'));
-                      const snap = await getDocs(q);
-                      const deletes = snap.docs.map(d => deleteDoc(doc(db, 'subject_resources', d.id)));
-                      await Promise.all(deletes);
+                      // 1. Supabase Delete
+                      if (supabase) {
+                        const { error } = await supabase.from('subject_resources').delete().eq('isFree', viewResourceMode === 'free');
+                        if (error) throw error;
+                      }
+
+                      // 2. Firestore Sync
+                      if (!checkQuotaLock()) {
+                        try {
+                          const q = query(collection(db, 'subject_resources'), where('isFree', '==', viewResourceMode === 'free'));
+                          const snap = await getDocs(q);
+                          const deletes = snap.docs.map(d => deleteDoc(doc(db, 'subject_resources', d.id)));
+                          await Promise.all(deletes);
+                        } catch (e) {
+                          console.warn("Firestore reset ignored (quota)");
+                        }
+                      }
+                      
                       toast.success(`${typeLabel} Library Reset.`);
                       fetchSubjectResources();
                     } finally {
@@ -1324,12 +1414,29 @@ export default function Admin() {
                   e.preventDefault();
                   setLoading(true);
                   try {
-                    await updateDoc(doc(db, 'subject_resources', editingResource.id), {
+                    const updateData = {
                       ...resourceFormData,
                       price: Number(resourceFormData.price) || 0,
                       isFree: Number(resourceFormData.price) === 0,
-                      coverUrl: resourceCoverPreview || editingResource.coverUrl
-                    });
+                      coverUrl: resourceCoverPreview || editingResource.coverUrl,
+                      updatedAt: new Date().toISOString()
+                    };
+
+                    // 1. Update Supabase
+                    if (supabase) {
+                      const { error } = await supabase.from('subject_resources').update(updateData).eq('id', editingResource.id);
+                      if (error) throw error;
+                    }
+
+                    // 2. Sync to Firestore if not locked
+                    if (!checkQuotaLock()) {
+                      try {
+                        await updateDoc(doc(db, 'subject_resources', editingResource.id), updateData);
+                      } catch (e) {
+                        console.warn("Firestore edit sync failed (quota)");
+                      }
+                    }
+
                     toast.success("Book Updated!");
                     setEditingResource(null);
                     setResourceCoverPreview(null);
@@ -1481,12 +1588,25 @@ export default function Admin() {
                       Edit Book
                     </button>
                     <button 
-                      onClick={() => {
+                      onClick={async () => {
                         if(window.confirm("Delete this book?")) {
-                          deleteDoc(doc(db, 'subject_resources', res.id)).then(() => {
+                          setLoading(true);
+                          try {
+                            // 1. Supabase Delete
+                            if (supabase) {
+                              await supabase.from('subject_resources').delete().eq('id', res.id);
+                            }
+                            // 2. Firestore Sync
+                            if (!checkQuotaLock()) {
+                              await deleteDoc(doc(db, 'subject_resources', res.id));
+                            }
                             toast.success("Deleted");
                             fetchSubjectResources();
-                          });
+                          } catch (err) {
+                            toast.error("Failed to delete");
+                          } finally {
+                            setLoading(false);
+                          }
                         }
                       }}
                       className="p-4 bg-red-500/10 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
@@ -1692,8 +1812,15 @@ export default function Admin() {
                           {req.userName?.charAt(0) || 'U'}
                         </div>
                         <div>
-                          <h4 className="font-bold text-lg">{req.userName}</h4>
-                          <p className="text-xs text-gray-500">{req.userEmail}</p>
+                          <h4 className="font-bold text-lg">{req.userName || req.email || 'Guest Student'}</h4>
+                          <div className="flex gap-2">
+                            <p className="text-xs text-gray-500">{req.userEmail || req.email}</p>
+                            <span className={`text-[8px] font-black px-2 py-0.5 rounded border ${
+                              req.source === 'supabase' ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/5' : 'border-indigo-500/30 text-indigo-400 bg-indigo-500/5'
+                            } uppercase tracking-tighter`}>
+                              {req.source || 'Firebase'}
+                            </span>
+                          </div>
                           <p className="text-[10px] text-purple-400 font-bold uppercase tracking-wider mt-1">WA: {req.whatsappNumber || 'N/A'}</p>
                         </div>
                       </div>

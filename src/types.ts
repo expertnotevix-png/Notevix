@@ -151,4 +151,5 @@ export interface PurchaseRequest {
   instagramUsername?: string;
   screenshotUrl?: string;
   isGuest?: boolean;
+  source?: 'firebase' | 'supabase';
 }

@@ -14,6 +14,8 @@ import { GoogleGenAI } from "@google/genai";
 import { useRef } from 'react';
 import { geminiService } from '../services/geminiService';
 
+import { dataBridge } from '../services/dataBridge';
+
 interface PremiumNotesProps {
   user: UserProfile | null;
 }
@@ -81,26 +83,17 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const upiId = (import.meta as any).env?.VITE_UPI_ID || '9236489649@mbk';
 
-  // Real-time listener for resources
+  // Real-time listener removed to avoid Firestore quota, using Bridge (Supabase)
   useEffect(() => {
-    const q = query(
-      collection(db, 'subject_resources'), 
-      where('class', '==', activeClass),
-      orderBy('createdAt', 'desc')
-    );
-    
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const data = snap.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as SubjectResource))
-        .filter(res => res.isFree !== true);
-      setResources(data);
+    const fetchResources = async () => {
+      setLoading(true);
+      const data = await dataBridge.getResources(activeClass);
+      if (data) {
+        setResources(data.filter((res: any) => res.isFree !== true));
+      }
       setLoading(false);
-    }, (error) => {
-      console.error("Firestore Snapshot Sync Failed:", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    };
+    fetchResources();
   }, [activeClass]);
 
   const isUnlocked = (res: SubjectResource) => {
@@ -178,77 +171,68 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         throw new Error("Invalid Transaction ID extracted. Please try again with a clearer screenshot.");
       }
 
-      // DOUBLE-SPEND PROTECTION
-      const registryDoc = doc(db, 'transaction_id_registry', finalTxId);
-      const registrySnap = await getDoc(registryDoc);
-      if (registrySnap.exists()) {
+      // DOUBLE-SPEND PROTECTION using bridge
+      const isRedeemed = await dataBridge.isTransactionRedeemed(finalTxId);
+      if (isRedeemed) {
         throw new Error("This Transaction ID has already been redeemed.");
       }
       
-      // --- 3. PURCHASE RECORDING ---
+      const purchaseData = {
+        whatsapp,
+        transactionId: finalTxId,
+        amount: result.amount || selectedPlan?.price || 0,
+        planId: selectedPlan?.id,
+        planName: selectedPlan?.name,
+        class: selectedPlan?.class || activeClass,
+        resourceId: selectedPlan?.resourceId || null,
+        isGuest: !user
+      };
+
       if (user) {
-        // Logged-in user flow
-        await setDoc(doc(db, 'transaction_id_registry', finalTxId), { 
+        // Logged-in user: Still try to update their profile in Firestore if possible
+        // But save record to bridge too
+        const saveResult = await dataBridge.savePurchaseRequest({
+          ...purchaseData,
           userId: user.uid,
-          redeemedAt: new Date().toISOString(),
-          planId: selectedPlan?.id,
-          amount: result.amount || selectedPlan?.price || 0
-        });
-        
-        await addDoc(collection(db, 'transaction_ledger'), {
-          transactionId: finalTxId,
-          userId: user.uid,
-          whatsapp: whatsapp,
-          amount: result.amount || selectedPlan?.price || 0,
-          planId: selectedPlan?.id,
-          timestamp: new Date().toISOString()
+          email: user.email
         });
 
-        const updateData: any = { isPremium: true, planType: selectedPlan?.id || 'individual_resource' };
-        
-        if (selectedPlan?.class && selectedPlan.type === 'one-time') {
-          const currentUnlocked = user.unlockedClasses || [];
-          if (!currentUnlocked.includes(selectedPlan.class)) {
-            updateData.unlockedClasses = [...currentUnlocked, selectedPlan.class];
+        if (saveResult.success) {
+          // If we saved to bridge, try to give instant access in Firestore if it's working
+          try {
+            const updateData: any = { isPremium: true, planType: selectedPlan?.id || 'individual_resource' };
+            if (selectedPlan?.class && selectedPlan.type === 'one-time') {
+              const currentUnlocked = user.unlockedClasses || [];
+              if (!currentUnlocked.includes(selectedPlan.class)) updateData.unlockedClasses = [...currentUnlocked, selectedPlan.class];
+            }
+            if (selectedPlan?.resourceId) {
+              const currentRes = user.unlockedResources || [];
+              if (!currentRes.includes(selectedPlan.resourceId)) updateData.unlockedResources = [...currentRes, selectedPlan.resourceId];
+            }
+            await updateDoc(doc(db, 'users', user.uid), updateData);
+          } catch (e) {
+            console.warn("Could not update user profile in Firestore (quota?), but purchase recorded in bridge.");
           }
-        }
-        
-        if (selectedPlan?.resourceId) {
-          const currentRes = user.unlockedResources || [];
-          if (!currentRes.includes(selectedPlan.resourceId)) {
-            updateData.unlockedResources = [...currentRes, selectedPlan.resourceId];
-          }
-        }
 
-        await updateDoc(doc(db, 'users', user.uid), updateData);
-        toast.success("AI Verified Successfully! Access Granted.");
-        setTimeout(() => window.location.reload(), 2000);
+          toast.success(`AI Verified! Access granted via ${saveResult.provider.toUpperCase()}.`);
+          setTimeout(() => window.location.reload(), 2000);
+        } else {
+          throw new Error("Failed to record purchase.");
+        }
       } else {
         // Guest user flow
-        await addDoc(collection(db, 'purchase_requests'), {
+        const saveResult = await dataBridge.savePurchaseRequest({
+          ...purchaseData,
           email: email,
-          whatsapp: whatsapp,
-          userId: 'GUEST',
-          transactionId: finalTxId,
-          planName: selectedPlan?.name,
-          planId: selectedPlan?.id,
-          targetClass: selectedPlan?.class || '',
-          amount: result.amount || selectedPlan?.price || 0,
-          status: 'pending',
-          isGuest: true,
-          timestamp: new Date().toISOString()
+          userId: 'GUEST'
         });
 
-        await setDoc(doc(db, 'transaction_id_registry', finalTxId), { 
-          email: email,
-          redeemedAt: new Date().toISOString(),
-          planId: selectedPlan?.id,
-          amount: result.amount || selectedPlan?.price || 0,
-          isGuest: true
-        });
-
-        toast.success("Payment request submitted! Admin will contact you on WhatsApp/Email within 2-4 hours.");
-        setSelectedPlan(null);
+        if (saveResult.success) {
+          toast.success(`Payment verified! Saved via ${saveResult.provider.toUpperCase()}. Admin will contact you soon.`);
+          setSelectedPlan(null);
+        } else {
+          throw new Error("Failed to record purchase.");
+        }
       }
       
     } catch (error: any) {

@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 let aiInstance: any = null;
 
@@ -20,7 +20,7 @@ function getAI() {
 
 const MODEL_FAST = "meta/llama-3.1-8b-instruct";
 const MODEL_POWER = "meta/llama-3.1-70b-instruct";
-const GEMINI_MODEL = "gemini-1.5-flash";
+const GEMINI_MODEL = "gemini-3-flash-preview";
 
 function handleAIError(error: any): never {
   console.error("AI Service Error:", error);
@@ -55,11 +55,15 @@ function handleAIError(error: any): never {
 export const geminiService = {
   async callGeminiDirect(prompt: string, system: string, key: string) {
     try {
-      const genAI = new GoogleGenerativeAI(key);
-      const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
-      const result = await model.generateContent(`${system}\n\nUser: ${prompt}`);
-      const response = await result.response;
-      return response.text();
+      const ai = new GoogleGenAI({ apiKey: key });
+      const response = await ai.models.generateContent({
+        model: GEMINI_MODEL,
+        config: {
+          systemInstruction: system
+        },
+        contents: prompt,
+      });
+      return response.text;
     } catch (err) {
       console.error("Gemini Direct Error:", err);
       throw err;
@@ -305,19 +309,23 @@ export const geminiService = {
       const { apiKey } = getAI();
       if (!apiKey) throw new Error("Our AI verification engine is currently offline. Please manually enter details or wait.");
 
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const ai = new GoogleGenAI({ apiKey });
 
       // Clean base64
       const base64Data = imageData.includes(',') ? imageData.split(',')[1] : imageData;
       
-      const result = await model.generateContent([
-        { text: `${system}\n\n${prompt}` },
-        { inlineData: { data: base64Data, mimeType: "image/jpeg" } }
-      ]);
+      const response = await ai.models.generateContent({
+        model: GEMINI_MODEL,
+        config: {
+          systemInstruction: system
+        },
+        contents: [
+          { text: prompt },
+          { inlineData: { data: base64Data, mimeType: "image/jpeg" } }
+        ]
+      });
 
-      const response = await result.response;
-      const res = response.text();
+      const res = response.text || "";
       console.log("Gemini Forensic RAW:", res);
 
       // RESILIENT PARSING

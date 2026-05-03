@@ -151,9 +151,12 @@ export default function Home({ user }: HomeProps) {
           }
         ];
 
+        /* 
+        // Disabled Firestore seeding - Resources now handled by Supabase
         for (const res of subjectResources) {
           await addDoc(collection(db, 'subject_resources'), res);
         }
+        */
 
         // Sample Chapters for Class 8
         const chapterSamples = [
