@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Play, Pause, RotateCcw, Timer as TimerIcon, Brain } from 'lucide-react';
 import { doc, updateDoc, increment, setDoc } from 'firebase/firestore';
-import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType } from './firebase';
 import { toast } from 'sonner';
 
 export function FocusTimerWidget() {

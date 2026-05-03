@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, onSnapshot, collection, query, orderBy, addDoc, updateDoc, increment, arrayUnion, arrayRemove, deleteDoc, setDoc, getDoc, getDocs } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../components/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ChevronLeft, 

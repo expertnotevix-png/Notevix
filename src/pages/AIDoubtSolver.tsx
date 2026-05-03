@@ -4,7 +4,7 @@ import { Send, Loader2, User, Bot, ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { geminiService } from '../services/geminiService';
-import { db, auth } from '../lib/firebase';
+import { db, auth } from '../components/firebase';
 import { doc, updateDoc, increment, setDoc } from 'firebase/firestore';
 import { UserProfile } from '../types';
 

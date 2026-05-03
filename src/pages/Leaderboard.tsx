@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { collection, query, orderBy, limit, doc, getDoc, getDocs } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../components/firebase';
 import { UserProfile } from '../types';
 import { motion } from 'motion/react';
 import { Trophy, Medal, Crown, Timer, TrendingUp, Instagram, Star, History, ShieldAlert } from 'lucide-react';

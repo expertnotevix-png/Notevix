@@ -282,69 +282,49 @@ export const geminiService = {
   },
 
   async verifyPaymentScreenshot(imageData: string): Promise<{ isValid: boolean, transactionId?: string, amount?: number, error?: string }> {
-    const prompt = `ALPHANUMERIC AUDIT TASK:
-    Analyze this digital payment receipt screenshot (Paytm, GPay, PhonePe, BHIM, Amazon Pay, etc.).
+    const system = `You are the NoteVix Forensic AUDITOR. You are an expert at reading Indian payment receipts (GPay, PhonePe, Paytm, BHIM, Amazon Pay).
     
-    1. EXTRACT "transactionId": Look for 'TXN ID', 'UTR', 'Transaction ID', 'Ref No', 'Ref', 'Order ID', or 'ID'. 
-       Note: Look closely for alphanumeric strings (e.g., FMPIB5344248147, TXN12345, T240503...).
-    2. EXTRACT "amount": Extract numeric value (e.g., 39, 99).
-    3. CHECK "isValid": Is it a successful payment? Status 'Success', 'Completed', 'Paid', or a Green icon.
+    TRAINING DATA:
+    1. PhonePe: Usually has a Transaction ID starting with 'T' followed by 20+ digits (e.g., T2405...).
+    2. GPay (Google Pay): Always has a 12-digit UTR number (e.g., 4152...).
+    3. Paytm: Has a 'Wallet Txn ID' or 'Bank Ref No' (e.g., 4587...).
+    4. Success Indicators: Large Green Checkmark, "Payment Successful", "Money sent", "Paid successfully".
+    
+    CRITICAL INSTRUCTIONS:
+    - EXTRACT "transactionId": Prioritize UTR (12 digits) or alphanumeric ID (T..., FMPIB...).
+    - EXTRACT "amount": Look for ₹ or Rs.
+    - VALIDATE: Only set isValid: true if you see clear success indicators.
+    - RETURN: Only raw JSON. No markdown. No text.`;
 
-    Return ONLY RAW JSON:
-    {
-      "isValid": boolean,
-      "transactionId": "string",
-      "amount": number,
-      "error": "Short reason if invalid"
-    }`;
-
-    const system = "You are the NoteVix Forensic OCR Auditor. You detect alphanumeric Transaction IDs (like FMPIB...) and UTRs with 100% precision. You return ONLY raw JSON. No conversational text.";
+    const prompt = "Extract the Transaction ID and Amount from this receipt. Determine if the payment was successful.";
 
     try {
-      const { apiKey, nvidiaKey } = getAI();
-      let res: string | undefined;
+      const { apiKey } = getAI();
+      if (!apiKey) throw new Error("Our AI verification engine is currently offline. Please manually enter details or wait.");
 
-      // Try Gemini first as it's the more reliable vision model for our context
-      if (apiKey) {
-        try {
-          const ai = new GoogleGenAI({ apiKey });
-          const response = await ai.models.generateContent({
-            model: "gemini-1.5-flash",
-            contents: {
-              parts: [
-                { inlineData: { mimeType: "image/jpeg", data: imageData.split(',')[1] } },
-                { text: `${system}\n\n${prompt}` }
-              ]
-            }
-          });
-          res = response.text;
-        } catch (err) {
-          console.error("Gemini Forensic failed:", err);
+      const ai = new GoogleGenAI({ apiKey });
+
+      // Clean base64
+      const base64Data = imageData.includes(',') ? imageData.split(',')[1] : imageData;
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: {
+          parts: [
+            { inlineData: { mimeType: "image/jpeg", data: base64Data } },
+            { text: `${system}\n\n${prompt}` }
+          ]
         }
-      }
+      });
 
-      // Try NVIDIA as fallback
-      if (!res && nvidiaKey) {
-        try {
-          res = await this.callNvidiaAPI(
-            prompt, 
-            system, 
-            true, 
-            "nvidia/llama-3.2-11b-vision-instruct", 
-            60000, 
-            imageData
-          );
-        } catch (err) {
-          console.error("NVIDIA Fallback failed:", err);
-        }
-      }
-
-      if (!res) throw new Error("Our forensic engine is currently overloaded. Please try again in a few seconds.");
+      const res = response.text;
+      console.log("Gemini Forensic RAW:", res);
 
       // RESILIENT PARSING
       const jsonMatch = res.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-         const idMatch = res.match(/(FMPIB[A-Z0-9]+|[0-9]{12})/i);
+         // Regex fallback for high-precision extraction
+         const idMatch = res.match(/(FMPIB[A-Z0-9]+|T[0-9]{15,}|[0-9]{12})/i);
          if (idMatch) {
            return {
              isValid: true,
@@ -352,7 +332,7 @@ export const geminiService = {
              amount: 0
            };
          }
-         throw new Error("Scan unclear. Please ensure the UTR/Transaction ID is clearly visible.");
+         throw new Error("Forensic engine couldn't find a clear UTR/Transaction ID. Please try a clearer screenshot.");
       }
       
       const data = JSON.parse(jsonMatch[0]);
@@ -364,10 +344,10 @@ export const geminiService = {
         error: data.error
       };
     } catch (error: any) {
-      console.error("Payment Verification Final Error:", error);
+      console.error("Forensic Hardware Failure:", error);
       return { 
         isValid: false, 
-        error: error.message || "Forensic scanning failed. Please try a clearer photo." 
+        error: error.message || "Forensic scanning failed. Please try again with a clearer receipt screenshot." 
       };
     }
   },

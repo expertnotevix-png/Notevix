@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db } from '../components/firebase';
 import { Chapter, UserProfile } from '../types';
 import { motion } from 'motion/react';
 import { ChevronLeft, Bookmark, Download, Share2, Info, HelpCircle, CheckCircle2, Lock, Share2 as ShareIcon, Sparkles } from 'lucide-react';

@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { doc, updateDoc, arrayUnion, arrayRemove, increment, deleteDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { db } from '../firebase';
 import { UserProfile } from '../../types';
 import { useNavigate } from 'react-router-dom';
 

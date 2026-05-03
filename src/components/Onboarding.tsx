@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, BookOpen, MessageSquare, Trophy, ChevronRight, X, Instagram } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db } from './firebase';
 import { toast } from 'sonner';
 
 interface OnboardingProps {

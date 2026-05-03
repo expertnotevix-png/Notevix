@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, Plus, Trash2, CheckCircle2, Circle, Calendar, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../components/firebase';
 import { UserProfile, ScheduleTask } from '../types';
 
 interface ScheduleProps {

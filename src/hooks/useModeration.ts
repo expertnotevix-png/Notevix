@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db } from '../components/firebase';
 import { UserProfile } from '../types';
 
 export function useModeration(user: UserProfile | null) {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { collection, query, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, getDoc, setDoc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { motion } from 'motion/react';
 import { Trash2, Shield, ShieldAlert, ShieldCheck, UserX, UserCheck, MessageSquare, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';

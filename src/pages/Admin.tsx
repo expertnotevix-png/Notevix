@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp, writeBatch, getCountFromServer } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType, checkQuotaLock, clearQuotaLock } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, checkQuotaLock, clearQuotaLock } from '../components/firebase';
 import { geminiService } from '../services/geminiService';
 import { Chapter, Message, Notification, PurchaseRequest, UserProfile, ValidPayment, TransactionLedger } from '../types';
 import { 

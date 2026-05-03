@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { collection, query, orderBy, getDocs, addDoc, serverTimestamp, doc, updateDoc, increment, deleteDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { db } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { Users, Plus, MessageSquare, Trash2, ArrowRight, ShieldCheck, Hash } from 'lucide-react';
 import { UserProfile } from '../../types';

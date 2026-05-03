@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Play, Pause, RotateCcw, Timer as TimerIcon, Coffee, Brain, Award, ChevronRight } from 'lucide-react';
 import { UserProfile } from '../types';
 import { doc, updateDoc, increment } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db } from '../components/firebase';
 
 interface FocusTimerProps {
   user: UserProfile;

@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { ChevronLeft, Mail, Send, MessageCircle, MapPin, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db } from '../components/firebase';
 import { UserProfile } from '../types';
 
 interface ContactProps {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, query, orderBy, getDocs, limit } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType, getCachedData, setCachedData, checkQuotaLock } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, getCachedData, setCachedData, checkQuotaLock } from './firebase';
 import { PromoBanner } from '../types';
 import { useNavigate } from 'react-router-dom';
 

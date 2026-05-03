@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import { X, Send, AlertCircle, Loader2 } from 'lucide-react';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, increment, setDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { db } from '../firebase';
 import { geminiService } from '../../services/geminiService';
 import { UserProfile } from '../../types';
 

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BookOpen, FlaskConical, Globe, Languages, Shield, Zap, Trophy, ChevronRight, Crown, Upload, QrCode } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { useState, useEffect, useRef } from 'react';
-import { db } from '../lib/firebase';
+import { db } from '../components/firebase';
 import { collection, addDoc, doc, setDoc, getDocs, query, orderBy, onSnapshot, where } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { geminiService } from '../services/geminiService';

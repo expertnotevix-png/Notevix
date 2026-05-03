@@ -7,7 +7,7 @@ import {
   SearchCheck, FilePlus, AlertCircle
 } from 'lucide-react';
 import { UserProfile, SubjectResource, ValidPayment } from '../types';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../components/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, addDoc, getDoc, setDoc, orderBy, onSnapshot } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { GoogleGenAI } from "@google/genai";

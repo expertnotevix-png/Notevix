@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { signInWithPopup, signInWithRedirect, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { auth, googleProvider, analytics } from '../lib/firebase';
+import { auth, googleProvider, analytics } from '../components/firebase';
 import { logEvent } from 'firebase/analytics';
 import { motion } from 'motion/react';
 import { LogIn, Loader2, Check, ExternalLink, Copy, Info } from 'lucide-react';

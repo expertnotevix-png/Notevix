@@ -1,4 +1,4 @@
-import { auth, db } from '../lib/firebase';
+import { auth, db } from '../components/firebase';
 import { signOut } from 'firebase/auth';
 import { doc, updateDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { UserProfile } from '../types';

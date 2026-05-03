@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, where, limit, doc, getDoc, updateDoc, increment, addDoc, serverTimestamp, setDoc, getDocs } from 'firebase/firestore';
-import { db, auth, handleFirestoreError, OperationType, checkQuotaLock } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType, checkQuotaLock } from '../components/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   MessageSquare, 
