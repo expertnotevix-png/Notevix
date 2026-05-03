@@ -4,7 +4,7 @@ import { BookOpen, FlaskConical, Globe, Languages, Shield, Zap, Trophy, ChevronR
 import { Logo } from '../components/Logo';
 import { useState, useEffect, useRef } from 'react';
 import { db } from '../lib/firebase';
-import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, getDocs, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { geminiService } from '../services/geminiService';
 
@@ -79,13 +79,15 @@ export default function Landing() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetch('/data/resources.json')
-      .then(res => res.json())
-      .then(data => {
-        const filtered = data.resources.filter((r: any) => r.class === activeClass);
-        setResources(filtered);
-      })
-      .catch(() => {});
+    const q = query(collection(db, 'subject_resources'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const filtered = data.filter((r: any) => r.class === activeClass);
+      setResources(filtered);
+    }, (error) => {
+      console.error("Error fetching resources:", error);
+    });
+    return () => unsubscribe();
   }, [activeClass]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -136,6 +138,8 @@ export default function Landing() {
         transactionId: finalTxId,
         planId: selectedPlan?.id,
         planName: selectedPlan?.name,
+        subject: selectedPlan?.subject || null,
+        class: selectedPlan?.class || null,
         amount: aiDetectedAmount || selectedPlan?.price || 0,
         status: 'pending',
         isGuest: true,
@@ -353,6 +357,22 @@ export default function Landing() {
               className="relative w-full max-w-lg bg-[#0A0A0B] border border-white/10 rounded-[40px] shadow-2xl p-8 sm:p-12 overflow-hidden"
             >
               <div className="absolute top-0 inset-x-0 h-1.5 bg-indigo-600" />
+              
+              {aiVerifying && (
+                <div className="absolute inset-0 bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center z-[200] rounded-[40px] border border-white/10">
+                  <div className="w-16 h-16 relative">
+                    <div className="absolute inset-0 border-4 border-indigo-500/20 rounded-full" />
+                    <div className="absolute inset-0 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="absolute inset-4 bg-indigo-500/10 rounded-full animate-pulse" />
+                  </div>
+                  <div className="mt-8 text-center px-6">
+                    <p className="text-white font-black text-xs uppercase tracking-[0.2em] mb-2 animate-pulse">Running Forensic Audit</p>
+                    <p className="text-white/40 text-[7px] font-bold uppercase tracking-widest leading-relaxed">
+                      NVIDIA Vision Engine Analyzing Receipt... <br /> This may take up to 60s for high precision
+                    </p>
+                  </div>
+                </div>
+              )}
               
               <div className="flex justify-between items-center mb-10">
                 <div className="space-y-1">

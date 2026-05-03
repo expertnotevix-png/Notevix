@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, SubjectResource, ValidPayment } from '../types';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, query, where, getDocs, updateDoc, doc, addDoc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, addDoc, getDoc, setDoc, orderBy, onSnapshot } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { GoogleGenAI } from "@google/genai";
 import { useRef } from 'react';
@@ -22,20 +22,19 @@ const CLASSES = ['8', '9', '10'];
 
 const PREMIUM_PLANS = [
   {
-    id: 'monthly_sub',
-    name: 'NoteVix Plus',
-    price: 199,
-    description: 'Full Access (All Classes)',
-    features: ['All Class 8-10 Notes', 'Unlimited AI Doubt Solver', 'Exclusive Exam PDFs', 'Priority Chat Support'],
-    color: 'from-indigo-600 to-purple-600',
-    type: 'subscription'
+    id: 'individual_subject',
+    name: 'Single PDF Notes',
+    price: 39,
+    features: ['Instant Download', 'Topic Coverage', 'One-time Payment'],
+    color: 'from-gray-600 to-gray-800',
+    type: 'one-time'
   },
   {
     id: 'class_8_one_time',
     name: 'Class 8 Master Pack',
     class: '8',
     price: 99,
-    features: ['All Class 8 Notes', 'Chapter-wise AI Solver', 'Lifetime Access'],
+    features: ['All Class 8 Subjects', 'Lifetime Access', 'Bonus PDFs'],
     color: 'from-blue-600 to-cyan-600',
     type: 'one-time'
   },
@@ -44,7 +43,7 @@ const PREMIUM_PLANS = [
     name: 'Class 9 Master Pack',
     class: '9',
     price: 99,
-    features: ['All Class 9 Notes', 'Chapter-wise AI Solver', 'Lifetime Access'],
+    features: ['All Class 9 Subjects', 'Lifetime Access', 'Bonus PDFs'],
     color: 'from-emerald-600 to-teal-600',
     type: 'one-time'
   },
@@ -53,9 +52,18 @@ const PREMIUM_PLANS = [
     name: 'Class 10 Master Pack',
     class: '10',
     price: 99,
-    features: ['All Class 10 Notes', 'Chapter-wise AI Solver', 'Lifetime Access'],
+    features: ['All Class 10 Subjects', 'Lifetime Access', 'Bonus PDFs'],
     color: 'from-orange-600 to-pink-600',
     type: 'one-time'
+  },
+  {
+    id: 'plus_sub',
+    name: 'NoteVix Plus',
+    price: 199,
+    description: 'Billed monthly',
+    features: ['Classes 8-12 Full Access', 'Unlimited AI Doubt Solver', 'Exclusive Exam Packs', 'Priority Chat Support'],
+    color: 'from-indigo-600 to-purple-600',
+    type: 'subscription'
   }
 ];
 
@@ -74,29 +82,27 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const upiId = (import.meta as any).env?.VITE_UPI_ID || '9236489649@mbk';
 
+  // Real-time listener for resources
   useEffect(() => {
-    fetchResources();
-  }, [activeClass]);
-
-  const fetchResources = async () => {
-    try {
-      setLoading(true);
-
-      // Task 5: Use static JSON for resources
-      const response = await fetch('/data/resources.json');
-      const json = await response.json();
-      const allResources: SubjectResource[] = json.resources || [];
-      
-      const data = allResources
-        .filter(res => res.class === activeClass && res.isFree !== true);
-      
+    const q = query(
+      collection(db, 'subject_resources'), 
+      where('class', '==', activeClass),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const data = snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as SubjectResource))
+        .filter(res => res.isFree !== true);
       setResources(data);
-    } catch (error) {
-      console.error("Error fetching resources:", error);
-    } finally {
       setLoading(false);
-    }
-  };
+    }, (error) => {
+      console.error("Firestore Snapshot Sync Failed:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [activeClass]);
 
   const isUnlocked = (res: SubjectResource) => {
     if (!user) return false;
@@ -146,17 +152,9 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     }
   };
 
-  const parseAIJson = (text: string) => {
-    try {
-      const match = text.match(/\{[\s\S]*\}/);
-      if (match) return JSON.parse(match[0]);
-      return JSON.parse(text);
-    } catch (e) { return { verified: false }; }
-  };
-
   const handlePurchase = async () => {
     if (isSubmitting || aiVerifying || !whatsapp || (!user && !email) || (!transactionId && !screenshotPreview)) {
-      toast.error('Please enter required fields (Email/WhatsApp and Transaction ID or Screenshot)');
+      toast.error('Please enter WhatsApp and Transaction Details.');
       return;
     }
 
@@ -167,79 +165,30 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       let finalTxId = transactionId.trim().toUpperCase();
       let aiDetectedAmount = 0;
 
-      // --- 1. AI EXTRACTION & VERIFICATION (NVIDIA PRIORITY) ---
       if (screenshotPreview) {
-        setAiVerifying(true);
-        const prompt = `You are the NoteVix Secure Auditor. 
-        Verify this payment receipt screenshot for a purchase of "${selectedPlan?.name}".
+        const result = await geminiService.verifyPaymentScreenshot(screenshotPreview);
         
-        STRICT CHECKLIST:
-        1. Recipient MUST be: "${upiId}"
-        2. Amount detected on receipt MUST be EXACTLY: ₹${selectedPlan?.price}. REJECT if it is higher or lower.
-        
-        Task: Extract the 12-digit Transaction ID / UTR / Reference number and the total payment amount.
-        Output ONLY valid JSON:
-        {
-          "transactionId": "string",
-          "amount": number,
-          "isVerified": boolean,
-          "reason": "explanation if not verified (e.g., 'Amount mismatch')"
-        }`;
-
-        const system = "You are a professional payment forensics expert. Analyze receipt screenshots with 100% accuracy. You must be extremely strict with the amount; if it's even ₹1 off, isVerified MUST be false. Return JSON only.";
-        
-        let aiResultRaw: string;
-        try {
-          // Attempt NVIDIA Multimodal
-          aiResultRaw = await geminiService.callNvidiaAPI(
-            prompt, 
-            system, 
-            true, 
-            "nvidia/llama-3.2-11b-vision-instruct", 
-            60000, 
-            screenshotPreview
-          );
-        } catch (nvidiaErr) {
-          console.warn("NVIDIA Vision failed, falling back to Gemini...", nvidiaErr);
-          // Fallback to Gemini 3 Flash
-          const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || (process as any).env.GEMINI_API_KEY;
-          if (!apiKey) throw new Error("Verification service busy. Please try again.");
-          
-          const ai = new GoogleGenAI({ apiKey });
-          const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: [
-              { text: prompt },
-              { inlineData: { mimeType: "image/jpeg", data: screenshotPreview.split(',')[1] } }
-            ],
-            config: { responseMimeType: "application/json" }
-          });
-          aiResultRaw = response.text;
+        if (!result.isValid) {
+          throw new Error(result.error || "AI could not verify this receipt. Enter ID manually.");
         }
 
-        const aiData = parseAIJson(aiResultRaw);
-        
-        if (!aiData.isVerified) {
-          throw new Error(aiData.reason || "Payment details do not match NoteVix requirements.");
+        if (result.amount && result.amount < (selectedPlan?.price || 0)) {
+           throw new Error(`Payment mismatch: AI detected ₹${result.amount} but required ₹${selectedPlan?.price}.`);
         }
 
-        // Hard check: Ensure amount detected matches the price EXACTLY
-        const requiredAmount = selectedPlan?.price || 0;
-        if (aiData.amount && Math.floor(aiData.amount) !== Math.floor(requiredAmount)) {
-          throw new Error(`Strict Amount Check Failed: Detected ₹${aiData.amount} but required EXACTLY ₹${requiredAmount}.`);
+        if (result.transactionId) {
+          finalTxId = result.transactionId.toUpperCase().replace(/[^A-Z0-9]/g, '');
         }
-
-        if (aiData.transactionId) {
-          finalTxId = aiData.transactionId.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        }
-        aiDetectedAmount = aiData.amount || 0;
+        aiDetectedAmount = result.amount || 0;
       }
+
+      setAiVerifying(false);
 
       if (!finalTxId || finalTxId.length < 6) {
-        throw new Error("Could not extract a valid Transaction ID. Please type it manually.");
+        throw new Error("Invalid Transaction ID. Please enter manually.");
       }
 
-      // --- 2. DOUBLE-SPEND PROTECTION ---
+      // DOUBLE-SPEND PROTECTION
       const registryDoc = doc(db, 'transaction_id_registry', finalTxId);
       const registrySnap = await getDoc(registryDoc);
       if (registrySnap.exists()) {
@@ -553,13 +502,28 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       <AnimatePresence>
         {selectedPlan && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-2xl">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-lg max-h-[90vh] flex flex-col bg-[#0a0a0a] border border-white/10 rounded-[3rem] overflow-hidden"
-            >
-              <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar pb-16">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="relative w-full max-w-lg max-h-[90vh] flex flex-col bg-[#0a0a0a] border border-white/10 rounded-[3rem] overflow-hidden"
+              >
+                {aiVerifying && (
+                  <div className="absolute inset-0 bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center z-[200] rounded-[3rem] border border-white/10">
+                    <div className="w-16 h-16 relative">
+                      <div className="absolute inset-0 border-4 border-indigo-500/20 rounded-full" />
+                      <div className="absolute inset-0 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                      <div className="absolute inset-4 bg-indigo-500/10 rounded-full animate-pulse" />
+                    </div>
+                    <div className="mt-8 text-center px-6">
+                      <p className="text-white font-black text-xs uppercase tracking-[0.2em] mb-2 animate-pulse">Running Forensic Audit</p>
+                      <p className="text-white/40 text-[7px] font-bold uppercase tracking-widest leading-relaxed">
+                        NVIDIA Vision Engine Analyzing Receipt... <br /> This may take up to 60s for high precision
+                      </p>
+                    </div>
+                  </div>
+                )}
+                <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar pb-16">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <h2 className="text-2xl font-black tracking-tight">{selectedPlan.name}</h2>

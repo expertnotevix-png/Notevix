@@ -20,7 +20,7 @@ function getAI() {
 
 const MODEL_FAST = "meta/llama-3.1-8b-instruct";
 const MODEL_POWER = "meta/llama-3.1-70b-instruct";
-const GEMINI_MODEL = "gemini-3-flash-preview";
+const GEMINI_MODEL = "gemini-1.5-flash";
 
 function handleAIError(error: any): never {
   console.error("AI Service Error:", error);
@@ -282,25 +282,52 @@ export const geminiService = {
   },
 
   async verifyPaymentScreenshot(imageData: string): Promise<{ isValid: boolean, transactionId?: string, amount?: number, error?: string }> {
-    const prompt = `Analyze this receipt screenshot. Extract the transaction ID (UTR/Ref) and the amount paid. Return ONLY JSON: { "isValid": boolean, "transactionId": "string", "amount": number, "error": "string if invalid" }`;
-    const system = "Payment Forensics Expert. Return ONLY JSON.";
+    const prompt = `Analyze this digital payment receipt screenshot (GPay, PhonePe, Paytm, or BHIM).
+    YOUR GOAL: Extract forensic data to prevent fraud.
+    
+    1. EXTRACT "transactionId": Look for 'UTR', 'Transaction ID', 'Ref No', or 'Measurement ID'. It is usually a 12-digit number or alphanumeric string.
+    2. EXTRACT "amount": The large numeric value paid. Do NOT include currency symbols.
+    3. CHECK "isValid": Is the status CLEARLY 'Success', 'Completed', or 'Paid'? Is there a green checkmark icon?
+    
+    CRITICAL: If the screenshot is blurry or does not show a clear transaction ID, set isValid: false.
+    
+    Return ONLY RAW JSON:
+    {
+      "isValid": boolean,
+      "transactionId": "string",
+      "amount": number,
+      "error": "Brief reason if invalid/unclear"
+    }`;
+
+    const system = "You are the NoteVix Secure Auditor. You are an expert at reading Indian payment receipts. You return ONLY raw JSON. No conversational text, no markdown blocks.";
 
     try {
       const { apiKey, nvidiaKey } = getAI();
-      
-      let res;
+      let res: string | undefined;
+
+      // PRIORITY 1: NVIDIA Forensic Logic (Slower but more accurate for Vision)
       if (nvidiaKey) {
+        console.log("AI: Running NVIDIA Forensic Check (60s timeout)...");
         try {
-          res = await this.callNvidiaAPI(prompt, system, true, "nvidia/llama-3.2-11b-vision-instruct", 30000, imageData);
+          res = await this.callNvidiaAPI(
+            prompt, 
+            system, 
+            true, 
+            "nvidia/llama-3.2-11b-vision-instruct", 
+            60000, // Increased to 60s as requested
+            imageData
+          );
         } catch (err) {
-          console.warn("NVIDIA Vision failed, falling back to Gemini...", err);
+          console.error("NVIDIA Forensic Check timed out or failed:", err);
         }
       }
 
+      // PRIORITY 2: Gemini Fallback (Only if NVIDIA fails)
       if (!res && apiKey) {
+        console.warn("AI: NVIDIA failed, attempting Gemini secondary check...");
         const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
+          model: GEMINI_MODEL,
           contents: {
             parts: [
               { inlineData: { mimeType: "image/jpeg", data: imageData.split(',')[1] } },
@@ -311,18 +338,24 @@ export const geminiService = {
         res = response.text;
       }
 
-      if (!res) throw new Error("No AI service available");
+      if (!res) throw new Error("No AI Forensic service responded.");
 
-      const data = JSON.parse(res.replace(/```json|```/g, '').trim());
+      // Clean the response (handle markdown blocks if AI includes them)
+      const cleaned = res.replace(/```json|```/g, '').trim();
+      const data = JSON.parse(cleaned);
+
       return {
-        isValid: data.isValid,
-        transactionId: data.transactionId,
-        amount: data.amount,
+        isValid: Boolean(data.isValid),
+        transactionId: String(data.transactionId || "").toUpperCase(),
+        amount: Number(data.amount || 0),
         error: data.error
       };
     } catch (error) {
-      console.error("Payment Verification Error:", error);
-      return { isValid: false, error: "Verification failed. Please try again or enter details manually." };
+      console.error("Payment Verification Hard Error:", error);
+      return { 
+        isValid: false, 
+        error: "Forensic analysis failed. Please ensure the screenshot clearly shows the UTR/Ref Number." 
+      };
     }
   },
 
