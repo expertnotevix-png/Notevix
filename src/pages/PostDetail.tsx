@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, onSnapshot, collection, query, orderBy, addDoc, updateDoc, increment, arrayUnion, arrayRemove, deleteDoc, setDoc, getDoc, getDocs } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../components/firebase';
+import { dataBridge } from '../services/dataBridge';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ChevronLeft, 
@@ -44,30 +43,21 @@ export default function PostDetail({ user }: { user: UserProfile | null }) {
     const fetchPostData = async () => {
       try {
         setLoading(true);
-        if (checkQuotaLock()) {
-          setLoading(false);
-          return;
-        }
 
         // Fetch Main Post
-        const docSnap = await getDoc(doc(db, 'posts', postId));
-        if (docSnap.exists()) {
-          setPost({ id: docSnap.id, ...docSnap.data() });
+        const postData = await dataBridge.getPost(postId);
+        if (postData) {
+          setPost(postData);
         } else {
           navigate('/community');
           return;
         }
 
         // Fetch Replies
-        const repliesQuery = query(
-          collection(db, 'posts', postId, 'replies'),
-          orderBy('isBest', 'desc'),
-          orderBy('createdAt', 'asc')
-        );
-        const repliesSnap = await getDocs(repliesQuery);
-        setReplies(repliesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const repliesData = await dataBridge.getReplies(postId);
+        setReplies(repliesData);
       } catch (error: any) {
-        handleFirestoreError(error, OperationType.GET, `posts/${postId}`);
+        console.error("Fetch post error:", error);
         setError("Something went wrong while loading the post.");
       } finally {
         setLoading(false);
@@ -93,39 +83,18 @@ export default function PostDetail({ user }: { user: UserProfile | null }) {
         return;
       }
 
-      const replyData = {
-        userId: user.uid,
-        userName: user.displayName,
-        userPhoto: user.photoURL,
-        content: newReply.trim(),
-        upvotes: [],
-        downvotes: [],
-        upvotesCount: 0,
-        isBest: false,
-        createdAt: new Date().toISOString()
-      };
+      const saved = await dataBridge.addReply(user.uid, postId!, newReply.trim());
 
-      await addDoc(collection(db, 'posts', postId!, 'replies'), replyData);
-      await updateDoc(doc(db, 'posts', postId!), {
-        replyCount: increment(1)
-      });
-      await setDoc(doc(db, 'community_stats', 'global'), {
-        totalAnswers: increment(1)
-      }, { merge: true });
-
-      // Add notification for post owner
-      if (post.userId !== user.uid) {
-        await addDoc(collection(db, 'notifications'), {
-          userId: post.userId,
-          title: 'New Reply',
-          message: `${user.displayName} replied to your question: "${post.title}"`,
-          type: 'reply',
-          read: false,
-          timestamp: new Date().toISOString()
-        });
+      if (saved) {
+        setReplies(prev => [...prev, {
+          ...saved,
+          userName: user.displayName,
+          userPhoto: user.photoURL,
+          userId: user.uid
+        }]);
+        setNewReply('');
+        setPost((prev: any) => ({ ...prev, replyCount: (prev.replyCount || 0) + 1 }));
       }
-
-      setNewReply('');
     } catch (err) {
       console.error("Reply error:", err);
       setError("Failed to post reply. Please try again.");
@@ -138,38 +107,13 @@ export default function PostDetail({ user }: { user: UserProfile | null }) {
     if (!user || user.uid !== post.userId) return;
 
     try {
-      const postRef = doc(db, 'posts', postId!);
-      const replyRef = doc(db, 'posts', postId!, 'replies', replyId);
-
-      // If there was a previous best reply, unmark it
-      if (post.bestReplyId) {
-        await updateDoc(doc(db, 'posts', postId!, 'replies', post.bestReplyId), {
-          isBest: false
-        });
-      }
-
-      await updateDoc(replyRef, { isBest: true });
-      await updateDoc(postRef, {
-        isSolved: true,
-        bestReplyId: replyId
-      });
-
-      // Update stats
-      await setDoc(doc(db, 'community_stats', 'global'), {
-        solvedToday: increment(1)
-      }, { merge: true });
-
-      // Notify reply owner
-      const reply = replies.find(r => r.id === replyId);
-      if (reply && reply.userId !== user.uid) {
-        await addDoc(collection(db, 'notifications'), {
-          userId: reply.userId,
-          title: 'Best Answer! 🏆',
-          message: `Your reply was marked as the best answer for: "${post.title}"`,
-          type: 'best_answer',
-          read: false,
-          timestamp: new Date().toISOString()
-        });
+      const success = await dataBridge.markBestReply(postId!, replyId);
+      if (success) {
+        setPost((prev: any) => ({ ...prev, isSolved: true, bestReplyId: replyId }));
+        setReplies(prev => prev.map(r => ({
+          ...r,
+          isBest: r.id === replyId
+        })));
       }
     } catch (err) {
       console.error("Mark best error:", err);

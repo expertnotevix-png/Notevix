@@ -7,6 +7,7 @@ import { geminiService } from '../services/geminiService';
 import { db, auth } from '../components/firebase';
 import { doc, updateDoc, increment, setDoc } from 'firebase/firestore';
 import { UserProfile } from '../types';
+import { dataBridge } from '../services/dataBridge';
 
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -67,10 +68,9 @@ export default function AIDoubtSolver({ user, setUser }: AIDoubtSolverProps) {
       };
       setMessages(prev => [...prev, aiMessage]);
 
-      // Award points for using AI Doubt Solver
+      // Award points for using AI Doubt Solver via DataBridge (Supabase)
       const pointsReward = 20;
-      const userRef = doc(db, 'users', user.uid);
-      const leaderboardRef = doc(db, 'leaderboard', user.uid);
+      dataBridge.awardPoints(user.uid, pointsReward);
 
       // Local update for instant feedback
       const newPoints = (user.totalPoints || 0) + pointsReward;
@@ -79,20 +79,6 @@ export default function AIDoubtSolver({ user, setUser }: AIDoubtSolverProps) {
         return { ...prev, totalPoints: newPoints };
       });
 
-      // Firebase updates
-      updateDoc(userRef, {
-        totalPoints: increment(pointsReward)
-      }).catch(e => console.error("Failed to update user points:", e));
-
-      setDoc(leaderboardRef, {
-        uid: user.uid,
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-        totalPoints: newPoints,
-        totalFocusMinutes: user.totalFocusMinutes || 0,
-        streakCount: user.streak?.currentCount || 0
-      }, { merge: true }).catch(e => console.error("Failed to sync leaderboard:", e));
-      
       toast.success(`+${pointsReward} points for solving a doubt! 🧠`, { 
         id: 'points-toast',
         duration: 2000

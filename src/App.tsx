@@ -136,7 +136,24 @@ export default function App() {
         setIsAuthReady(true); // Allow components to render immediately
         setLoading(false);
 
+        // SYNC TO SUPABASE
+        dataBridge.syncProfile(firebaseUser.uid, basicProfile).catch(e => console.warn("Supabase initial sync deferred", e));
+
         try {
+          // Check Supabase profile first
+          const supabaseProfile = await dataBridge.getProfile(firebaseUser.uid);
+          if (supabaseProfile && isMounted) {
+            const mergedProfile = { ...basicProfile, ...supabaseProfile };
+            setUser(mergedProfile);
+            localStorage.setItem(CACHED_USER_KEY, JSON.stringify(mergedProfile));
+            localStorage.setItem(CACHED_USER_KEY + '_time', Date.now().toString());
+          }
+
+          if (checkQuotaLock()) {
+            console.log("App: Profile update skipped (quota locked)");
+            return;
+          }
+
           const userRef = doc(db, 'users', firebaseUser.uid);
           let userData: UserProfile | null = null;
           
@@ -208,6 +225,9 @@ export default function App() {
                     'streak.currentCount': newCount,
                     'streak.lastUpdateDate': today
                   }).catch(e => console.warn("Streak update failed:", e));
+                  
+                  // Sync to Supabase
+                  dataBridge.updateStreak(firebaseUser.uid, newCount);
                   
                   userData.streak = { currentCount: newCount, lastUpdateDate: today };
                   toast.success(`Welcome back! Your streak is now ${newCount} days! 🔥`);
@@ -533,10 +553,10 @@ export default function App() {
             <Route path="/schedule" element={user ? <Schedule user={user} /> : <Navigate to="/login" />} />
             <Route path="/notifications" element={user ? <Notifications user={user} /> : <Navigate to="/login" />} />
             <Route path="/saved" element={user ? <Saved user={user} /> : <Navigate to="/login" />} />
-            <Route path="/profile" element={user ? <Profile user={user} /> : <Navigate to="/login" />} />
+            <Route path="/profile" element={user ? <Profile user={user} setUser={setUser} /> : <Navigate to="/login" />} />
             
             <Route path="/class/:classId/:subjectId" element={<ChapterList />} />
-            <Route path="/note/:noteId" element={<NoteView user={user} />} />
+            <Route path="/note/:noteId" element={<NoteView user={user} setUser={setUser} />} />
             <Route path="/premium-notes" element={<PremiumNotes user={user} />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/about" element={<AboutUs />} />

@@ -12,8 +12,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { doc, updateDoc, arrayUnion, arrayRemove, increment, deleteDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { dataBridge } from '../../services/dataBridge';
 import { UserProfile } from '../../types';
 import { useNavigate } from 'react-router-dom';
 
@@ -26,6 +25,7 @@ export default function PostCard({ post, currentUser }: PostCardProps) {
   const navigate = useNavigate();
   const [isVoting, setIsVoting] = useState(false);
 
+  // Supabase uses upvotes_count directly. We'll simplify the UI check for now.
   const hasUpvoted = currentUser && post.upvotes?.includes(currentUser.uid);
   const hasDownvoted = currentUser && post.downvotes?.includes(currentUser.uid);
 
@@ -34,36 +34,10 @@ export default function PostCard({ post, currentUser }: PostCardProps) {
     if (!currentUser || isVoting) return;
 
     setIsVoting(true);
-    const postRef = doc(db, 'posts', post.id);
 
     try {
-      if (type === 'up') {
-        if (hasUpvoted) {
-          await updateDoc(postRef, {
-            upvotes: arrayRemove(currentUser.uid),
-            upvotesCount: increment(-1)
-          });
-        } else {
-          await updateDoc(postRef, {
-            upvotes: arrayUnion(currentUser.uid),
-            downvotes: arrayRemove(currentUser.uid),
-            upvotesCount: increment(hasDownvoted ? 2 : 1)
-          });
-        }
-      } else {
-        if (hasDownvoted) {
-          await updateDoc(postRef, {
-            downvotes: arrayRemove(currentUser.uid),
-            upvotesCount: increment(1)
-          });
-        } else {
-          await updateDoc(postRef, {
-            downvotes: arrayUnion(currentUser.uid),
-            upvotes: arrayRemove(currentUser.uid),
-            upvotesCount: increment(hasUpvoted ? -2 : -1)
-          });
-        }
-      }
+      await dataBridge.votePost(currentUser.uid, post.id, type);
+      // NOTE: UI won't reflect immediately unless we manage local state or re-fetch
     } catch (err) {
       console.error("Vote error:", err);
     } finally {

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, limit, doc, getDoc, getDocs } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../components/firebase';
+import { dataBridge } from '../services/dataBridge';
 import { UserProfile } from '../types';
 import { motion } from 'motion/react';
 import { Trophy, Medal, Crown, Timer, TrendingUp, Instagram, Star, History, ShieldAlert } from 'lucide-react';
@@ -23,52 +22,26 @@ export default function Leaderboard({ user }: LeaderboardProps) {
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
-      // Check cache first
-      const cached = localStorage.getItem(CACHED_LEADERBOARD_KEY);
-      const cacheTimestamp = localStorage.getItem(CACHED_LEADERBOARD_KEY + '_time');
-      
-      // If cache is less than 5 mins old, use it
-      if (cached && cacheTimestamp && Date.now() - parseInt(cacheTimestamp) < 5 * 60 * 1000) {
-        setTopUsers(JSON.parse(cached));
-        setLoading(false);
-        return;
-      }
-
       try {
-        if (!cached) setLoading(true);
-        if (checkQuotaLock()) {
-          setLoading(false);
-          setIsQuotaLimited(true);
-          if (cached) setTopUsers(JSON.parse(cached));
-          return;
-        }
+        setLoading(true);
+        const data = await dataBridge.getLeaderboard(10);
+        
+        // Map dataBridge response back to UserProfile format for UI
+        const mappedData = data.map((d: any) => ({
+          ...d,
+          displayName: d.full_name,
+          photoURL: d.avatar_url,
+          totalPoints: d.xp,
+          class: d.class_level
+        })) as any[];
 
-        const q = query(
-          collection(db, 'leaderboard'),
-          orderBy('totalPoints', 'desc'),
-          limit(10) // Limit to top 10 as requested
-        );
-        const snapshot = await getDocs(q);
-        const users = snapshot.docs
-          .map(doc => doc.data() as any)
-          .filter(u => u.email !== 'expertraj8@gmail.com');
-        setTopUsers(users);
-        
-        // Cache successful fetch
-        localStorage.setItem(CACHED_LEADERBOARD_KEY, JSON.stringify(users));
+        setTopUsers(mappedData);
+        localStorage.setItem(CACHED_LEADERBOARD_KEY, JSON.stringify(mappedData));
         localStorage.setItem(CACHED_LEADERBOARD_KEY + '_time', Date.now().toString());
-        
-        // Also fetch stats
-        const statsDoc = await getDoc(doc(db, 'system_stats', 'leaderboard'));
-        if (statsDoc.exists()) {
-          setLastReset(statsDoc.data().lastReset);
-        }
-      } catch (error: any) {
-        handleFirestoreError(error, OperationType.LIST, 'leaderboard');
-        setIsQuotaLimited(true);
-        if (cached) {
-          setTopUsers(JSON.parse(cached));
-        }
+      } catch (error) {
+        console.warn("Leaderboard fetch failed:", error);
+        const cached = localStorage.getItem(CACHED_LEADERBOARD_KEY);
+        if (cached) setTopUsers(JSON.parse(cached));
       } finally {
         setLoading(false);
       }

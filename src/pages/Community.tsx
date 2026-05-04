@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { collection, query, orderBy, onSnapshot, where, limit, doc, getDoc, updateDoc, increment, addDoc, serverTimestamp, setDoc, getDocs } from 'firebase/firestore';
-import { db, auth, handleFirestoreError, OperationType, checkQuotaLock } from '../components/firebase';
+import { dataBridge } from '../services/dataBridge';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   MessageSquare, 
@@ -98,15 +97,13 @@ export default function Community({ user }: { user: UserProfile | null }) {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        if (checkQuotaLock()) return;
-        const docSnap = await getDoc(doc(db, 'community_stats', 'global'));
-        if (docSnap.exists()) {
-          const data = docSnap.data() as CommunityStats;
-          setStats(data);
-          localStorage.setItem(CACHED_STATS_KEY, JSON.stringify(data));
+        const statsData = await dataBridge.getCommunityStats();
+        if (statsData) {
+          setStats(statsData);
+          localStorage.setItem(CACHED_STATS_KEY, JSON.stringify(statsData));
         }
       } catch (error) {
-        handleFirestoreError(error, OperationType.GET, 'community_stats');
+        console.error("Fetch stats error:", error);
         const cached = localStorage.getItem(CACHED_STATS_KEY);
         if (cached) setStats(JSON.parse(cached));
       }
@@ -117,78 +114,29 @@ export default function Community({ user }: { user: UserProfile | null }) {
   // 2. Fetch Global Chat Messages
   const fetchMessagesManual = async () => {
     try {
-      if (checkQuotaLock()) return;
-      const chatQuery = query(
-        collection(db, 'community_chat'),
-        orderBy('timestamp', 'desc'),
-        limit(50)
-      );
-      const snapshot = await getDocs(chatQuery);
-      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ChatMessage[];
-      setMessages([...msgs].reverse());
+      const msgs = await dataBridge.getChatMessages(50);
+      setMessages(msgs);
       setTimeout(() => scrollToBottom('auto'), 50);
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'community_chat');
+      console.error("Fetch chat error:", error);
     }
   };
 
   useEffect(() => {
     if (activeTab !== 'chat') return;
-    
-    if (isLiveChat) {
-      if (checkQuotaLock()) {
-        setIsLiveChat(false);
-        return;
-      }
-      const chatQuery = query(
-        collection(db, 'community_chat'),
-        orderBy('timestamp', 'desc'),
-        limit(50)
-      );
-      const chatUnsub = onSnapshot(chatQuery, (snapshot) => {
-        const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ChatMessage[];
-        const reversed = [...msgs].reverse();
-        setMessages(reversed);
-        
-        // Remove from pending if server has it now
-        setPendingMessages(prev => prev.filter(p => !reversed.some(m => m.content === p.content && m.userId === p.userId)));
+    fetchMessagesManual();
+  }, [activeTab]);
 
-        if (isNearBottom()) {
-          setTimeout(() => scrollToBottom('smooth'), 50);
-        }
-      }, (error) => {
-        handleFirestoreError(error, OperationType.LIST, 'community_chat');
-        setIsLiveChat(false);
-      });
-      return () => chatUnsub();
-    } else {
-      fetchMessagesManual();
-    }
-  }, [activeTab, isLiveChat]);
-
-  // 3. Fetch Posts - Handle filters (Manual fetch to save quota)
+  // 3. Fetch Posts - Handle filters
   useEffect(() => {
     const fetchPosts = async () => {
       setLoading(true);
       try {
-        if (checkQuotaLock()) {
-          setLoading(false);
-          const cached = localStorage.getItem(CACHED_POSTS_KEY);
-          if (cached) setPosts(JSON.parse(cached));
-          return;
-        }
-        let postsQuery = query(collection(db, 'posts'), where('status', '==', 'approved'), limit(50));
-        if (filterSubject !== 'All') postsQuery = query(postsQuery, where('subject', '==', filterSubject));
-        if (filterClass !== 'All') postsQuery = query(postsQuery, where('class', '==', filterClass));
-        if (sortBy === 'latest') postsQuery = query(postsQuery, orderBy('createdAt', 'desc'));
-        else if (sortBy === 'upvoted') postsQuery = query(postsQuery, orderBy('upvotesCount', 'desc'));
-
-        const snapshot = await getDocs(postsQuery);
-        const postsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+        const postsData = await dataBridge.getPosts(50, filterSubject, filterClass, sortBy);
         setPosts(postsData);
         localStorage.setItem(CACHED_POSTS_KEY, JSON.stringify(postsData));
       } catch (error: any) {
-        handleFirestoreError(error, OperationType.LIST, 'posts');
+        console.error("Supabase migration: Failed to fetch posts:", error);
         const cached = localStorage.getItem(CACHED_POSTS_KEY);
         if (cached) setPosts(JSON.parse(cached));
       } finally {
@@ -224,13 +172,21 @@ export default function Community({ user }: { user: UserProfile | null }) {
     setTimeout(() => scrollToBottom('smooth'), 50);
 
     try {
-      await addDoc(collection(db, 'community_chat'), {
-        userId: user.uid,
-        userName: user.displayName,
-        userPhoto: user.photoURL,
-        content: messageContent,
-        timestamp: serverTimestamp()
-      });
+      const saved = await dataBridge.sendChatMessage(user.uid, messageContent);
+      if (saved) {
+        // Success handled by pulling latest? 
+        // In this simple manual mode, we just fetch again or add locally
+        setMessages(prev => [...prev, {
+          ...saved,
+          id: saved.id,
+          userId: user.uid,
+          userName: user.displayName,
+          userPhoto: user.photoURL,
+          content: messageContent,
+          timestamp: saved.created_at
+        }]);
+        setPendingMessages(prev => prev.filter(m => m.id !== tempId));
+      }
     } catch (error) {
       console.error("Failed to send message:", error);
       // Mark as error in local state

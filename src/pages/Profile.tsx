@@ -1,6 +1,6 @@
-import { auth, db } from '../components/firebase';
+import { auth } from '../components/firebase';
 import { signOut } from 'firebase/auth';
-import { doc, updateDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { dataBridge } from '../services/dataBridge';
 import { UserProfile } from '../types';
 import { LogOut, Settings, Shield, CreditCard, Bell, ChevronRight, Award, Instagram, Send, BookOpen, Moon, Bookmark, Share2, Copy, Check, Download, QrCode, MessageSquare, History } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -14,16 +14,15 @@ interface ProfileProps {
   user: UserProfile;
 }
 
-export default function Profile({ user }: ProfileProps) {
+export default function Profile({ user, setUser }: { user: UserProfile, setUser: any }) {
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
   const [userPostsCount, setUserPostsCount] = useState(0);
 
   useEffect(() => {
     const fetchUserStats = async () => {
-      const q = query(collection(db, 'posts'), where('userId', '==', user.uid));
-      const snap = await getDocs(q);
-      setUserPostsCount(snap.size);
+      const count = await dataBridge.getUserPostCount(user.uid);
+      setUserPostsCount(count);
     };
     fetchUserStats();
   }, [user.uid]);
@@ -33,28 +32,37 @@ export default function Profile({ user }: ProfileProps) {
   };
 
   const toggleNotifications = async () => {
-    const userRef = doc(db, 'users', user.uid);
     const newState = !user.notificationsEnabled;
-    await updateDoc(userRef, { notificationsEnabled: newState });
-    toast.success(newState ? 'Notifications Enabled' : 'Notifications Disabled');
+    const success = await dataBridge.updateProfile(user.uid, { notifications_enabled: newState });
+    if (success) {
+      setUser((prev: any) => ({ ...prev, notificationsEnabled: newState }));
+      toast.success(newState ? 'Notifications Enabled' : 'Notifications Disabled');
+    }
   };
 
   const toggleStudyMode = async () => {
-    const userRef = doc(db, 'users', user.uid);
     const newState = !user.studyModeEnabled;
-    await updateDoc(userRef, { studyModeEnabled: newState });
-    toast.success(newState ? 'Study Mode On' : 'Study Mode Off');
+    const success = await dataBridge.updateProfile(user.uid, { study_mode: newState });
+    if (success) {
+      setUser((prev: any) => ({ ...prev, studyModeEnabled: newState }));
+      toast.success(newState ? 'Study Mode On' : 'Study Mode Off');
+    }
   };
 
   const updateInstagram = async (handle: string) => {
-    const userRef = doc(db, 'users', user.uid);
-    await updateDoc(userRef, { instagramUsername: handle.trim() });
-    toast.success('Instagram Handle Updated');
+    const success = await dataBridge.updateProfile(user.uid, { instagram: handle.trim() });
+    if (success) {
+      setUser((prev: any) => ({ ...prev, instagramUsername: handle.trim() }));
+      toast.success('Instagram Handle Updated');
+    }
   };
 
   const updateClass = async (cls: string) => {
-    const userRef = doc(db, 'users', user.uid);
-    await updateDoc(userRef, { class: cls });
+    const success = await dataBridge.updateProfile(user.uid, { class_level: cls });
+    if (success) {
+      setUser((prev: any) => ({ ...prev, class: cls }));
+      toast.success(`Switched to Class ${cls}`);
+    }
   };
 
   const menuItems = [

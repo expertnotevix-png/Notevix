@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, Plus, Trash2, CheckCircle2, Circle, Calendar, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../components/firebase';
+import { dataBridge } from '../services/dataBridge';
 import { UserProfile, ScheduleTask } from '../types';
 
 interface ScheduleProps {
@@ -25,39 +24,26 @@ export default function Schedule({ user }: ScheduleProps) {
     const fetchTasks = async () => {
       try {
         setLoading(true);
-        if (checkQuotaLock()) {
-          setLoading(false);
-          const cached = localStorage.getItem(CACHED_SCHEDULE_KEY);
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            if (parsed.date === today) setTasks(parsed.tasks);
-          }
-          return;
-        }
+        const data = await dataBridge.getSchedules(user.uid);
+        
+        // Map Supabase fields to ScheduleTask type
+        const mappedTasks = data.map((d: any) => ({
+          id: d.id,
+          userId: user.uid,
+          task: d.title,
+          time: d.time,
+          completed: d.completed,
+          date: d.date
+        }));
 
-        const q = query(
-          collection(db, 'schedule'),
-          where('userId', '==', user.uid),
-          where('date', '==', today)
-        );
-        
-        const snapshot = await getDocs(q);
-        const taskList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduleTask));
-        const sortedTasks = taskList.sort((a, b) => a.time.localeCompare(b.time));
-        setTasks(sortedTasks);
-        
-        // Cache successful fetch
-        localStorage.setItem(CACHED_SCHEDULE_KEY, JSON.stringify({ date: today, tasks: sortedTasks }));
+        setTasks(mappedTasks);
+        localStorage.setItem(CACHED_SCHEDULE_KEY, JSON.stringify({ date: today, tasks: mappedTasks }));
       } catch (error: any) {
-        handleFirestoreError(error, OperationType.LIST, 'schedule');
-        
-        // Fallback to cache on error
+        console.warn("Supabase fetch failed, trying cache:", error);
         const cached = localStorage.getItem(CACHED_SCHEDULE_KEY);
         if (cached) {
           const parsed = JSON.parse(cached);
-          if (parsed.date === today) {
-            setTasks(parsed.tasks);
-          }
+          if (parsed.date === today) setTasks(parsed.tasks);
         }
       } finally {
         setLoading(false);
@@ -72,16 +58,27 @@ export default function Schedule({ user }: ScheduleProps) {
     if (!newTask.trim()) return;
 
     try {
-      await addDoc(collection(db, 'schedule'), {
-        userId: user.uid,
-        task: newTask,
+      const saved = await dataBridge.saveSchedule(user.uid, {
+        title: newTask,
         time: newTime || 'No time',
-        completed: false,
         date: today,
-        timestamp: serverTimestamp()
+        type: 'task',
+        completed: false
       });
-      setNewTask('');
-      setNewTime('');
+      
+      if (saved) {
+        const newTaskObj: ScheduleTask = {
+          id: saved.id,
+          userId: user.uid,
+          task: saved.title,
+          time: saved.time,
+          completed: saved.completed,
+          date: saved.date
+        };
+        setTasks(prev => [...prev, newTaskObj]);
+        setNewTask('');
+        setNewTime('');
+      }
     } catch (error) {
       console.error("Error adding task:", error);
     }
@@ -89,9 +86,19 @@ export default function Schedule({ user }: ScheduleProps) {
 
   const toggleTask = async (taskId: string, currentStatus: boolean) => {
     try {
-      await updateDoc(doc(db, 'schedule', taskId), {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const updated = await dataBridge.saveSchedule(user.uid, {
+        ...task,
+        id: taskId,
+        title: task.task,
         completed: !currentStatus
       });
+
+      if (updated) {
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: !currentStatus } : t));
+      }
     } catch (error) {
       console.error("Error toggling task:", error);
     }
@@ -99,7 +106,10 @@ export default function Schedule({ user }: ScheduleProps) {
 
   const deleteTask = async (taskId: string) => {
     try {
-      await deleteDoc(doc(db, 'schedule', taskId));
+      const success = await dataBridge.deleteSchedule(taskId);
+      if (success) {
+        setTasks(prev => prev.filter(t => t.id !== taskId));
+      }
     } catch (error) {
       console.error("Error deleting task:", error);
     }

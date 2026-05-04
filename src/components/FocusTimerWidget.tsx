@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Play, Pause, RotateCcw, Timer as TimerIcon, Brain } from 'lucide-react';
-import { doc, updateDoc, increment, setDoc } from 'firebase/firestore';
-import { db, auth, handleFirestoreError, OperationType } from './firebase';
+import { dataBridge } from '../services/dataBridge';
+import { auth } from './firebase';
 import { toast } from 'sonner';
 
 export function FocusTimerWidget() {
@@ -74,22 +74,12 @@ export function FocusTimerWidget() {
         const fullDuration = 25; // 25 mins
         const points = fullDuration * 10;
         
-        const userRef = doc(db, 'users', auth.currentUser.uid);
-        const leaderboardRef = doc(db, 'leaderboard', auth.currentUser.uid);
-        
-        await updateDoc(userRef, {
-          totalFocusMinutes: increment(fullDuration),
-          totalPoints: increment(points)
-        });
+        await dataBridge.addFocusMinutes(auth.currentUser.uid, fullDuration);
+        await dataBridge.awardPoints(auth.currentUser.uid, points);
 
-        await setDoc(leaderboardRef, {
-          totalPoints: increment(points),
-          totalFocusMinutes: increment(fullDuration)
-        }, { merge: true });
-
-        console.log("Focus session saved to Cloud");
+        console.log("Focus session saved to Supabase");
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'focus_timer_sync');
+        console.error("Focus sync failed:", err);
       }
     }
     localStorage.removeItem('notevix_focus_session');

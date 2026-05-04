@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, limit } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../components/firebase';
 import { Chapter } from '../types';
+import { dataBridge } from '../services/dataBridge';
 import { Search, Filter, BookOpen, Lock, X, Sparkles, GraduationCap, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -19,16 +18,9 @@ export default function Explore() {
     }
     setLoading(true);
     try {
-      const q = query(collection(db, 'chapters'), limit(30));
-      const querySnapshot = await getDocs(q);
-      const allChapters = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Chapter));
-      const filtered = allChapters.filter(c => 
-        c.title.toLowerCase().includes(term.toLowerCase()) ||
-        c.subject.toLowerCase().includes(term.toLowerCase())
-      );
+      const filtered = await dataBridge.searchResources(term);
       setResults(filtered);
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'chapters');
       console.error("Search error:", error);
     } finally {
       setLoading(false);

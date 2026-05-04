@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { db } from '../components/firebase';
 import { Chapter, UserProfile } from '../types';
+import { dataBridge } from '../services/dataBridge';
 import { motion } from 'motion/react';
 import { ChevronLeft, Bookmark, Download, Share2, Info, HelpCircle, CheckCircle2, Lock, Share2 as ShareIcon, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -11,22 +10,19 @@ interface NoteViewProps {
   user: UserProfile | null;
 }
 
-export default function NoteView({ user }: NoteViewProps) {
+export default function NoteView({ user, setUser }: { user: UserProfile | null, setUser: any }) {
   const { noteId } = useParams();
   const navigate = useNavigate();
   const [chapter, setChapter] = useState<Chapter | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isSaved, setIsSaved] = useState(user?.savedNotes.includes(noteId || '') || false);
+  const [isSaved, setIsSaved] = useState(user?.savedNotes?.includes(noteId || '') || false);
 
   useEffect(() => {
     const fetchChapter = async () => {
       if (!noteId) return;
       try {
-        const docRef = doc(db, 'chapters', noteId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setChapter({ id: docSnap.id, ...docSnap.data() } as Chapter);
-        }
+        const data = await dataBridge.getResourceById(noteId);
+        if (data) setChapter(data);
       } catch (error) {
         console.error("Error fetching chapter:", error);
       } finally {
@@ -49,11 +45,9 @@ export default function NoteView({ user }: NoteViewProps) {
     setIsSaved(newIsSaved);
 
     try {
-      const userRef = doc(db, 'users', user.uid);
-      if (isSaved) {
-        await updateDoc(userRef, { savedNotes: arrayRemove(noteId) });
-      } else {
-        await updateDoc(userRef, { savedNotes: arrayUnion(noteId) });
+      const updatedNotes = await dataBridge.toggleSavedNote(user.uid, user.savedNotes || [], noteId);
+      if (updatedNotes) {
+        setUser((prev: any) => ({ ...prev, savedNotes: updatedNotes }));
       }
     } catch (error) {
       console.error("Failed to save:", error);

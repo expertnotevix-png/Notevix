@@ -25,6 +25,8 @@ import { PromoCarousel } from '../components/PromoCarousel';
 
 const classes = ['8', '9', '10'];
 
+import { dataBridge } from '../services/dataBridge';
+
 export default function Home({ user }: HomeProps) {
   const navigate = useNavigate();
   const [selectedClass, setSelectedClass] = useState<string | null>(user.class || null);
@@ -33,10 +35,8 @@ export default function Home({ user }: HomeProps) {
   const handleClassSelect = async (cls: string) => {
     setSelectedClass(cls);
     try {
-      if (checkQuotaLock()) return;
-      await updateDoc(doc(db, 'users', user.uid), { class: cls });
+      await dataBridge.updateProfile(user.uid, { class_level: cls });
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
       console.error("Error updating class:", error);
     }
   };

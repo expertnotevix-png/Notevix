@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, documentId } from 'firebase/firestore';
-import { db } from '../components/firebase';
 import { Chapter, UserProfile } from '../types';
+import { dataBridge } from '../services/dataBridge';
 import { Bookmark, BookOpen, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -16,17 +15,20 @@ export default function Saved({ user }: SavedProps) {
 
   useEffect(() => {
     const fetchSaved = async () => {
-      if (user.savedNotes.length === 0) {
+      if (!user.savedNotes || user.savedNotes.length === 0) {
         setSavedChapters([]);
         setLoading(false);
         return;
       }
 
-      const q = query(collection(db, 'chapters'), where(documentId(), 'in', user.savedNotes));
-      const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Chapter));
-      setSavedChapters(data);
-      setLoading(false);
+      try {
+        const data = await dataBridge.getSavedNotes(user.savedNotes);
+        setSavedChapters(data);
+      } catch (error) {
+        console.error("Fetch saved error:", error);
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchSaved();

@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { X, Send, AlertCircle, Loader2 } from 'lucide-react';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, increment, setDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { dataBridge } from '../../services/dataBridge';
 import { geminiService } from '../../services/geminiService';
 import { UserProfile } from '../../types';
 
@@ -28,7 +27,7 @@ export default function CreatePostModal({ isOpen, onClose, user }: CreatePostMod
     setError(null);
 
     try {
-      // AI Moderation & Auto-Reply in ONE call to save quota
+      // 1. AI Moderation & Response Generation (Gemini)
       const result = await geminiService.processCommunityPost(title, description);
       
       if (!result.approved) {
@@ -37,68 +36,14 @@ export default function CreatePostModal({ isOpen, onClose, user }: CreatePostMod
         return;
       }
 
-      // Create Post
-      const postRef = await addDoc(collection(db, 'posts'), {
-        userId: user.uid,
-        userName: user.displayName,
-        userPhoto: user.photoURL,
+      // 2. DataBridge handles Post Creation, AI Reply insertion, and Point Awarding in Supabase
+      await dataBridge.createPost(user.uid, {
         title: title.trim(),
         description: description.trim(),
         subject,
         class: className,
-        upvotes: [],
-        downvotes: [],
-        upvotesCount: 0,
-        replyCount: result.aiAnswer ? 1 : 0,
-        isSolved: false,
-        status: 'approved',
-        createdAt: new Date().toISOString()
-      });
-
-      // Update Stats
-      await setDoc(doc(db, 'community_stats', 'global'), {
-        totalQuestions: increment(1)
-      }, { merge: true });
-
-      // Award 50 points to the author for contributing
-      const userRef = doc(db, 'users', user.uid);
-      const leaderboardRef = doc(db, 'leaderboard', user.uid);
-      
-      await updateDoc(userRef, {
-        totalPoints: increment(50)
-      }).catch(e => console.error("Failed to reward post creator:", e));
-
-      // Sync leaderboard with the potential new points
-      // We don't have the absolute total here easily without a fetch, 
-      // but we can use increment on setDoc too
-      await setDoc(leaderboardRef, {
-        uid: user.uid,
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-        totalPoints: increment(50),
-        class: user.class || '',
-        streakCount: user.streak?.currentCount || 0
-      }, { merge: true }).catch(e => console.error("Leaderboard sync failed:", e));
-
-      // Add AI Reply if generated
-      if (result.aiAnswer && !result.isNotes) {
-        await addDoc(collection(db, 'posts', postRef.id, 'replies'), {
-          userId: 'notevix-ai',
-          userName: 'NoteVix AI 🤖',
-          userPhoto: 'https://img.icons8.com/fluency/96/bot.png',
-          content: result.aiAnswer,
-          upvotes: [],
-          downvotes: [],
-          upvotesCount: 0,
-          isBest: false,
-          createdAt: new Date().toISOString()
-        });
-
-        // Update stats
-        await setDoc(doc(db, 'community_stats', 'global'), {
-          totalAnswers: increment(1)
-        }, { merge: true });
-      }
+        tags: []
+      }, result);
 
       onClose();
     } catch (err: any) {

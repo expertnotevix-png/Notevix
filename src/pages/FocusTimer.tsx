@@ -2,11 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Play, Pause, RotateCcw, Timer as TimerIcon, Coffee, Brain, Award, ChevronRight } from 'lucide-react';
 import { UserProfile } from '../types';
-import { doc, updateDoc, increment } from 'firebase/firestore';
-import { db } from '../components/firebase';
+import { dataBridge } from '../services/dataBridge';
 
 interface FocusTimerProps {
   user: UserProfile;
+  setUser: React.Dispatch<React.SetStateAction<UserProfile | null>>;
 }
 
 type TimerMode = 'focus' | 'shortBreak' | 'longBreak';
@@ -17,7 +17,7 @@ const MODES = {
   longBreak: { label: 'Long Break', minutes: 15, color: 'bg-indigo-600', icon: TimerIcon },
 };
 
-export default function FocusTimer({ user }: FocusTimerProps) {
+export default function FocusTimer({ user, setUser }: FocusTimerProps) {
   const [mode, setMode] = useState<TimerMode>('focus');
   const [timeLeft, setTimeLeft] = useState(MODES.focus.minutes * 60);
   const [isActive, setIsActive] = useState(false);
@@ -46,7 +46,20 @@ export default function FocusTimer({ user }: FocusTimerProps) {
 
     if (mode === 'focus') {
       setSessionsCompleted(prev => prev + 1);
-      // Points and minutes are now handled by the global time tracker in App.tsx
+      
+      // Award points and minutes via Supabase
+      const sessionMinutes = MODES.focus.minutes;
+      const points = Math.floor(sessionMinutes / 5) || 5;
+      
+      dataBridge.awardPoints(user.uid, points);
+      dataBridge.addFocusMinutes(user.uid, sessionMinutes);
+      
+      // Local state update for instant feedback
+      setUser(prev => prev ? { 
+        ...prev, 
+        totalPoints: (prev.totalPoints || 0) + points,
+        totalFocusMinutes: (prev.totalFocusMinutes || 0) + sessionMinutes
+      } : null);
       
       // Suggest break
       setMode('shortBreak');
