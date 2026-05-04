@@ -50,11 +50,12 @@ export const dataBridge = {
   },
 
   /**
-   * Saves a purchase request strictly to Supabase.
+   * Saves a purchase request strictly to Supabase or Firestore fallback.
    */
   async savePurchaseRequest(data: any): Promise<{ success: boolean; provider: 'firebase' | 'supabase' | 'none'; error?: string }> {
     const txId = data.transactionId.toUpperCase().replace(/[^A-Z0-9]/g, '');
     
+    // 1. Try Supabase FIRST
     if (supabase) {
       try {
         const { error } = await supabase
@@ -70,17 +71,34 @@ export const dataBridge = {
         return { success: true, provider: 'supabase' };
       } catch (err: any) {
         console.error("Supabase payment save failed:", err);
-        return { success: false, provider: 'none', error: `Supabase Error: ${err.message}` };
+        // Continue to Firestore fallback if Supabase fails
       }
     }
 
-    // Fallback info
-    console.warn("Payment triggered but Supabase is not configured (Missing VITE_SUPABASE_URL)");
-    return { 
-      success: false, 
-      provider: 'none', 
-      error: "Supabase connection missing. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your env settings." 
-    };
+    // 2. Try Firestore SECOND
+    try {
+      if (checkQuotaLock()) throw new Error("Firestore quota reached");
+      
+      await addDoc(collection(db, 'purchase_requests'), {
+        ...data,
+        transactionId: txId,
+        timestamp: serverTimestamp(),
+        provider: 'firebase',
+        status: 'pending'
+      });
+      return { success: true, provider: 'firebase' };
+    } catch (err: any) {
+      console.error("Firestore payment save failed:", err);
+      
+      // If both fail, we return a specific error that can trigger a WhatsApp fallback in the UI
+      return { 
+        success: false, 
+        provider: 'none', 
+        error: supabase 
+          ? "Database error. Please try WhatsApp support if this persists."
+          : "Supabase connection missing. Please add VITE_SUPABASE_URL or use WhatsApp fallback." 
+      };
+    }
   },
 
   /**

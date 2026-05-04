@@ -51,6 +51,7 @@ export default function App() {
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [isQuotaLocked, setIsQuotaLocked] = useState(checkQuotaLock());
+  const [isSupabaseMissing, setIsSupabaseMissing] = useState(!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY);
   const quotaLockRef = useRef<boolean>(checkQuotaLock());
 
   useEffect(() => {
@@ -462,6 +463,26 @@ export default function App() {
               className="bg-red-500 text-white text-[10px] font-bold uppercase tracking-widest py-1 text-center sticky top-0 z-[110]"
             >
               You are offline. Some features may not work.
+            </motion.div>
+          )}
+          {isSupabaseMissing && !isQuotaLocked && (
+            <motion.div
+              key="supabase-banner"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest py-1.5 text-center sticky top-0 z-[120] flex items-center justify-center gap-4 px-4"
+            >
+              <div className="flex items-center gap-2 flex-1 justify-center">
+                <span className="animate-pulse">⚠</span>
+                Maintenance Mode: Payment sync is currently manual. Verification may take longer.
+              </div>
+              <button 
+                onClick={() => setIsSupabaseMissing(false)}
+                className="bg-white text-indigo-600 px-3 py-1 rounded-sm text-[8px] font-black active:scale-95 transition-transform"
+              >
+                Dismiss
+              </button>
             </motion.div>
           )}
           {isQuotaLocked && (

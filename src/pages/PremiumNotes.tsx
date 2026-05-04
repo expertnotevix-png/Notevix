@@ -200,17 +200,17 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         isGuest: !user
       };
 
+      let saveResult;
       if (user) {
-        // Logged-in user: Still try to update their profile in Firestore if possible
-        // But save record to bridge too
-        const saveResult = await dataBridge.savePurchaseRequest({
+        // Logged-in user: Save to bridge
+        saveResult = await dataBridge.savePurchaseRequest({
           ...purchaseData,
           userId: user.uid,
           email: user.email
         });
 
         if (saveResult.success) {
-          // If we saved to bridge, try to give instant access in Firestore if it's working
+          // Try to give instant access in Firestore if it's working
           try {
             const updateData: any = { isPremium: true, planType: selectedPlan?.id || 'individual_resource' };
             if (selectedPlan?.class && selectedPlan.type === 'one-time') {
@@ -228,12 +228,11 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
           toast.success(`AI Verified! Access granted via ${saveResult.provider.toUpperCase()}.`);
           setTimeout(() => window.location.reload(), 2000);
-        } else {
-          throw new Error("Failed to record purchase.");
+          return;
         }
       } else {
         // Guest user flow
-        const saveResult = await dataBridge.savePurchaseRequest({
+        saveResult = await dataBridge.savePurchaseRequest({
           ...purchaseData,
           email: email,
           userId: 'GUEST'
@@ -242,9 +241,28 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         if (saveResult.success) {
           toast.success(`Payment verified! Saved via ${saveResult.provider.toUpperCase()}. Admin will contact you soon.`);
           setSelectedPlan(null);
-        } else {
-          throw new Error("Failed to record purchase.");
+          return;
         }
+      }
+
+      // If we reach here, it means saveResult.success was false
+      // Handle failure with WhatsApp fallback
+      const waNumber = "919236489649"; // Admin WhatsApp
+      const waMessage = `Hi Admin, I just paid ₹${purchaseData.amount} for ${purchaseData.planName} (Tx: ${purchaseData.transactionId}). My email is ${user?.email || email}. Please verify my access!`;
+      const waLink = `https://wa.me/${waNumber}?text=${encodeURIComponent(waMessage)}`;
+
+      toast.error(saveResult?.error || "Database sync failed.", {
+        duration: 10000,
+        action: {
+          label: "Send via WhatsApp",
+          onClick: () => window.open(waLink, '_blank')
+        }
+      });
+      
+      // Even if save failed, if it's the admin, just give access
+      if (user?.role === 'admin') {
+         toast.success("Admin detected: Granting session-access anyway.");
+         setTimeout(() => window.location.reload(), 2000);
       }
       
     } catch (error: any) {
