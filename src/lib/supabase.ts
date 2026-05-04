@@ -4,13 +4,22 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn("Supabase configuration is missing in environment variables. Payments will fall back to limited mode.");
+// Basic URL validation to prevent Supabase SDK from throwing errors
+const isValidUrl = (url: string) => {
+  try {
+    return url && (url.startsWith('https://') || url.startsWith('http://'));
+  } catch {
+    return false;
+  }
+};
+
+if (!supabaseUrl || !supabaseAnonKey || !isValidUrl(supabaseUrl)) {
+  console.warn("Supabase configuration is missing or invalid in environment variables. URL found:", supabaseUrl);
 } else {
-  console.log("Supabase client initialized successfully with URL:", supabaseUrl.substring(0, 15) + "...");
+  console.log("Supabase client initialized successfully.");
 }
 
-export const supabase = (supabaseUrl && supabaseAnonKey) 
+export const supabase = (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUrl)) 
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 

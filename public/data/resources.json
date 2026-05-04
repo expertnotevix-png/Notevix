@@ -1,3 +1,35 @@
 {
-  "resources": []
+  "resources": [
+    {
+      "id": "c10_maths_1",
+      "class": "10",
+      "subject": "maths",
+      "onePageNotesUrl": "https://example.com/c10m-onepage.pdf",
+      "fullNotesUrl": "https://example.com/c10m-full.pdf",
+      "importantQuestionsUrl": "https://example.com/c10m-q.pdf",
+      "reviewUrl": "https://example.com/c10m-review.pdf"
+    },
+    {
+      "id": "c10_science_1",
+      "class": "10",
+      "subject": "science",
+      "onePageNotesUrl": "https://example.com/c10s-onepage.pdf",
+      "fullNotesUrl": "https://example.com/c10s-full.pdf",
+      "importantQuestionsUrl": "https://example.com/c10s-q.pdf"
+    },
+    {
+      "id": "c9_maths_1",
+      "class": "9",
+      "subject": "maths",
+      "onePageNotesUrl": "https://example.com/c9m-onepage.pdf",
+      "fullNotesUrl": "https://example.com/c9m-full.pdf"
+    },
+    {
+      "id": "c8_maths_1",
+      "class": "8",
+      "subject": "maths",
+      "onePageNotesUrl": "https://example.com/c8m-onepage.pdf",
+      "fullNotesUrl": "https://example.com/c8m-full.pdf"
+    }
+  ]
 }

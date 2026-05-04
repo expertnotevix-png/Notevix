@@ -131,7 +131,24 @@ export const dataBridge = {
       }
     }
 
-    // No fallback - user will add manually to Supabase
+    // Fallback to local resources.json if Supabase has no data
+    try {
+      const response = await fetch('/data/resources.json');
+      const jsonData = await response.json();
+      const filtered = jsonData.resources.filter((r: any) => r.class === classLevel);
+      if (filtered.length > 0) {
+        return filtered.map((r: any) => ({
+          ...r,
+          subject: r.subject ? r.subject.charAt(0).toUpperCase() + r.subject.slice(1).toLowerCase() : 'Subject',
+          price: 0,
+          isFree: true,
+          description: `Sample notes for Class ${classLevel} ${r.subject || ''}.`
+        }));
+      }
+    } catch (e) {
+      console.warn("Could not fetch local resources.json fallback:", e);
+    }
+
     return [];
   },
 
