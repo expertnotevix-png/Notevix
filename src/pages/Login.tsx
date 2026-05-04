@@ -23,7 +23,8 @@ export default function Login() {
     // If user is already logged in, redirect them home
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user) {
-        window.location.href = '/';
+        console.log("Login: User detected, forcing redirect...");
+        window.location.replace('/');
       }
     });
     return () => unsubscribe();
