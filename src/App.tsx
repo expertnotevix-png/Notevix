@@ -153,37 +153,37 @@ export default function App() {
           }
           
           try {
+            // ALWAYS check Supabase first if available (immediate truth for payments)
+            const isPremiumSupabase = await dataBridge.checkPremiumStatus(firebaseUser.uid, firebaseUser.email);
+            const isPremium = isPremiumSupabase || isAdmin;
+
             if (quotaLockRef.current) {
-              // If quota locked, check Supabase for premium status to override cache if needed
-              const isPremium = await dataBridge.checkPremiumStatus(firebaseUser.uid, firebaseUser.email);
               if (userData) {
-                userData.isPremium = isPremium || userData.isPremium || isAdmin;
+                userData.isPremium = isPremium || userData.isPremium;
                 setUser(userData);
-              } else if (isPremium || isAdmin) {
-                // If no user data but is premium in Supabase, we can't fully construct profile but we can allow premium access
-                setUser({ uid: firebaseUser.uid, email: firebaseUser.email, isPremium: true, role: isAdmin ? 'admin' : 'student' } as any);
+              } else {
+                setUser({ uid: firebaseUser.uid, email: firebaseUser.email, isPremium, role: isAdmin ? 'admin' : 'student' } as any);
               }
               setIsAuthReady(true);
               setLoading(false);
               return;
             }
 
-            // If cache invalid or not present, fetch from server
+            // If cache invalid or not present, fetch from server (Firestore)
             if (!isCacheValid) {
               const userDoc = await getDoc(userRef);
               
               if (userDoc.exists()) {
                 userData = userDoc.data() as UserProfile;
                 
-                // Double check Supabase to ensure isPremium is true even if Firestore update failed earlier
-                if (!userData.isPremium || isAdmin) {
-                  const isPremium = await dataBridge.checkPremiumStatus(firebaseUser.uid, firebaseUser.email);
-                  if (isPremium || isAdmin) {
-                    userData.isPremium = true;
-                    // No need to await updateDoc here, just update state for now
-                    if (!quotaLockRef.current) updateDoc(userRef, { isPremium: true }).catch(() => {});
-                  }
+                // Sync premium status from Supabase truth to Firestore profile if needed
+                if (!userData.isPremium && isPremium) {
+                  userData.isPremium = true;
+                  if (!quotaLockRef.current) updateDoc(userRef, { isPremium: true }).catch(() => {});
                 }
+                
+                // Ensure isAdmin is set
+                if (isAdmin) userData.isPremium = true;
 
                 localStorage.setItem(CACHED_USER_KEY, JSON.stringify(userData));
                 localStorage.setItem(CACHED_USER_KEY + '_time', Date.now().toString());

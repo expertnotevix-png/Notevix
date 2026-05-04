@@ -192,16 +192,15 @@ export default function Admin() {
         createdAt: new Date().toISOString()
       };
 
-      // 1. Primary Save to Supabase
+      // STRICT Supabase for Resources
       if (supabase) {
         const { error } = await supabase.from('subject_resources').insert([resourceData]);
         if (error) throw error;
+        toast.success("Book Created (Saved to Supabase)!");
       } else {
-        // Fallback to Firestore if Supabase fails/not set
-        await addDoc(collection(db, 'subject_resources'), resourceData);
+        toast.error("Supabase not configured. Cannot save premium resource.");
+        return;
       }
-      
-      toast.success("Book Created (Saved to Supabase)!");
       setIsAddingResource(false);
       setResourceCoverPreview(null);
       setResourceFormData({
@@ -323,27 +322,17 @@ export default function Admin() {
     setLoading(true);
     try {
       let data = [];
-      // 1. Try Supabase
+      // STRICT Supabase
       if (supabase) {
-        const { data: sbData } = await supabase.from('subject_resources').select('*').order('subject', { ascending: true });
-        if (sbData && sbData.length > 0) {
-          data = sbData;
-        }
-      }
-
-      // 2. Try Firestore fallback
-      if (data.length === 0 && !checkQuotaLock()) {
-        try {
-          const snap = await getDocs(collection(db, 'subject_resources'));
-          data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        } catch (error) {
-          console.warn("Firestore resources skipped (quota)");
-        }
+        const { data: sbData, error } = await supabase.from('subject_resources').select('*').order('subject', { ascending: true });
+        if (error) throw error;
+        data = sbData || [];
       }
       
       setSubjectResources(data);
     } catch (error) {
-      console.error(error);
+      console.error("Resource fetch failed:", error);
+      toast.error("Could not fetch resources from Supabase.");
     } finally {
       setLoading(false);
     }
@@ -524,21 +513,7 @@ export default function Admin() {
 
   useEffect(() => {
     fetchChapters();
-    autoSeedResources();
   }, []);
-
-  const autoSeedResources = async () => {
-    try {
-      const q = query(collection(db, 'subject_resources'), limit(1));
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        console.log("Auto-seeding subject resources...");
-        await addSampleData();
-      }
-    } catch (err) {
-      console.warn("Admin: Auto-seeding check failed (likely quota):", err);
-    }
-  };
 
   const [activeUsers, setActiveUsers] = useState(0);
   const [aiStatus, setAiStatus] = useState<{ status: 'checking' | 'ok' | 'error', message?: string }>({ status: 'checking' });

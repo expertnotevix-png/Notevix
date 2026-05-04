@@ -210,24 +210,13 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         });
 
         if (saveResult.success) {
-          // Try to give instant access in Firestore if it's working
-          try {
-            const updateData: any = { isPremium: true, planType: selectedPlan?.id || 'individual_resource' };
-            if (selectedPlan?.class && selectedPlan.type === 'one-time') {
-              const currentUnlocked = user.unlockedClasses || [];
-              if (!currentUnlocked.includes(selectedPlan.class)) updateData.unlockedClasses = [...currentUnlocked, selectedPlan.class];
-            }
-            if (selectedPlan?.resourceId) {
-              const currentRes = user.unlockedResources || [];
-              if (!currentRes.includes(selectedPlan.resourceId)) updateData.unlockedResources = [...currentRes, selectedPlan.resourceId];
-            }
-            await updateDoc(doc(db, 'users', user.uid), updateData);
-          } catch (e) {
-            console.warn("Could not update user profile in Firestore (quota?), but purchase recorded in bridge.");
-          }
-
+          // Attempt instant local access grant
           toast.success(`AI Verified! Access granted via ${saveResult.provider.toUpperCase()}.`);
-          setTimeout(() => window.location.reload(), 2000);
+          
+          // Force a small delay then reload to ensure checkPremiumStatus picks it up
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
           return;
         }
       } else {
@@ -239,7 +228,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         });
 
         if (saveResult.success) {
-          toast.success(`Payment verified! Saved via ${saveResult.provider.toUpperCase()}. Admin will contact you soon.`);
+          toast.success(`Payment verified via ${saveResult.provider.toUpperCase()}! Admin will contact you soon.`);
           setSelectedPlan(null);
           return;
         }

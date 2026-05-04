@@ -68,6 +68,18 @@ export const dataBridge = {
           }]);
 
         if (error) throw error;
+
+        // INSTANT UPGRADE in Supabase Profiles if userId exists
+        if (data.userId && data.userId !== 'GUEST') {
+          await supabase
+            .from('profiles')
+            .upsert({ 
+              id: data.userId, 
+              is_premium: true, 
+              last_updated: new Date().toISOString() 
+            }, { onConflict: 'id' });
+        }
+
         return { success: true, provider: 'supabase' };
       } catch (err: any) {
         console.error("Supabase payment save failed:", err);
@@ -102,87 +114,25 @@ export const dataBridge = {
   },
 
   /**
-   * Get subject resources exclusively from Supabase or Local Fallback.
+   * Get subject resources exclusively from Supabase.
    */
   async getResources(classLevel: string) {
     if (supabase) {
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('subject_resources')
           .select('*')
           .eq('class', classLevel);
         
-        if (data && data.length > 0) return data;
+        if (error) throw error;
+        if (data) return data;
       } catch (err) {
         console.error("Supabase resource fetch failed:", err);
       }
     }
 
-    // Try to fetch from local resources.json as primary fallback
-    try {
-      const response = await fetch('/data/resources.json');
-      const data = await response.json();
-      const filtered = data.resources.filter((r: any) => r.class === classLevel);
-      if (filtered.length > 0) {
-        // Map subject names to match UI expected format
-        return filtered.map((r: any) => ({
-          ...r,
-          id: r.id,
-          subject: r.subject.charAt(0).toUpperCase() + r.subject.slice(1).toLowerCase(),
-          description: `Premium study materials for Class ${classLevel} ${r.subject}.`,
-          price: 39,
-          isFree: false
-        }));
-      }
-    } catch (e) {
-      console.warn("Could not fetch local resources.json, using hardcoded fallback.");
-    }
-
-    // FINAL FALLBACK DATA: Hardcoded high-quality resources for when databases are unavailable/loading
-    const fallbackResources = [
-      {
-        id: `math_${classLevel}`,
-        subject: 'Mathematics',
-        class: classLevel,
-        price: 39,
-        description: `Complete Master Guide for Class ${classLevel} Maths. includes formulas, theorems, and practice sets.`,
-        isFree: false,
-        features: ['Full Chapter Notes', 'PYQ Solutions', 'AI Analysis'],
-        coverUrl: ''
-      },
-      {
-        id: `science_${classLevel}`,
-        subject: 'Science',
-        class: classLevel,
-        price: 39,
-        description: `High-yield Science notes for Class ${classLevel}. Optimized for the 2024-25 syllabus.`,
-        isFree: false,
-        features: ['Diagram Sets', 'Lab Concepts', 'Exam Predictor'],
-        coverUrl: ''
-      },
-      {
-        id: `social_${classLevel}`,
-        subject: 'Social Science',
-        class: classLevel,
-        price: 39,
-        description: `History, Geography, and Civics simplified. Bullet-point revision for fast learning.`,
-        isFree: false,
-        features: ['Timeline Maps', 'Flashcard Deck', 'PYQ Collection'],
-        coverUrl: ''
-      },
-      {
-        id: `english_${classLevel}`,
-        subject: 'English',
-        class: classLevel,
-        price: 39,
-        description: `Literature and Grammar master guide. Includes summary and character sketches.`,
-        isFree: false,
-        features: ['Literature Summary', 'Grammar Rules', 'Writing Prep'],
-        coverUrl: ''
-      }
-    ];
-
-    return fallbackResources;
+    // No fallback - user will add manually to Supabase
+    return [];
   },
 
   /**
@@ -192,25 +142,33 @@ export const dataBridge = {
     // ADMIN OVERRIDE
     if (email === 'expertraj8@gmail.com') return true;
 
-    // 1. Try Supabase FIRST (since Firestore is over quota)
+    // 1. Try Supabase FIRST
     if (supabase) {
       try {
-        const { data } = await supabase
+        // Check purchase requests for approved status
+        const { data: purchases } = await supabase
           .from('purchase_requests')
           .select('status')
           .eq('userId', uid)
           .eq('status', 'approved')
           .limit(1);
         
-        if (data && data.length > 0) {
-          return true;
-        }
+        if (purchases && purchases.length > 0) return true;
+
+        // Also check a personal profile table for is_premium flag
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_premium')
+          .eq('id', uid)
+          .maybeSingle();
+        
+        if (profile?.is_premium) return true;
       } catch (e) {
         console.warn("Supabase premium check failed:", e);
       }
     }
 
-    // 2. Fallback to Firestore
+    // 2. Fallback to Firestore (if not quota locked)
     if (!checkQuotaLock()) {
       try {
         const userDoc = await getDoc(doc(db, 'users', uid));
@@ -218,7 +176,6 @@ export const dataBridge = {
           return true;
         }
       } catch (e) {
-        // Silent fail for quota
         console.warn("Firestore premium check failed (likely quota):", e);
       }
     }
