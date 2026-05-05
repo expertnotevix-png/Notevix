@@ -50,24 +50,15 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const [isQuotaLocked, setIsQuotaLocked] = useState(checkQuotaLock());
+  const [isQuotaLocked, setIsQuotaLocked] = useState(false);
   const [isSupabaseMissing, setIsSupabaseMissing] = useState(!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY);
-  const quotaLockRef = useRef<boolean>(checkQuotaLock());
+  const quotaLockRef = useRef<boolean>(false);
 
   useEffect(() => {
-    return listenToQuotaLock((locked) => {
-      setIsQuotaLocked(locked);
-      quotaLockRef.current = locked;
-      if (locked) {
-        toast.error("Daily Data Limit Reached", {
-          description: "Simplified mode active for 24h. Use 'Restore Full Mode' in the banner to retry.",
-          id: 'quota-lock-toast',
-          duration: Infinity
-        });
-      } else {
-        toast.dismiss('quota-lock-toast');
-      }
-    });
+    // Clear legacy quota locks
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('firestore_quota_lockout');
+    }
   }, []);
 
   useEffect(() => {
@@ -474,18 +465,7 @@ export default function App() {
     <Router>
       <div className="min-h-screen bg-black text-white pb-20">
         <AnimatePresence mode="wait">
-          {isOffline && (
-            <motion.div
-              key="offline-banner"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="bg-red-500 text-white text-[10px] font-bold uppercase tracking-widest py-1 text-center sticky top-0 z-[110]"
-            >
-              You are offline. Some features may not work.
-            </motion.div>
-          )}
-          {isSupabaseMissing && !isQuotaLocked && (
+          {isSupabaseMissing && (
             <motion.div
               key="supabase-banner"
               initial={{ height: 0, opacity: 0 }}
@@ -502,31 +482,6 @@ export default function App() {
                 className="bg-white text-indigo-600 px-3 py-1 rounded-sm text-[8px] font-black active:scale-95 transition-transform"
               >
                 Dismiss
-              </button>
-            </motion.div>
-          )}
-          {isQuotaLocked && (
-            <motion.div
-              key="quota-banner"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="bg-yellow-500 text-black text-[10px] font-black uppercase tracking-widest py-1.5 text-center sticky top-0 z-[120] flex items-center justify-center gap-4 px-4"
-            >
-              <div className="flex items-center gap-2 flex-1 justify-center">
-                <Zap size={10} fill="currentColor" />
-                NoteVix Viral Mode: Data limit nearly reached. App is using optimized cache.
-                <Zap size={10} fill="currentColor" />
-              </div>
-              <button 
-                onClick={() => {
-                  window.localStorage.removeItem('firestore_quota_lockout');
-                  window.localStorage.clear();
-                  window.location.reload();
-                }}
-                className="bg-black text-yellow-500 px-3 py-1 rounded-sm border border-black/10 active:scale-95 transition-transform"
-              >
-                Restore Full Mode
               </button>
             </motion.div>
           )}

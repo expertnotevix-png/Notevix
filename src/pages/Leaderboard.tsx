@@ -16,7 +16,6 @@ export default function Leaderboard({ user }: LeaderboardProps) {
   const [topUsers, setTopUsers] = useState<UserProfile[]>([]);
   const [lastReset, setLastReset] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isQuotaLimited, setIsQuotaLimited] = useState(false);
   const navigate = useNavigate();
   const isSunday = new Date().getDay() === 0;
 
@@ -82,12 +81,6 @@ export default function Leaderboard({ user }: LeaderboardProps) {
               <h1 className="text-2xl font-bold">Leaderboard</h1>
               <div className="flex items-center gap-2 text-gray-400">
                 <p className="text-sm">Top students by study time</p>
-                {isQuotaLimited && (
-                  <div className="flex items-center gap-1 text-[10px] bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded-full border border-amber-500/20">
-                    <ShieldAlert className="w-3 h-3" />
-                    <span>Cached (Cloud Busy)</span>
-                  </div>
-                )}
                 {lastReset && (
                   <div className="flex items-center gap-1 text-[10px] bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
                     <History className="w-3 h-3" />

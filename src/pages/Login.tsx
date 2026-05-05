@@ -158,13 +158,6 @@ export default function Login() {
                     </motion.div>
                   )}
 
-                  {!import.meta.env.VITE_SUPABASE_URL && (
-                    <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-xl text-yellow-500 text-[9px] text-left">
-                      <p className="font-bold uppercase mb-1 flex items-center gap-1">⚠️ Maintenance Mode</p>
-                      <p>Payment systems are temporarily limited. If you just added Supabase secrets, please restart the server or refresh after 1 minute.</p>
-                    </div>
-                  )}
-
                   {isInAppBrowser && (
                 <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-2xl text-indigo-400 text-[10px] text-left space-y-3">
                   <p className="font-bold uppercase tracking-widest text-indigo-400 flex items-center gap-2">

@@ -88,31 +88,12 @@ const QUOTA_LOCK_DURATION = 30 * 60 * 1000;
 const QUOTA_EVENT = 'notevix_quota_lock_changed';
 
 export const checkQuotaLock = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  const lockout = localStorage.getItem(QUOTA_LOCK_KEY);
-  if (lockout) {
-    const lockTime = parseInt(lockout);
-    // If lock is older than duration, remove it
-    if (Date.now() - lockTime > QUOTA_LOCK_DURATION) {
-      localStorage.removeItem(QUOTA_LOCK_KEY);
-      window.dispatchEvent(new Event(QUOTA_EVENT));
-      return false;
-    }
-    return true;
-  }
   return false;
 };
 
 export const setQuotaLock = () => {
-  if (typeof window === 'undefined') return;
-  const existing = localStorage.getItem(QUOTA_LOCK_KEY);
-  if (existing) {
-    const time = parseInt(existing);
-    if (Date.now() - time < QUOTA_LOCK_DURATION) return;
-  }
-  
-  localStorage.setItem(QUOTA_LOCK_KEY, Date.now().toString());
-  window.dispatchEvent(new Event(QUOTA_EVENT));
+  // Disabling quota lockout system as we've migrated to Supabase
+  return;
 };
 
 export const clearQuotaLock = () => {

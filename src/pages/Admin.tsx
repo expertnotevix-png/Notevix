@@ -951,41 +951,6 @@ export default function Admin() {
   ];
 
   const renderTabContent = () => {
-    if (checkQuotaLock()) {
-      return (
-        <div className="p-8 bg-red-500/5 border border-red-500/20 rounded-[2.5rem] flex flex-col items-center justify-center gap-6 text-center animate-in fade-in zoom-in duration-500">
-          <div className="w-20 h-20 rounded-[2rem] bg-red-500/10 flex items-center justify-center">
-            <Database className="w-10 h-10 text-red-500" />
-          </div>
-          <div className="space-y-2">
-            <h4 className="text-xl font-black text-red-500 uppercase tracking-widest">QUOTA LOCK ACTIVATED</h4>
-            <p className="text-sm text-gray-500 max-w-sm mx-auto">
-              The dashboard is currently restricted to preserve Firestore resources for your students. This happens when the daily free quota is nearly exhausted.
-            </p>
-          </div>
-          
-          <div className="flex flex-col gap-3 w-full max-w-xs">
-            <button 
-              onClick={() => {
-                clearQuotaLock();
-                window.location.reload();
-              }}
-              className="w-full bg-indigo-500 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-indigo-500/20 active:scale-95 transition-all"
-            >
-              Unlock & Try Anyway
-            </button>
-            <button 
-              onClick={handleEmergencyReset}
-              className="w-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white py-3 rounded-2xl font-black uppercase tracking-widest text-[8px] transition-all border border-white/5"
-            >
-              Emergency Fix (Clear App Cache)
-            </button>
-            <p className="text-[10px] text-gray-600 font-medium pt-2">Use with caution: Multiple retries during quota exhaustion may lead to temporary project suspension.</p>
-          </div>
-        </div>
-      );
-    }
-
     switch (activeTab) {
       case 'banners':
         return (
