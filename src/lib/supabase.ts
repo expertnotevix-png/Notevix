@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
+const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
 // Basic URL validation to prevent Supabase SDK from throwing errors
 const isValidUrl = (url: string) => {
@@ -14,9 +14,12 @@ const isValidUrl = (url: string) => {
 };
 
 if (!supabaseUrl || !supabaseAnonKey || !isValidUrl(supabaseUrl)) {
-  console.warn("Supabase configuration is missing or invalid in environment variables. URL found:", supabaseUrl);
+  console.warn("Supabase configuration is missing or invalid. Check your VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Settings.");
+  if (supabaseUrl && !isValidUrl(supabaseUrl)) {
+    console.error("Invalid Supabase URL format:", supabaseUrl);
+  }
 } else {
-  console.log("Supabase client initialized successfully.");
+  console.log("Supabase client initialized successfully at", supabaseUrl);
 }
 
 export const supabase = (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUrl)) 

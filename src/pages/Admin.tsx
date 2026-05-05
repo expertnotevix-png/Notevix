@@ -2112,6 +2112,15 @@ export default function Admin() {
 
           <div className="flex items-center gap-6">
             <div className="hidden md:flex flex-col items-end pr-6 border-r border-white/10">
+               <div className="flex items-center gap-2 text-emerald-400 font-medium">
+                 <div className={`w-2 h-2 rounded-full ${supabase ? 'bg-green-500 animate-pulse' : 'bg-amber-500'}`} />
+                 <span className={`text-[10px] uppercase font-black tracking-widest ${supabase ? 'text-green-500' : 'text-amber-500'}`}>
+                   {supabase ? 'Supabase Sync ON' : 'Supabase Sync OFF'}
+                 </span>
+               </div>
+               <span className="text-[10px] text-gray-500 uppercase font-bold tracking-widest leading-none mt-1">External Database</span>
+            </div>
+            <div className="hidden md:flex flex-col items-end pr-6 border-r border-white/10">
                <div className="flex items-center gap-2 text-emerald-400">
                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
                  <span className="text-xl font-black tabular-nums">{activeUsers}</span>

@@ -88,26 +88,39 @@ export default function Landing() {
     
     // Real-time for resources from Supabase
     let channel: any = null;
+    let unsubscribeFirestore: (() => void) | null = null;
+
     const setupRealtime = async () => {
       const { supabase } = await import('../lib/supabase');
-      if (!supabase) return;
       
-      channel = supabase
-        .channel(`resources_landing_${activeClass}`)
-        .on('postgres_changes', { 
-          event: '*', 
-          schema: 'public', 
-          table: 'subject_resources',
-          filter: `class=eq.${activeClass}`
-        }, () => {
-          fetchResources();
-        })
-        .subscribe();
+      if (supabase) {
+        channel = supabase
+          .channel(`resources_landing_${activeClass}`)
+          .on('postgres_changes', { 
+            event: '*', 
+            schema: 'public', 
+            table: 'subject_resources',
+            filter: `class=eq.${activeClass}`
+          }, () => {
+            fetchResources();
+          })
+          .subscribe();
+      } else {
+        // Fallback to Firestore listener
+        const q = query(collection(db, 'subject_resources'), where('class', '==', activeClass));
+        unsubscribeFirestore = onSnapshot(q, (snap) => {
+          const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setResources(data);
+        }, (err) => {
+          console.warn("Firestore landing listener failed:", err);
+        });
+      }
     };
 
     setupRealtime();
     return () => {
       if (channel) channel.unsubscribe();
+      if (unsubscribeFirestore) unsubscribeFirestore();
     };
   }, [activeClass]);
 
