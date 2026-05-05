@@ -23,15 +23,15 @@ export default function Leaderboard({ user }: LeaderboardProps) {
     const fetchLeaderboard = async () => {
       try {
         setLoading(true);
-        const data = await dataBridge.getLeaderboard(10);
+        const data = await dataBridge.getLeaderboard(30);
         
         // Map dataBridge response back to UserProfile format for UI
         const mappedData = data.map((d: any) => ({
           ...d,
-          displayName: d.full_name,
-          photoURL: d.avatar_url,
-          totalPoints: d.xp,
-          class: d.class_level
+          displayName: d.displayName || 'Student',
+          photoURL: d.photoURL || '',
+          totalPoints: d.totalPoints || 0,
+          streak: d.streak || 0
         })) as any[];
 
         setTopUsers(mappedData);
@@ -47,8 +47,31 @@ export default function Leaderboard({ user }: LeaderboardProps) {
     };
 
     fetchLeaderboard();
-    const interval = setInterval(fetchLeaderboard, 5 * 60 * 1000); // 5 minute polling
-    return () => clearInterval(interval);
+
+    // Set up real-time subscription for leaderboard updates
+    let subscription: any = null;
+    
+    const setupRealtime = async () => {
+      import('../lib/supabase').then(({ supabase }) => {
+        if (!supabase) return;
+        
+        subscription = supabase
+          .channel('public:profiles')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+            // Re-fetch when any profile changes (points, streaks, etc.)
+            fetchLeaderboard();
+          })
+          .subscribe();
+      });
+    };
+
+    setupRealtime();
+
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
   }, []);
 
   if (loading) {

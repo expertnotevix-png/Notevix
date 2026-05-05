@@ -281,12 +281,13 @@ export const dataBridge = {
   },
 
   /**
-   * Check if user is premium in Supabase (Truth source)
+   * Check if user is premium in Supabase (Truth source) or Firestore (Secondary)
    */
   async checkPremiumStatus(uid: string, email?: string): Promise<boolean> {
+    // 1. Try Supabase First (Truth source, no limits)
     if (supabase) {
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('profiles')
           .select('is_premium')
           .eq('id', uid)
@@ -303,8 +304,25 @@ export const dataBridge = {
             .maybeSingle();
           if (purchase) return true;
         }
-      } catch (err) {}
+      } catch (err) {
+        console.warn("Supabase premium check failed:", err);
+      }
     }
+
+    // 2. Fallback to Firestore only if Supabase didn't confirm
+    try {
+      const userDoc = await getDoc(doc(db, 'users', uid));
+      if (userDoc.exists() && userDoc.data()?.isPremium) return true;
+      
+      if (email) {
+        const q = query(collection(db, 'purchase_requests'), where('email', '==', email), where('status', '==', 'approved'), limit(1));
+        const snap = await getDocs(q);
+        if (!snap.empty) return true;
+      }
+    } catch (err) {
+      console.warn("Firestore premium check failed:", err);
+    }
+
     return false;
   },
 

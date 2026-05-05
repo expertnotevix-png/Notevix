@@ -662,18 +662,16 @@ export default function Admin() {
       let fsData: any[] = [];
       let sbData: any[] = [];
 
-      // 1. Fetch from Firestore
-      if (true) {
-        try {
-          const q = query(collection(db, 'purchase_requests'), orderBy('timestamp', 'desc'), limit(100));
-          const snapshot = await getDocs(q);
-          fsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, source: 'firebase' } as PurchaseRequest));
-        } catch (e) {
-          console.warn("Firestore purchase fetch failed:", e);
-        }
+      // 1. Fetch from Firestore (Fallback)
+      try {
+        const q = query(collection(db, 'purchase_requests'), orderBy('timestamp', 'desc'), limit(50));
+        const snapshot = await getDocs(q);
+        fsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, source: 'firebase' } as PurchaseRequest));
+      } catch (e) {
+        console.warn("Firestore purchase fetch skipped");
       }
 
-      // 2. Fetch from Supabase
+      // 2. Fetch from Supabase (Primary)
       if (supabase) {
         try {
           const { data, error } = await supabase
@@ -690,8 +688,8 @@ export default function Admin() {
         }
       }
 
-      // Merge and sort
-      const merged = [...fsData, ...sbData].sort((a, b) => 
+      // Merge and sort, favoring Supabase versions if IDs match (though IDs differ)
+      const merged = [...sbData, ...fsData].sort((a, b) => 
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       );
 
@@ -702,6 +700,25 @@ export default function Admin() {
       setLoading(false);
     }
   };
+
+  // Real-time listener for purchase requests
+  useEffect(() => {
+    if (activeTab !== 'payments') return;
+    
+    let channel: any = null;
+    if (supabase) {
+      channel = supabase
+        .channel('public:purchase_requests')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_requests' }, () => {
+          fetchPurchaseRequests();
+        })
+        .subscribe();
+    }
+
+    return () => {
+      if (channel) channel.unsubscribe();
+    };
+  }, [activeTab]);
 
   const handleApprovePurchase = async (req: any) => {
     try {
@@ -741,19 +758,32 @@ export default function Admin() {
       }
 
       if (req.planType === 'subscription') {
-        await updateDoc(finalUserRef, { 
+        const updateData = { 
           isPremium: true,
           subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-        });
+        };
+        await updateDoc(finalUserRef, updateData);
+        // Supabase Sync
+        if (supabase) {
+          await supabase.from('profiles').update({ is_premium: true }).eq('id', req.userId);
+        }
       } else if (req.planType === 'one-time' && req.targetClass) {
         const currentUnlocked = (userData?.unlockedClasses || []) as string[];
         if (!currentUnlocked.includes(req.targetClass)) {
-          await updateDoc(finalUserRef, { 
+          const updateData = { 
             unlockedClasses: [...currentUnlocked, req.targetClass]
-          });
+          };
+          await updateDoc(finalUserRef, updateData);
+          // Supabase Sync (optional: track unlocked classes in Supabase too if needed)
+          if (supabase) {
+            await supabase.from('profiles').update({ is_premium: true }).eq('id', req.userId);
+          }
         }
       } else {
         await updateDoc(finalUserRef, { isPremium: true });
+        if (supabase) {
+          await supabase.from('profiles').update({ is_premium: true }).eq('id', req.userId);
+        }
       }
       
       // 3. Notify user

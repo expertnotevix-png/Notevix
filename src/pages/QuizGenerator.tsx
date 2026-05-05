@@ -60,6 +60,18 @@ export default function QuizGenerator() {
       setShowExplanation(false);
     } else {
       setStep('result');
+      // Award points for completing the quiz
+      const pointsReward = score * 10;
+      if (pointsReward > 0) {
+        import('../services/dataBridge').then(({ dataBridge }) => {
+          import('../components/firebase').then(({ auth }) => {
+            const userId = auth.currentUser?.uid;
+            if (userId) {
+              dataBridge.awardPoints(userId, pointsReward);
+            }
+          });
+        });
+      }
     }
   };
 

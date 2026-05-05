@@ -125,7 +125,28 @@ export default function Community({ user }: { user: UserProfile | null }) {
   useEffect(() => {
     if (activeTab !== 'chat') return;
     fetchMessagesManual();
-  }, [activeTab]);
+
+    // Set up real-time subscription for chat
+    let channel: any = null;
+    if (isLiveChat) {
+      import('../lib/supabase').then(({ supabase }) => {
+        if (!supabase) return;
+        channel = supabase
+          .channel('public:community_chat')
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'community_chat' }, (payload) => {
+             // Handle new message
+             const newMsg = payload.new;
+             // Need profile data for the new message
+             fetchMessagesManual(); // Simplest way to get the joined data
+          })
+          .subscribe();
+      });
+    }
+
+    return () => {
+      if (channel) channel.unsubscribe();
+    };
+  }, [activeTab, isLiveChat]);
 
   // 3. Fetch Posts - Handle filters
   useEffect(() => {
@@ -145,6 +166,23 @@ export default function Community({ user }: { user: UserProfile | null }) {
     };
 
     fetchPosts();
+
+    // Real-time for posts
+    let postChannel: any = null;
+    import('../lib/supabase').then(({ supabase }) => {
+      if (!supabase) return;
+      postChannel = supabase
+        .channel('public:posts')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
+          fetchPosts(); 
+        })
+        .subscribe();
+    });
+
+    return () => {
+      if (postChannel) postChannel.unsubscribe();
+    };
+
   }, [sortBy, filterSubject, filterClass]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
