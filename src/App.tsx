@@ -105,7 +105,7 @@ export default function App() {
         }
 
         // INSTANT ENTRY: Set basic user info immediately from Google account
-        const isAdmin = firebaseUser.email === 'expertraj8@gmail.com';
+        const isAdmin = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(firebaseUser.email || '');
         const basicProfile: UserProfile = {
           uid: firebaseUser.uid,
           email: firebaseUser.email || '',
@@ -234,7 +234,7 @@ export default function App() {
                   email: firebaseUser.email || '',
                   displayName: firebaseUser.displayName || 'Student',
                   photoURL: firebaseUser.photoURL || '',
-                  role: firebaseUser.email === 'expertraj8@gmail.com' ? 'admin' : 'student',
+                  role: ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(firebaseUser.email || '') ? 'admin' : 'student',
                   savedNotes: [],
                   notificationsEnabled: true,
                   studyModeEnabled: false,
@@ -270,7 +270,7 @@ export default function App() {
                 email: firebaseUser.email || '',
                 displayName: firebaseUser.displayName || 'Student',
                 photoURL: firebaseUser.photoURL || '',
-                role: firebaseUser.email === 'expertraj8@gmail.com' ? 'admin' : 'student',
+                role: ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(firebaseUser.email || '') ? 'admin' : 'student',
                 savedNotes: [],
                 notificationsEnabled: true,
                 totalFocusMinutes: 0,
@@ -293,7 +293,7 @@ export default function App() {
               email: firebaseUser.email || '',
               displayName: firebaseUser.displayName || 'Student',
               photoURL: firebaseUser.photoURL || '',
-              role: firebaseUser.email === 'expertraj8@gmail.com' ? 'admin' : 'student',
+              role: ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(firebaseUser.email || '') ? 'admin' : 'student',
               savedNotes: [],
               notificationsEnabled: true,
               totalFocusMinutes: 0,
