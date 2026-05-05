@@ -20,25 +20,6 @@ export function PromoCarousel() {
         return;
       }
 
-      if (checkQuotaLock()) {
-        const fallbacks: PromoBanner[] = [
-          {
-            id: 'fallback_1',
-            imageUrl: 'https://images.unsplash.com/photo-1513258496099-48168024aec0?q=80&w=2070&auto=format&fit=crop',
-            link: '/premium-notes',
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: 'fallback_2',
-            imageUrl: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?q=80&w=2070&auto=format&fit=crop',
-            link: '/ai-doubts',
-            createdAt: new Date().toISOString()
-          }
-        ];
-        setBanners(fallbacks);
-        return;
-      }
-
       try {
         const q = query(
           collection(db, 'promo_banners'), 
@@ -51,11 +32,30 @@ export function PromoCarousel() {
           ...doc.data()
         })) as PromoBanner[];
         
-        setBanners(data);
-        setCachedData(cacheKey, data, 60); // Cache for 60 mins
+        if (data.length > 0) {
+          setBanners(data);
+          setCachedData(cacheKey, data, 60); // Cache for 60 mins
+          return;
+        }
       } catch (error) {
-        handleFirestoreError(error, OperationType.LIST, 'promo_banners');
+        console.warn("Carousel fetch failed, using fallbacks", error);
       }
+      
+      const fallbacks: PromoBanner[] = [
+        {
+          id: 'fallback_1',
+          imageUrl: 'https://images.unsplash.com/photo-1513258496099-48168024aec0?q=80&w=2070&auto=format&fit=crop',
+          link: '/premium-notes',
+          createdAt: new Date().toISOString()
+        },
+        {
+          id: 'fallback_2',
+          imageUrl: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?q=80&w=2070&auto=format&fit=crop',
+          link: '/ai-doubts',
+          createdAt: new Date().toISOString()
+        }
+      ];
+      setBanners(fallbacks);
     };
 
     fetchBanners();

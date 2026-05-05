@@ -54,11 +54,54 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
   const [instagram, setInstagram] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const handleSkip = async () => {
+    setIsSubmitting(true);
+    // Persist locally immediately to prevent re-appearance
+    try {
+      const cached = localStorage.getItem('notevix_user_profile_v1');
+      if (cached) {
+        const profile = JSON.parse(cached);
+        profile.onboardingCompleted = true;
+        localStorage.setItem('notevix_user_profile_v1', JSON.stringify(profile));
+      }
+      sessionStorage.setItem('onboarding_dismissed', 'true');
+    } catch (e) {
+      console.warn("Local storage error:", e);
+    }
+
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        onboardingCompleted: true
+      });
+      onComplete();
+    } catch (error) {
+      console.error("Error skipping onboarding:", error);
+      onComplete(); 
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleNext = async () => {
     if (currentStep < steps.length - 1) {
       setCurrentStep(prev => prev + 1);
     } else {
       setIsSubmitting(true);
+      
+      // Update local cache first
+      try {
+        const cached = localStorage.getItem('notevix_user_profile_v1');
+        if (cached) {
+          const profile = JSON.parse(cached);
+          profile.onboardingCompleted = true;
+          profile.instagramUsername = instagram.trim() || null;
+          localStorage.setItem('notevix_user_profile_v1', JSON.stringify(profile));
+        }
+        sessionStorage.setItem('onboarding_dismissed', 'true');
+      } catch (e) {
+        console.warn("Local storage error:", e);
+      }
+
       try {
         await updateDoc(doc(db, 'users', userId), {
           onboardingCompleted: true,
@@ -88,7 +131,7 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
         <div className="absolute -top-24 -right-24 w-48 h-48 bg-purple-600/20 blur-[80px] -z-10" />
         
         <button 
-          onClick={handleNext}
+          onClick={handleSkip}
           className="absolute top-6 right-6 p-2 hover:bg-white/5 rounded-full transition-colors"
         >
           <X className="w-5 h-5 text-gray-500" />

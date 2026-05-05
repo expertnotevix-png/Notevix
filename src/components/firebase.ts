@@ -104,15 +104,8 @@ export const clearQuotaLock = () => {
 
 export const listenToQuotaLock = (callback: (isLocked: boolean) => void) => {
   if (typeof window === 'undefined') return () => {};
-  const handler = () => callback(checkQuotaLock());
-  window.addEventListener(QUOTA_EVENT, handler);
-  window.addEventListener('storage', (e) => {
-    if (e.key === QUOTA_LOCK_KEY) handler();
-  });
-  return () => {
-    window.removeEventListener(QUOTA_EVENT, handler);
-    window.removeEventListener('storage', handler);
-  };
+  callback(false);
+  return () => {};
 };
 
 interface FirestoreErrorInfo {

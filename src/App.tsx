@@ -140,7 +140,7 @@ export default function App() {
             localStorage.setItem(CACHED_USER_KEY + '_time', Date.now().toString());
           }
 
-          if (checkQuotaLock()) {
+          if (false) {
             console.log("App: Profile update skipped (quota locked)");
             return;
           }
@@ -264,9 +264,6 @@ export default function App() {
             const cached = localStorage.getItem(CACHED_USER_KEY);
             if (cached) {
               userData = JSON.parse(cached);
-              if (isMounted && isQuotaError) {
-                toast.info("Using cached profile (Cloud limits reached)");
-              }
             } else {
               userData = {
                 uid: firebaseUser.uid,
@@ -309,7 +306,7 @@ export default function App() {
             };
             setUser(fallbackProfile);
             if (quotaLockRef.current) {
-              toast.info("Logged in limited mode (Cloud limits reached)");
+              // Removed toast to avoid annoying users during quota periods
             }
           }
 
@@ -372,7 +369,7 @@ export default function App() {
       const currentUser = userRefForInterval.current;
       if (!currentUser) return;
 
-      if (checkQuotaLock()) return;
+      if (false) return;
 
       const userRef = doc(db, 'users', currentUser.uid);
       
@@ -465,26 +462,6 @@ export default function App() {
     <Router>
       <div className="min-h-screen bg-black text-white pb-20">
         <AnimatePresence mode="wait">
-          {isSupabaseMissing && (
-            <motion.div
-              key="supabase-banner"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest py-1.5 text-center sticky top-0 z-[120] flex items-center justify-center gap-4 px-4"
-            >
-              <div className="flex items-center gap-2 flex-1 justify-center">
-                <span className="animate-pulse">⚠</span>
-                Maintenance Mode: Payment sync is currently manual. Verification may take longer.
-              </div>
-              <button 
-                onClick={() => setIsSupabaseMissing(false)}
-                className="bg-white text-indigo-600 px-3 py-1 rounded-sm text-[8px] font-black active:scale-95 transition-transform"
-              >
-                Dismiss
-              </button>
-            </motion.div>
-          )}
         </AnimatePresence>
 
         <Suspense fallback={

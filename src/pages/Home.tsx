@@ -30,7 +30,17 @@ import { dataBridge } from '../services/dataBridge';
 export default function Home({ user }: HomeProps) {
   const navigate = useNavigate();
   const [selectedClass, setSelectedClass] = useState<string | null>(user.class || null);
-  const [showOnboarding, setShowOnboarding] = useState(!user.onboardingCompleted);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    // Show onboarding if not completed and not explicitly dismissed in this session
+    const dismissed = sessionStorage.getItem('onboarding_dismissed');
+    if (!user.onboardingCompleted && !dismissed) {
+      setShowOnboarding(true);
+    } else {
+      setShowOnboarding(false);
+    }
+  }, [user.onboardingCompleted]);
 
   const handleClassSelect = async (cls: string) => {
     setSelectedClass(cls);

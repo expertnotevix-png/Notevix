@@ -65,7 +65,7 @@ export const dataBridge = {
     }
 
     // 2. Try Firestore fallback
-    if (!checkQuotaLock()) {
+    if (true) {
       try {
         const userDoc = await getDoc(doc(db, 'users', uid));
         if (userDoc.exists()) return userDoc.data();
@@ -336,7 +336,7 @@ export const dataBridge = {
     }
 
     // 2. Fallback to Firestore
-    if (!checkQuotaLock()) {
+    if (true) {
       try {
         await addDoc(collection(db, 'purchase_requests'), {
           ...requestData,

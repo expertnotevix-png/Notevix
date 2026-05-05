@@ -222,7 +222,7 @@ export default function Admin() {
   const fetchBanners = async () => {
     setLoading(true);
     try {
-      if (checkQuotaLock()) return;
+      if (false) return;
       const q = query(collection(db, 'promo_banners'), orderBy('createdAt', 'desc'));
       const snap = await getDocs(q);
       setBanners(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -358,7 +358,7 @@ export default function Admin() {
       }
 
       // 2. Try Firestore fallback (if Supabase failed or returned nothing)
-      if (docs.length === 0 && !checkQuotaLock()) {
+      if (docs.length === 0) {
         try {
           const q = query(collection(db, 'purchase_requests'), where('status', '==', 'approved'), orderBy('timestamp', 'desc'), limit(500));
           const snap = await getDocs(q);
@@ -465,7 +465,7 @@ export default function Admin() {
   const fetchRegistry = async () => {
     setLoading(true);
     try {
-      if (checkQuotaLock()) return;
+      if (false) return;
       const q = query(collection(db, 'transaction_id_registry'), orderBy('usedAt', 'desc'), limit(100));
       const snap = await getDocs(q);
       setRegistry(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -480,7 +480,7 @@ export default function Admin() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      if (checkQuotaLock()) return;
+      if (false) return;
       const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(100));
       const snap = await getDocs(q);
       setAllUsers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
@@ -564,7 +564,7 @@ export default function Admin() {
 
   const fetchChapters = async () => {
     try {
-      if (checkQuotaLock()) return;
+      if (false) return;
       const querySnapshot = await getDocs(collection(db, 'chapters'));
       const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Chapter));
       setChapters(data);
@@ -663,7 +663,7 @@ export default function Admin() {
       let sbData: any[] = [];
 
       // 1. Fetch from Firestore
-      if (!checkQuotaLock()) {
+      if (true) {
         try {
           const q = query(collection(db, 'purchase_requests'), orderBy('timestamp', 'desc'), limit(100));
           const snapshot = await getDocs(q);
@@ -1258,7 +1258,7 @@ export default function Admin() {
                       }
 
                       // 2. Firestore Sync
-                      if (!checkQuotaLock()) {
+                      if (true) {
                         try {
                           const q = query(collection(db, 'subject_resources'), where('isFree', '==', viewResourceMode === 'free'));
                           const snap = await getDocs(q);
@@ -1369,7 +1369,7 @@ export default function Admin() {
                     }
 
                     // 2. Sync to Firestore if not locked
-                    if (!checkQuotaLock()) {
+                    if (true) {
                       try {
                         await updateDoc(doc(db, 'subject_resources', editingResource.id), updateData);
                       } catch (e) {
@@ -1537,7 +1537,7 @@ export default function Admin() {
                               await supabase.from('subject_resources').delete().eq('id', res.id);
                             }
                             // 2. Firestore Sync
-                            if (!checkQuotaLock()) {
+                            if (true) {
                               await deleteDoc(doc(db, 'subject_resources', res.id));
                             }
                             toast.success("Deleted");
