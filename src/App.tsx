@@ -135,6 +135,14 @@ export default function App() {
           const supabaseProfile = await dataBridge.getProfile(firebaseUser.uid);
           if (supabaseProfile && isMounted) {
             const mergedProfile = { ...basicProfile, ...supabaseProfile };
+            
+            // FORCE ADMIN CHECK AGAIN AFTER MERGE
+            const isAdminSync = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(firebaseUser.email || '');
+            if (isAdminSync) {
+              mergedProfile.role = 'admin';
+              mergedProfile.isPremium = true;
+            }
+
             setUser(mergedProfile);
             localStorage.setItem(CACHED_USER_KEY, JSON.stringify(mergedProfile));
             localStorage.setItem(CACHED_USER_KEY + '_time', Date.now().toString());
@@ -190,9 +198,13 @@ export default function App() {
                   if (!quotaLockRef.current) updateDoc(userRef, { isPremium: true }).catch(() => {});
                 }
                 
-                // Ensure isAdmin is set
-                if (isAdmin) userData.isPremium = true;
-
+                // ENSURE ADMIN ROLE IS PERSISTENT
+                const isAdminEmail = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(userData.email || '');
+                if (isAdminEmail) {
+                  userData.role = 'admin';
+                  userData.isPremium = true;
+                }
+                
                 localStorage.setItem(CACHED_USER_KEY, JSON.stringify(userData));
                 localStorage.setItem(CACHED_USER_KEY + '_time', Date.now().toString());
                 
@@ -261,9 +273,13 @@ export default function App() {
               console.error("App: Firestore error fetching profile:", docError);
             }
             
-            const cached = localStorage.getItem(CACHED_USER_KEY);
             if (cached) {
               userData = JSON.parse(cached);
+              const isAdminEmail = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(userData.email || '');
+              if (isAdminEmail) {
+                userData.role = 'admin';
+                userData.isPremium = true;
+              }
             } else {
               userData = {
                 uid: firebaseUser.uid,
