@@ -425,23 +425,26 @@ export const dataBridge = {
   /**
    * Leaderboard
    */
-  async getLeaderboard(limitCount = 20) {
+  async getLeaderboard(limitCount = 30) {
     if (supabase) {
       try {
         const { data, error } = await supabase
           .from('profiles')
-          .select('id, display_name, photo_url, total_points, streak')
-          .order('total_points', { ascending: false })
+          .select('id, full_name, avatar_url, xp, streak, class_level')
+          .order('xp', { ascending: false })
           .limit(limitCount);
         
         if (data) return data.map(d => ({
           uid: d.id,
-          displayName: d.display_name,
-          photoURL: d.photo_url,
-          totalPoints: d.total_points,
-          streak: d.streak
+          displayName: d.full_name || 'Student',
+          photoURL: d.avatar_url || '',
+          totalPoints: d.xp || 0,
+          streak: d.streak || 0,
+          class: d.class_level
         }));
-      } catch (err) {}
+      } catch (err) {
+        console.error("Leaderboard fetch failed:", err);
+      }
     }
     return [];
   },
@@ -457,8 +460,8 @@ export const dataBridge = {
           .select(`
             *,
             profiles:user_id (
-              display_name,
-              photo_url
+              full_name,
+              avatar_url
             )
           `)
           .order('created_at', { ascending: false })
@@ -468,13 +471,15 @@ export const dataBridge = {
           return data.reverse().map((d: any) => ({
             id: d.id,
             userId: d.user_id,
-            userName: d.profiles?.display_name || 'Student',
-            userPhoto: d.profiles?.photo_url || '',
+            userName: d.profiles?.full_name || 'Student',
+            userPhoto: d.profiles?.avatar_url || '',
             content: d.content,
             timestamp: d.created_at
           }));
         }
-      } catch (err) {}
+      } catch (err) {
+        console.error("Chat fetch failed:", err);
+      }
     }
     return [];
   },

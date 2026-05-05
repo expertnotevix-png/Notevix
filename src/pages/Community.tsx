@@ -129,18 +129,18 @@ export default function Community({ user }: { user: UserProfile | null }) {
     // Set up real-time subscription for chat
     let channel: any = null;
     if (isLiveChat) {
-      import('../lib/supabase').then(({ supabase }) => {
+      const setupChatRealtime = async () => {
+        const { supabase } = await import('../lib/supabase');
         if (!supabase) return;
         channel = supabase
-          .channel('public:community_chat')
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'community_chat' }, (payload) => {
-             // Handle new message
-             const newMsg = payload.new;
-             // Need profile data for the new message
-             fetchMessagesManual(); // Simplest way to get the joined data
+          .channel(`community_chat_${Math.random().toString(36).substring(7)}`)
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'community_chat' }, () => {
+             // Re-fetch when any profile changes (points, streaks, etc.)
+             fetchMessagesManual(); 
           })
           .subscribe();
-      });
+      };
+      setupChatRealtime();
     }
 
     return () => {
@@ -169,15 +169,17 @@ export default function Community({ user }: { user: UserProfile | null }) {
 
     // Real-time for posts
     let postChannel: any = null;
-    import('../lib/supabase').then(({ supabase }) => {
+    const setupPostsRealtime = async () => {
+      const { supabase } = await import('../lib/supabase');
       if (!supabase) return;
       postChannel = supabase
-        .channel('public:posts')
+        .channel(`posts_updates_${Math.random().toString(36).substring(7)}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
           fetchPosts(); 
         })
         .subscribe();
-    });
+    };
+    setupPostsRealtime();
 
     return () => {
       if (postChannel) postChannel.unsubscribe();

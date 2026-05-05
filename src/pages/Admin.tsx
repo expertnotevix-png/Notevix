@@ -706,14 +706,18 @@ export default function Admin() {
     if (activeTab !== 'payments') return;
     
     let channel: any = null;
-    if (supabase) {
-      channel = supabase
-        .channel('public:purchase_requests')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_requests' }, () => {
-          fetchPurchaseRequests();
-        })
-        .subscribe();
-    }
+    const setupAdminRealtime = async () => {
+      const { supabase } = await import('../lib/supabase');
+      if (supabase) {
+        channel = supabase
+          .channel(`admin_payments_${Math.random().toString(36).substring(7)}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_requests' }, () => {
+            fetchPurchaseRequests();
+          })
+          .subscribe();
+      }
+    };
+    setupAdminRealtime();
 
     return () => {
       if (channel) channel.unsubscribe();

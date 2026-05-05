@@ -49,27 +49,30 @@ export default function Leaderboard({ user }: LeaderboardProps) {
     fetchLeaderboard();
 
     // Set up real-time subscription for leaderboard updates
-    let subscription: any = null;
+    let channel: any = null;
     
     const setupRealtime = async () => {
-      import('../lib/supabase').then(({ supabase }) => {
-        if (!supabase) return;
-        
-        subscription = supabase
-          .channel('public:profiles')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-            // Re-fetch when any profile changes (points, streaks, etc.)
-            fetchLeaderboard();
-          })
-          .subscribe();
-      });
+      const { supabase } = await import('../lib/supabase');
+      if (!supabase) return;
+      
+      // Use a unique channel name to avoid conflicts with other components
+      channel = supabase
+        .channel(`leaderboard_updates_${Math.random().toString(36).substring(7)}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+          fetchLeaderboard();
+        })
+        .subscribe((status: string) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('Leaderboard realtime subscribed');
+          }
+        });
     };
 
     setupRealtime();
 
     return () => {
-      if (subscription) {
-        subscription.unsubscribe();
+      if (channel) {
+        channel.unsubscribe();
       }
     };
   }, []);
