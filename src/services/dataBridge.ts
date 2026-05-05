@@ -129,9 +129,8 @@ export const dataBridge = {
         
         if (sortBy === 'latest') queryBuilder = queryBuilder.order('created_at', { ascending: false });
         else if (sortBy === 'upvoted') queryBuilder = queryBuilder.order('upvotes_count', { ascending: false });
-
-        const { data, error } = await queryBuilder.limit(limitCount);
         
+        const { data, error } = await queryBuilder.limit(limitCount);
         if (error) throw error;
         
         return (data || []).map(p => ({
@@ -145,8 +144,20 @@ export const dataBridge = {
           createdAt: p.created_at
         }));
       } catch (err) {
-        console.error("Posts fetch failed:", err);
+        console.warn("Supabase posts fetch failed, trying Firestore...");
       }
+    }
+
+    // Firestore Fallback
+    try {
+      let q = query(collection(db, 'posts'), where('status', '==', 'approved'), limit(limitCount));
+      if (subject !== 'All') q = query(q, where('subject', '==', subject));
+      if (classLevel !== 'All') q = query(q, where('class', '==', classLevel));
+      
+      const snap = await getDocs(q);
+      return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+    } catch (err) {
+      console.warn("Firestore posts fetch failed:", err);
     }
     return [];
   },
@@ -195,12 +206,23 @@ export const dataBridge = {
 
         return post;
       } catch (err) {
-        console.error("Supabase post creation failed:", err);
-        // Fallback to Firestore if needed or throw
-        throw err;
+        console.warn("Supabase post creation failed, falling back to Firestore:", err);
       }
     }
-    throw new Error("Supabase not initialized");
+
+    // Firestore Fallback
+    try {
+      const docRef = await addDoc(collection(db, 'posts'), {
+        author_id: uid,
+        ...postData,
+        status: 'approved',
+        createdAt: serverTimestamp()
+      });
+      return { id: docRef.id };
+    } catch (err) {
+      console.error("Firestore post creation failed:", err);
+      throw err;
+    }
   },
 
   /**
@@ -242,7 +264,18 @@ export const dataBridge = {
       }
     }
 
-    // Secondary Safety: Local Fallback (always works)
+    // 2. Try Firestore fallback
+    try {
+      const q = query(collection(db, 'subject_resources'), where('class', '==', classLevel));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectResource));
+      }
+    } catch (err) {
+      console.warn("Firestore resource fetch failed:", err);
+    }
+
+    // 3. Last Resort: Local JSON Fallback (always works)
     try {
       const response = await fetch('/data/resources.json');
       const jsonData = await response.json();

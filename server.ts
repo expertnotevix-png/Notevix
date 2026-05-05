@@ -313,6 +313,44 @@ async function startServer() {
     }
   });
 
+  // Gemini Proxy (for Browser-Safe AI calls including Vision)
+  app.post("/api/ai/gemini", async (req, res) => {
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+    if (!geminiKey) {
+      return res.status(500).json({ error: "Gemini API Key missing in environment." });
+    }
+
+    try {
+      const { prompt, system, isVision, imageData } = req.body;
+      const { GoogleGenAI } = await import("@google/genai");
+      const ai = new GoogleGenAI({ apiKey: geminiKey });
+      
+      let contents: any;
+      if (isVision && imageData) {
+        const base64Data = imageData.includes(",") ? imageData.split(",")[1] : imageData;
+        contents = [
+          { text: prompt },
+          { inlineData: { data: base64Data, mimeType: "image/jpeg" } }
+        ];
+      } else {
+        contents = prompt;
+      }
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: contents,
+        config: {
+          systemInstruction: system
+        }
+      });
+
+      res.json({ text: response.text });
+    } catch (error: any) {
+      console.error("[Gemini Proxy] Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

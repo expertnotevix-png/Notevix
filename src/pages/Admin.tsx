@@ -192,14 +192,20 @@ export default function Admin() {
         createdAt: new Date().toISOString()
       };
 
-      // STRICT Supabase for Resources
+      // STRICT Supabase for Resources (Primary)
       if (supabase) {
         const { error } = await supabase.from('subject_resources').insert([resourceData]);
         if (error) throw error;
         toast.success("Book Created (Saved to Supabase)!");
       } else {
-        toast.error("Supabase not configured. Cannot save premium resource.");
-        return;
+        // Fallback to Firestore
+        try {
+          await addDoc(collection(db, 'subject_resources'), resourceData);
+          toast.success("Book Created (Saved to Firestore - Supabase Not Configured)!");
+        } catch (e) {
+          toast.error("Failed to save to Firestore. Check quota.");
+          throw e;
+        }
       }
       setIsAddingResource(false);
       setResourceCoverPreview(null);
@@ -322,11 +328,26 @@ export default function Admin() {
     setLoading(true);
     try {
       let data = [];
-      // STRICT Supabase
+      // STRICT Supabase (Primary)
       if (supabase) {
-        const { data: sbData, error } = await supabase.from('subject_resources').select('*').order('subject', { ascending: true });
-        if (error) throw error;
-        data = sbData || [];
+        try {
+          const { data: sbData, error } = await supabase.from('subject_resources').select('*').order('subject', { ascending: true });
+          if (error) throw error;
+          data = sbData || [];
+        } catch (err) {
+          console.warn("Supabase resource fetch failed, trying Firestore...");
+        }
+      }
+      
+      // Firestore Fallback (if Supabase is missing or failed)
+      if (data.length === 0) {
+        try {
+          const q = query(collection(db, 'subject_resources'), orderBy('subject', 'asc'));
+          const snap = await getDocs(q);
+          data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        } catch (e) {
+          console.warn("Firestore resource fetch failed");
+        }
       }
       
       setSubjectResources(data);

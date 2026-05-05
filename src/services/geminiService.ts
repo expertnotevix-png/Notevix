@@ -306,57 +306,76 @@ export const geminiService = {
     const prompt = "Extract the Transaction ID and Amount from this receipt. Determine if the payment was successful.";
 
     try {
+      // 1. Try Server-Side Proxy First (Safest, handles hidden keys)
+      try {
+        const response = await fetch("/api/ai/gemini", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, system, isVision: true, imageData })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          return this.parsePaymentResult(data.text);
+        }
+      } catch (proxyErr) {
+        console.warn("Gemini Proxy failed, trying direct browser call if key exists...");
+      }
+
+      // 2. Browser-side Fallback (if VITE_GEMINI_API_KEY is present)
       const { apiKey } = getAI();
-      if (!apiKey) throw new Error("Our AI verification engine is currently offline. Please manually enter details or wait.");
+      if (!apiKey) throw new Error("Verification engine offline. Please finish Supabase/Gemini setup in Settings.");
 
       const ai = new GoogleGenAI({ apiKey });
-
-      // Clean base64
       const base64Data = imageData.includes(',') ? imageData.split(',')[1] : imageData;
       
       const response = await ai.models.generateContent({
         model: GEMINI_MODEL,
-        config: {
-          systemInstruction: system
-        },
+        config: { systemInstruction: system },
         contents: [
           { text: prompt },
           { inlineData: { data: base64Data, mimeType: "image/jpeg" } }
         ]
       });
 
-      const res = response.text || "";
-      console.log("Gemini Forensic RAW:", res);
-
-      // RESILIENT PARSING
-      const jsonMatch = res.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-         // Regex fallback for high-precision extraction
-         const idMatch = res.match(/(FMPIB[A-Z0-9]+|T[0-9]{15,}|[0-9]{12})/i);
-         if (idMatch) {
-           return {
-             isValid: true,
-             transactionId: idMatch[0].toUpperCase(),
-             amount: 0
-           };
-         }
-         throw new Error("Forensic engine couldn't find a clear UTR/Transaction ID. Please try a clearer screenshot.");
-      }
-      
-      const data = JSON.parse(jsonMatch[0]);
-
-      return {
-        isValid: Boolean(data.isValid),
-        transactionId: String(data.transactionId || "").toUpperCase().replace(/[^A-Z0-9]/g, ''),
-        amount: Number(data.amount || 0),
-        error: data.error
-      };
+      return this.parsePaymentResult(response.text || "");
     } catch (error: any) {
       console.error("Forensic Hardware Failure:", error);
       return { 
         isValid: false, 
         error: error.message || "Forensic scanning failed. Please try again with a clearer receipt screenshot." 
       };
+    }
+  },
+
+  parsePaymentResult(res: string): { isValid: boolean, transactionId?: string, amount?: number, error?: string } {
+    console.log("Gemini Forensic RAW:", res);
+    
+    // RESILIENT PARSING
+    const jsonMatch = res.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+       // Regex fallback for high-precision extraction
+       const idMatch = res.match(/(FMPIB[A-Z0-9]+|T[0-9]{15,}|[0-9]{12})/i);
+       if (idMatch) {
+         return {
+           isValid: true,
+           transactionId: idMatch[0].toUpperCase(),
+           amount: 0
+         };
+       }
+       throw new Error("Forensic engine couldn't find a clear UTR/Transaction ID. Please try a clearer screenshot.");
+    }
+    
+    try {
+      const data = JSON.parse(jsonMatch[0].replace(/\\n/g, ''));
+      return {
+        isValid: Boolean(data.isValid),
+        transactionId: String(data.transactionId || "").toUpperCase().replace(/[^A-Z0-9]/g, ''),
+        amount: Number(data.amount || 0),
+        error: data.error
+      };
+    } catch (e) {
+      throw new Error("Failed to parse AI forensic data.");
     }
   },
 
