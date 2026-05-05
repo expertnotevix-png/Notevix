@@ -185,11 +185,11 @@ export default function Admin() {
         class: resourceFormData.class,
         price: Number(resourceFormData.price) || 0,
         description: resourceFormData.description || 'Premium curated digital resources for board prep.',
-        coverUrl: resourceCoverPreview || '',
-        driveLink: resourceFormData.driveLink || '',
+        cover_url: resourceCoverPreview || '',
+        drive_link: resourceFormData.driveLink || '',
         features: ['Chapter-wise Notes', 'PYQs Included', 'AI Doubt Support'],
-        isFree: Number(resourceFormData.price) === 0,
-        createdAt: new Date().toISOString()
+        is_free: Number(resourceFormData.price) === 0,
+        created_at: new Date().toISOString()
       };
 
       // STRICT Supabase for Resources (Primary)
@@ -217,9 +217,14 @@ export default function Admin() {
         driveLink: ''
       });
       fetchSubjectResources();
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to create book.");
+    } catch (error: any) {
+      console.error("Resource Creation Error:", error);
+      // Extra error parsing for Supabase schema issues
+      const msg = error.message || "Failed to create book.";
+      toast.error(`Database Error: ${msg}`, { duration: 6000 });
+      if (msg.includes('relation "subject_resources" does not exist')) {
+        toast.info("FIX: Go to Supabase SQL Editor and run the table creation SQL I just provided.", { duration: 10000 });
+      }
     } finally {
       setLoading(false);
     }
@@ -333,7 +338,13 @@ export default function Admin() {
         try {
           const { data: sbData, error } = await supabase.from('subject_resources').select('*').order('subject', { ascending: true });
           if (error) throw error;
-          data = sbData || [];
+          data = (sbData || []).map((d: any) => ({
+            ...d,
+            coverUrl: d.cover_url,
+            driveLink: d.drive_link,
+            isFree: d.is_free,
+            createdAt: d.created_at
+          }));
         } catch (err) {
           console.warn("Supabase resource fetch failed, trying Firestore...");
         }
@@ -753,43 +764,52 @@ export default function Admin() {
     }
   };
 
-  // Real-time listener for purchase requests
+  // Real-time listener for purchase requests and profiles
   useEffect(() => {
-    if (activeTab !== 'payments') return;
+    if (activeTab !== 'payments' && activeTab !== 'users') return;
     
-    let channel: any = null;
+    const channels: any[] = [];
     const setupAdminRealtime = async () => {
       const { supabase } = await import('../lib/supabase');
       if (supabase) {
-        // Purchase Requests
-        channel = supabase
-          .channel(`admin_payments_${Math.random().toString(36).substring(7)}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_requests' }, () => {
-            fetchPurchaseRequests();
-            fetchAnalytics();
-          })
-          .subscribe();
+        // Purchase Requests (Tab: payments)
+        if (activeTab === 'payments') {
+          const payChannel = supabase
+            .channel(`admin_payments_${Math.random().toString(36).substring(7)}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_requests' }, () => {
+              fetchPurchaseRequests();
+              fetchAnalytics();
+            })
+            .subscribe();
+          channels.push(payChannel);
+        }
 
-        // Profiles / Users
-        supabase
-          .channel('admin_users')
+        // Profiles / Users (Tab: users or payments for analytics)
+        const userChannel = supabase
+          .channel(`admin_users_${Math.random().toString(36).substring(7)}`)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
             if (activeTab === 'users') fetchUsers();
-            // Upate active students count optimistically or fetch
+            
+            // Analytics update (Live Active Users badge)
             const checkActiveUsers = async () => {
               const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-              const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).gt('updated_at', fiveMinutesAgo);
-              setActiveUsers(count || 0);
+              try {
+                const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).gt('updated_at', fiveMinutesAgo);
+                setActiveUsers(count || 0);
+              } catch (e) {
+                console.warn("Active users count fetch failed", e);
+              }
             };
             checkActiveUsers();
           })
           .subscribe();
+        channels.push(userChannel);
       }
     };
     setupAdminRealtime();
 
     return () => {
-      if (channel) channel.unsubscribe();
+      channels.forEach(ch => ch.unsubscribe());
     };
   }, [activeTab]);
 
@@ -1457,24 +1477,34 @@ export default function Admin() {
                   e.preventDefault();
                   setLoading(true);
                   try {
-                    const updateData = {
-                      ...resourceFormData,
+                    const sbUpdateData = {
+                      subject: resourceFormData.subject,
+                      class: resourceFormData.class,
                       price: Number(resourceFormData.price) || 0,
-                      isFree: Number(resourceFormData.price) === 0,
-                      coverUrl: resourceCoverPreview || editingResource.coverUrl,
-                      updatedAt: new Date().toISOString()
+                      description: resourceFormData.description,
+                      cover_url: resourceCoverPreview || editingResource.coverUrl,
+                      drive_link: resourceFormData.driveLink,
+                      is_free: Number(resourceFormData.price) === 0,
+                      updated_at: new Date().toISOString()
                     };
 
                     // 1. Update Supabase
                     if (supabase) {
-                      const { error } = await supabase.from('subject_resources').update(updateData).eq('id', editingResource.id);
+                      const { error } = await supabase.from('subject_resources').update(sbUpdateData).eq('id', editingResource.id);
                       if (error) throw error;
                     }
 
                     // 2. Sync to Firestore if not locked
                     if (true) {
                       try {
-                        await updateDoc(doc(db, 'subject_resources', editingResource.id), updateData);
+                        const fsUpdateData = {
+                          ...resourceFormData,
+                          price: Number(resourceFormData.price) || 0,
+                          isFree: Number(resourceFormData.price) === 0,
+                          coverUrl: resourceCoverPreview || editingResource.coverUrl,
+                          updatedAt: new Date().toISOString()
+                        };
+                        await updateDoc(doc(db, 'subject_resources', editingResource.id), fsUpdateData);
                       } catch (e) {
                         console.warn("Firestore edit sync failed (quota)");
                       }

@@ -185,3 +185,22 @@ CREATE TABLE public.community_stats (
 
 ALTER TABLE public.community_stats ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Anyone can read stats" ON public.community_stats FOR SELECT USING (true);
+
+-- 11. Subject Resources
+CREATE TABLE IF NOT EXISTS public.subject_resources (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    subject TEXT NOT NULL,
+    class TEXT NOT NULL,
+    price NUMERIC DEFAULT 0,
+    description TEXT,
+    cover_url TEXT,
+    drive_link TEXT,
+    is_free BOOLEAN DEFAULT FALSE,
+    features JSONB DEFAULT '["Chapter-wise Notes", "PYQs Included", "AI Doubt Support"]',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.subject_resources ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public read resources" ON public.subject_resources FOR SELECT USING (true);
+CREATE POLICY "Admin write resources" ON public.subject_resources FOR ALL USING (auth.jwt() ->> 'email' = 'expertraj8@gmail.com');

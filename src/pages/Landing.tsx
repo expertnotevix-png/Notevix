@@ -95,7 +95,7 @@ export default function Landing() {
       
       if (supabase) {
         channel = supabase
-          .channel(`resources_landing_${activeClass}`)
+          .channel(`resources_landing_${activeClass}_${Math.random().toString(36).substring(7)}`)
           .on('postgres_changes', { 
             event: '*', 
             schema: 'public', 

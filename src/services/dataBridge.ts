@@ -258,7 +258,20 @@ export const dataBridge = {
           .eq('class', classLevel);
         
         if (error) throw error;
-        if (data && data.length > 0) return data;
+        if (data && data.length > 0) {
+          return data.map((d: any) => ({
+            id: d.id,
+            subject: d.subject,
+            class: d.class,
+            price: d.price,
+            description: d.description,
+            coverUrl: d.cover_url,
+            driveLink: d.drive_link,
+            isFree: d.is_free,
+            features: d.features,
+            createdAt: d.created_at
+          })) as SubjectResource[];
+        }
       } catch (err) {
         console.error("Supabase resource fetch failed:", err);
       }
