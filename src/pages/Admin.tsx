@@ -1376,7 +1376,7 @@ export default function Admin() {
                     try {
                       // 1. Supabase Delete
                       if (supabase) {
-                        const { error } = await supabase.from('subject_resources').delete().eq('isFree', viewResourceMode === 'free');
+                        const { error } = await supabase.from('subject_resources').delete().eq('is_free', viewResourceMode === 'free');
                         if (error) throw error;
                       }
 
