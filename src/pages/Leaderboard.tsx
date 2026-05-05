@@ -31,7 +31,7 @@ export default function Leaderboard({ user }: LeaderboardProps) {
           displayName: d.displayName || 'Student',
           photoURL: d.photoURL || '',
           totalPoints: d.totalPoints || 0,
-          streak: d.streak || 0
+          streakCount: d.streak || 0
         })) as any[];
 
         setTopUsers(mappedData);

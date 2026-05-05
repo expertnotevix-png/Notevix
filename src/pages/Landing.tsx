@@ -86,16 +86,29 @@ export default function Landing() {
     };
     fetchResources();
     
-    // Also keep real-time if firebase is working, but it might fail so we rely on fetchResources
-    const q = query(collection(db, 'subject_resources'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const filtered = data.filter((r: any) => r.class === activeClass);
-      if (filtered.length > 0) setResources(filtered);
-    }, (error) => {
-      console.warn("Firestore snapshot failed, falling back to one-time data fetch");
-    });
-    return () => unsubscribe();
+    // Real-time for resources from Supabase
+    let channel: any = null;
+    const setupRealtime = async () => {
+      const { supabase } = await import('../lib/supabase');
+      if (!supabase) return;
+      
+      channel = supabase
+        .channel(`resources_landing_${activeClass}`)
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'subject_resources',
+          filter: `class=eq.${activeClass}`
+        }, () => {
+          fetchResources();
+        })
+        .subscribe();
+    };
+
+    setupRealtime();
+    return () => {
+      if (channel) channel.unsubscribe();
+    };
   }, [activeClass]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
