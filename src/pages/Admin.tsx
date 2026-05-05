@@ -677,6 +677,37 @@ export default function Admin() {
     }
   };
 
+  const handleAIVerify = async (req: PurchaseRequest) => {
+    if (!req.screenshotUrl) {
+      toast.error("No screenshot provided for this request.");
+      return;
+    }
+    
+    setLoading(true);
+    const toastId = toast.loading("AI is analyzing the receipt...");
+    try {
+      const result = await geminiService.verifyPaymentScreenshot(req.screenshotUrl);
+      
+      if (result.isValid) {
+        toast.dismiss(toastId);
+        toast.success(`AI Verified: ₹${result.amount} Match! Transaction: ${result.transactionId}`, { duration: 6000 });
+        
+        // Show a confirm dialog to auto-approve
+        if (window.confirm(`AI recommends APPROVING this. \n\nAmount Found: ₹${result.amount}\nID Found: ${result.transactionId}\nRequest ID: ${req.transactionId}\n\nProceed with Auto-Approval?`)) {
+          await handleApprovePurchase(req);
+        }
+      } else {
+        toast.dismiss(toastId);
+        toast.error(`AI Rejection: ${result.error || "Receipt looks invalid or incomplete."}`, { duration: 8000 });
+      }
+    } catch (error: any) {
+      toast.dismiss(toastId);
+      toast.error("AI Audit failed: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchPurchaseRequests = async () => {
     setLoading(true);
     try {
@@ -730,10 +761,27 @@ export default function Admin() {
     const setupAdminRealtime = async () => {
       const { supabase } = await import('../lib/supabase');
       if (supabase) {
+        // Purchase Requests
         channel = supabase
           .channel(`admin_payments_${Math.random().toString(36).substring(7)}`)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_requests' }, () => {
             fetchPurchaseRequests();
+            fetchAnalytics();
+          })
+          .subscribe();
+
+        // Profiles / Users
+        supabase
+          .channel('admin_users')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+            if (activeTab === 'users') fetchUsers();
+            // Upate active students count optimistically or fetch
+            const checkActiveUsers = async () => {
+              const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+              const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).gt('updated_at', fiveMinutesAgo);
+              setActiveUsers(count || 0);
+            };
+            checkActiveUsers();
           })
           .subscribe();
       }
@@ -1832,16 +1880,45 @@ export default function Admin() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      <div className="space-y-1">
-                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Plan Details</p>
-                        <h5 className="font-bold text-xl">{req.planName}</h5>
-                        <p className="text-2xl font-black text-green-500 tracking-tighter">₹{req.amount}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Transaction Snapshot</p>
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/5 font-mono text-sm text-purple-400 break-all">
-                          {req.transactionId}
+                      <div className="space-y-4">
+                        <div className="space-y-1">
+                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Plan Details</p>
+                          <h5 className="font-bold text-xl">{req.planName}</h5>
+                          <p className="text-2xl font-black text-green-500 tracking-tighter">₹{req.amount}</p>
                         </div>
+                        {req.screenshotUrl && (
+                          <div className="space-y-2">
+                             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Payment Screenshot</p>
+                             <div className="relative group aspect-[9/16] max-h-[300px] w-full rounded-2xl overflow-hidden border border-white/10 bg-black">
+                                <img src={req.screenshotUrl} className="w-full h-full object-contain" />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                   <button 
+                                     onClick={() => window.open(req.screenshotUrl, '_blank')}
+                                     className="bg-white text-black px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest"
+                                   >
+                                     View Full Size
+                                   </button>
+                                </div>
+                             </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-4">
+                        <div className="space-y-1">
+                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Transaction Snapshot</p>
+                          <div className="bg-white/5 p-4 rounded-2xl border border-white/5 font-mono text-sm text-purple-400 break-all">
+                            {req.transactionId}
+                          </div>
+                        </div>
+                        {req.status === 'pending' && req.screenshotUrl && (
+                          <button
+                            onClick={() => handleAIVerify(req)}
+                            className="w-full flex items-center justify-center gap-3 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all active:scale-95"
+                          >
+                            <Zap className="w-4 h-4" />
+                            AI Audit Shortcut
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -2114,10 +2191,15 @@ export default function Admin() {
             <div 
               onClick={() => {
                 if (!supabase) {
-                  toast.info("Supabase requires 'VITE_SUPABASE_URL' and 'VITE_SUPABASE_ANON_KEY' in Settings.", { duration: 5000 });
+                  toast.info(
+                    "Prod Sync Required: Since you're using GitHub/Firebase, ensure VITE_SUPABASE_URL is added to your GitHub Secrets and exposed in your build workflow. Vite bakes these into the app at build-time.", 
+                    { duration: 8000 }
+                  );
+                } else {
+                  toast.success("Supabase is live! Notes will sync to your external database.");
                 }
               }}
-              className="flex flex-col items-end pr-3 sm:pr-6 border-r border-white/10 cursor-help"
+              className="flex flex-col items-end pr-3 sm:pr-6 border-r border-white/10 cursor-pointer active:scale-95 transition-transform"
             >
                <div className="flex items-center gap-2 text-emerald-400 font-medium">
                  <div className={`w-2 h-2 rounded-full ${supabase ? 'bg-green-500 animate-pulse' : 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]'}`} />
@@ -2126,7 +2208,7 @@ export default function Admin() {
                  </span>
                </div>
                <span className="text-[9px] sm:text-[10px] text-gray-500 uppercase font-bold tracking-widest leading-none mt-1">
-                 {supabase ? 'Production DB Active' : 'Check Settings / Secrets'}
+                 {supabase ? 'Production DB Active' : 'Tap to See Fix'}
                </span>
             </div>
             <div className="hidden sm:flex flex-col items-end pr-6 border-r border-white/10">

@@ -291,17 +291,18 @@ export const geminiService = {
   async verifyPaymentScreenshot(imageData: string): Promise<{ isValid: boolean, transactionId?: string, amount?: number, error?: string }> {
     const system = `You are the NoteVix Forensic AUDITOR. You are an expert at reading Indian payment receipts (GPay, PhonePe, Paytm, BHIM, Amazon Pay).
     
-    TRAINING DATA:
+    TRAINING DATA & PATTERNS:
     1. PhonePe: Usually has a Transaction ID starting with 'T' followed by 20+ digits (e.g., T2405...).
     2. GPay (Google Pay): Always has a 12-digit UTR number (e.g., 4152...).
     3. Paytm: Has a 'Wallet Txn ID' or 'Bank Ref No' (e.g., 4587...).
     4. Success Indicators: Large Green Checkmark, "Payment Successful", "Money sent", "Paid successfully".
     
     CRITICAL INSTRUCTIONS:
-    - EXTRACT "transactionId": Prioritize UTR (12 digits) or alphanumeric ID (T..., FMPIB...).
-    - EXTRACT "amount": Look for ₹ or Rs.
-    - VALIDATE: Only set isValid: true if you see clear success indicators.
-    - RETURN: Only raw JSON. No markdown. No text.`;
+    - IDENTIFY STATUS: Valid only if "Success", "Completed", or similar terminal state. "Processing/Pending" = invalid.
+    - EXTRACT "transactionId": Prioritize UTR (usually 12 digits) or alphanumeric ID. Remove spaces.
+    - EXTRACT "amount": Look for ₹ or Rs. Numeric only.
+    - FORGERY CHECK: If fonts or alignment looks fake or manipulated, set isValid: false.
+    - OUTPUT: Only return raw JSON: {"isValid": boolean, "transactionId": string, "amount": number, "error"?: string}`;
 
     const prompt = "Extract the Transaction ID and Amount from this receipt. Determine if the payment was successful.";
 

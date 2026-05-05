@@ -23,22 +23,64 @@ export default function Leaderboard({ user }: LeaderboardProps) {
     const fetchLeaderboard = async () => {
       try {
         setLoading(true);
-        const data = await dataBridge.getLeaderboard(30);
         
-        // Map dataBridge response back to UserProfile format for UI
-        const mappedData = data.map((d: any) => ({
-          ...d,
-          displayName: d.displayName || 'Student',
-          photoURL: d.photoURL || '',
-          totalPoints: d.totalPoints || 0,
-          streakCount: d.streak || 0
-        })) as any[];
+        // 1. Fetch from Supabase (Primary Truth)
+        let sbData: any[] = [];
+        try {
+          const data = await dataBridge.getLeaderboard(50);
+          sbData = data.map((d: any) => ({
+            ...d,
+            displayName: d.displayName || 'Student',
+            photoURL: d.photoURL || '',
+            totalPoints: d.totalPoints || 0,
+            streakCount: d.streak || 0,
+            source: 'supabase'
+          }));
+        } catch (e) {
+          console.warn("Supabase leaderboard fetch failed:", e);
+        }
 
-        setTopUsers(mappedData);
-        localStorage.setItem(CACHED_LEADERBOARD_KEY, JSON.stringify(mappedData));
+        // 2. Fetch from Firestore (Fallback/Legacy)
+        let fsData: any[] = [];
+        try {
+          const { collection, getDocs, query, orderBy, limit } = await import('firebase/firestore');
+          const { db } = await import('../components/firebase');
+          const q = query(collection(db, 'users'), orderBy('totalPoints', 'desc'), limit(50));
+          const snap = await getDocs(q);
+          fsData = snap.docs.map(doc => {
+            const d = doc.data();
+            return {
+              uid: d.uid || doc.id,
+              displayName: d.displayName || 'Student',
+              photoURL: d.photoURL || '',
+              totalPoints: d.totalPoints || 0,
+              streakCount: d.streakCount || d.streak?.currentCount || 0,
+              class: d.class || '?',
+              source: 'firestore'
+            };
+          });
+        } catch (e) {
+          console.warn("Firestore leaderboard fetch failed:", e);
+        }
+
+        // 3. Merge and De-duplicate by UID (Supabase version takes priority)
+        const userMap = new Map();
+        
+        // Add Firestore users first
+        fsData.forEach(u => userMap.set(u.uid, u));
+        // Overwrite/Add Supabase users (they are the modern truth)
+        sbData.forEach(u => userMap.set(u.uid, u));
+
+        // Sort by points
+        const mergedData = Array.from(userMap.values())
+          .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0))
+          .slice(0, 30);
+
+        setTopUsers(mergedData);
+        localStorage.setItem(CACHED_LEADERBOARD_KEY, JSON.stringify(mergedData));
         localStorage.setItem(CACHED_LEADERBOARD_KEY + '_time', Date.now().toString());
       } catch (error) {
-        console.warn("Leaderboard fetch failed:", error);
+        console.warn("Leaderboard merge failed:", error);
         const cached = localStorage.getItem(CACHED_LEADERBOARD_KEY);
         if (cached) setTopUsers(JSON.parse(cached));
       } finally {
