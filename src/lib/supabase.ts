@@ -15,8 +15,11 @@ const isValidUrl = (url: string) => {
 
 if (!supabaseUrl || !supabaseAnonKey || !isValidUrl(supabaseUrl)) {
   console.warn("Supabase configuration is missing or invalid. Check your VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Settings.");
+  console.log("DEBUG - Supabase URL found:", supabaseUrl ? "YES (masked)" : "NO");
+  console.log("DEBUG - Supabase Anon Key found:", supabaseAnonKey ? "YES (masked)" : "NO");
+  
   if (supabaseUrl && !isValidUrl(supabaseUrl)) {
-    console.error("Invalid Supabase URL format:", supabaseUrl);
+    console.error("Invalid Supabase URL format. It should start with https:// - Found:", supabaseUrl);
   }
 } else {
   console.log("Supabase client initialized successfully at", supabaseUrl);

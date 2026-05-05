@@ -2110,17 +2110,26 @@ export default function Admin() {
             <h1 className="text-xl font-black tracking-tight text-white capitalize">{activeTab} Interface</h1>
           </div>
 
-          <div className="flex items-center gap-6">
-            <div className="hidden md:flex flex-col items-end pr-6 border-r border-white/10">
+          <div className="flex items-center gap-3 sm:gap-6">
+            <div 
+              onClick={() => {
+                if (!supabase) {
+                  toast.info("Supabase requires 'VITE_SUPABASE_URL' and 'VITE_SUPABASE_ANON_KEY' in Settings.", { duration: 5000 });
+                }
+              }}
+              className="flex flex-col items-end pr-3 sm:pr-6 border-r border-white/10 cursor-help"
+            >
                <div className="flex items-center gap-2 text-emerald-400 font-medium">
-                 <div className={`w-2 h-2 rounded-full ${supabase ? 'bg-green-500 animate-pulse' : 'bg-amber-500'}`} />
-                 <span className={`text-[10px] uppercase font-black tracking-widest ${supabase ? 'text-green-500' : 'text-amber-500'}`}>
+                 <div className={`w-2 h-2 rounded-full ${supabase ? 'bg-green-500 animate-pulse' : 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]'}`} />
+                 <span className={`text-[9px] sm:text-[10px] uppercase font-black tracking-widest ${supabase ? 'text-green-500' : 'text-amber-500 animate-pulse'}`}>
                    {supabase ? 'Supabase Sync ON' : 'Supabase Sync OFF'}
                  </span>
                </div>
-               <span className="text-[10px] text-gray-500 uppercase font-bold tracking-widest leading-none mt-1">External Database</span>
+               <span className="text-[9px] sm:text-[10px] text-gray-500 uppercase font-bold tracking-widest leading-none mt-1">
+                 {supabase ? 'Production DB Active' : 'Check Settings / Secrets'}
+               </span>
             </div>
-            <div className="hidden md:flex flex-col items-end pr-6 border-r border-white/10">
+            <div className="hidden sm:flex flex-col items-end pr-6 border-r border-white/10">
                <div className="flex items-center gap-2 text-emerald-400">
                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
                  <span className="text-xl font-black tabular-nums">{activeUsers}</span>
