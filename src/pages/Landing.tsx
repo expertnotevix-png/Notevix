@@ -110,7 +110,7 @@ export default function Landing() {
         // Fallback to Firestore listener
         const q = query(collection(db, 'subject_resources'), where('class', '==', activeClass));
         unsubscribeFirestore = onSnapshot(q, (snap) => {
-          const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const data = snap.docs.map(doc => dataBridge.mapResource({ id: doc.id, ...doc.data() }));
           setResources(data);
         }, (err) => {
           console.warn("Firestore landing listener failed:", err);

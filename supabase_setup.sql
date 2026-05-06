@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     streak INTEGER DEFAULT 0,
     focus_minutes INTEGER DEFAULT 0,
     is_premium BOOLEAN DEFAULT FALSE,
+    plan_type TEXT,
     role TEXT DEFAULT 'student',
     referral_code TEXT,
     referral_count INTEGER DEFAULT 0,

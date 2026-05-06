@@ -70,7 +70,8 @@ export const dataBridge = {
              photoURL: data.avatar_url,
              class: data.class_level,
              totalPoints: data.xp,
-             isPremium: data.is_premium || isAdmin,
+             isPremium: !!data.is_premium || isAdmin,
+             planType: data.plan_type,
              unlockedResources: data.unlocked_resources || [],
              unlockedClasses: data.unlocked_classes || [],
              streak: { currentCount: data.streak || 0 }
@@ -89,11 +90,13 @@ export const dataBridge = {
         if (!result) {
           result = {
             ...userData,
-            uid: uid
+            uid: uid,
+            isPremium: !!userData.isPremium
           };
         } else {
-          // Merge logic: Take premium and unlocked counts from Firestore too if they are more comprehensive
-          result.isPremium = result.isPremium || userData.isPremium || false;
+          // Merge logic: Take premium status and unlocked resources from Firestore too
+          result.isPremium = result.isPremium || !!userData.isPremium;
+          if (!result.planType && userData.planType) result.planType = userData.planType;
           
           const fsResources = userData.unlockedResources || [];
           result.unlockedResources = Array.from(new Set([...(result.unlockedResources || []), ...fsResources]));
@@ -294,18 +297,7 @@ export const dataBridge = {
           .eq('class', classLevel);
         
         if (!error && data && data.length > 0) {
-          return data.map((d: any) => ({
-            id: d.id,
-            subject: d.subject,
-            class: d.class,
-            price: d.price || 39,
-            description: d.description,
-            coverUrl: d.cover_url,
-            driveLink: d.drive_link,
-            isFree: d.is_free,
-            features: d.features,
-            createdAt: d.created_at
-          })) as SubjectResource[];
+          return data.map((d: any) => this.mapResource(d)) as SubjectResource[];
         }
       } catch (err) {
         console.warn("Supabase resource fetch failed:", err);
@@ -562,7 +554,7 @@ export const dataBridge = {
         let q = supabase.from('subject_resources').select('*').eq('class', classLevel);
         if (subjectId !== 'all') q = q.eq('subject', subjectId);
         const { data } = await q;
-        if (data && data.length > 0) return data;
+        if (data) return data.map((d: any) => this.mapResource(d));
       } catch (err) {}
     }
     return [];
@@ -572,7 +564,7 @@ export const dataBridge = {
     if (supabase) {
       try {
         const { data } = await supabase.from('subject_resources').select('*').eq('id', noteId).maybeSingle();
-        if (data) return data;
+        if (data) return this.mapResource(data);
       } catch (err) {}
     }
     return null;
@@ -586,7 +578,7 @@ export const dataBridge = {
           .select('*')
           .or(`title.ilike.%${term}%,subject.ilike.%${term}%`)
           .limit(20);
-        if (data) return data;
+        if (data) return data.map((d: any) => this.mapResource(d));
       } catch (err) {}
     }
     return [];
@@ -597,10 +589,30 @@ export const dataBridge = {
     if (supabase) {
       try {
         const { data } = await supabase.from('subject_resources').select('*').in('id', noteIds);
-        if (data) return data;
+        if (data) return data.map((d: any) => this.mapResource(d));
       } catch (err) {}
     }
     return [];
+  },
+
+  // Helper for consistent mapping
+  mapResource(d: any): SubjectResource {
+    return {
+      id: d.id,
+      subject: d.subject,
+      class: d.class,
+      price: d.price || 39,
+      description: d.description,
+      coverUrl: d.cover_url,
+      driveLink: d.drive_link,
+      onePageNotesUrl: d.one_page_notes_url,
+      fullNotesUrl: d.full_notes_url,
+      importantQuestionsUrl: d.important_questions_url,
+      examOrientedQuestionsUrl: d.exam_oriented_questions_url,
+      isFree: d.is_free === true || d.isFree === true || false,
+      features: Array.isArray(d.features) ? d.features : (typeof d.features === 'string' ? JSON.parse(d.features) : []),
+      createdAt: d.created_at
+    };
   },
 
   async toggleSavedNote(uid: string, currentSavedNotes: string[], noteId: string) {

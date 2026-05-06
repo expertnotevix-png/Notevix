@@ -110,22 +110,27 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
   const isUnlocked = (res: SubjectResource) => {
     // 0. Free resources are always unlocked
-    if (res.isFree) return true;
+    // Use strict check: must be explicitly true
+    if (res.isFree === true) return true;
 
     if (!user) return false;
     
     // 1. Admin Overrides - Use absolute email check as backup
     const adminEmails = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'];
-    const isAdmin = adminEmails.includes(user.email?.toLowerCase());
+    const userEmail = user.email?.toLowerCase();
+    const isAdmin = adminEmails.includes(userEmail);
     if (user.role === 'admin' || isAdmin) return true;
     
     // 2. Subscription Check (Master access)
-    // If user is premium, they get everything. planType check was too restrictive.
-    if (user.isPremium) return true;
+    // Only grant blanket access if the user is premium AND has a recurring plan type (not just a single purchase)
+    if (user.isPremium && (user.planType === 'monthly_sub' || user.planType === 'plus_sub' || user.role === 'admin')) {
+      return true;
+    }
     
     // 3. Class-wide Master Pack Check
     const unlockedClasses = user.unlockedClasses || [];
-    if (unlockedClasses.some(c => String(c) === String(res.class))) return true;
+    const resClass = String(res.class);
+    if (unlockedClasses.some(c => String(c) === resClass)) return true;
     
     // 4. Individual Resource Check
     const unlockedResources = user.unlockedResources || [];
