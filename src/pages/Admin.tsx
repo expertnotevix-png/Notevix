@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp, writeBatch, getCountFromServer } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, checkQuotaLock, clearQuotaLock } from '../components/firebase';
+import { dataBridge } from '../services/dataBridge';
 import { geminiService } from '../services/geminiService';
 import { Chapter, Message, Notification, PurchaseRequest, UserProfile, ValidPayment, TransactionLedger } from '../types';
 import { 
@@ -53,6 +54,10 @@ export default function Admin() {
   const [analyticsData, setAnalyticsData] = useState({
     totalRevenue: 0,
     salesCount: 0,
+    totalUsers: 0,
+    premiumUsers: 0,
+    newUsersToday: 0,
+    activeToday: 0,
     dailyRevenue: [] as any[],
     planDistribution: [] as any[],
   });
@@ -111,6 +116,18 @@ export default function Admin() {
     
     if (txId && whatsapp) {
       try {
+        // Sync to Supabase if available
+        if (supabase) {
+          const { error } = await supabase.from('valid_payments').insert([{
+            transaction_id: txId.trim(),
+            whatsapp: whatsapp.trim(),
+            amount: Number(amount) || 0,
+            is_used: false,
+            created_at: new Date().toISOString()
+          }]);
+          if (error) console.warn("Supabase whitelist sync failed:", error);
+        }
+
         await addDoc(collection(db, 'valid_payments'), {
           transactionId: txId.trim(),
           whatsapp: whatsapp.trim(),
@@ -424,7 +441,10 @@ export default function Admin() {
     try {
       let docs: any[] = [];
       
-      // 1. Try Supabase for payments (Primary)
+      // 1. Fetch User Stats (Total, Premium, New) from Supabase
+      const stats = await dataBridge.getAdminStats();
+      
+      // 2. Try Supabase for payments (Primary)
       if (supabase) {
         try {
           const { data, error } = await supabase
@@ -438,7 +458,7 @@ export default function Admin() {
         }
       }
 
-      // 2. Try Firestore fallback (if Supabase failed or returned nothing)
+      // 3. Try Firestore fallback (if Supabase failed or returned nothing)
       if (docs.length === 0) {
         try {
           const q = query(collection(db, 'purchase_requests'), where('status', '==', 'approved'), orderBy('timestamp', 'desc'), limit(500));
@@ -468,6 +488,7 @@ export default function Admin() {
       const planDistribution = Object.entries(planMap).map(([name, value]) => ({ name, value }));
 
       setAnalyticsData({
+        ...stats,
         totalRevenue: total,
         salesCount: docs.length,
         dailyRevenue,
@@ -561,8 +582,16 @@ export default function Admin() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      if (false) return;
-      const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(100));
+      // 1. Try Supabase first
+      const sbUsers = await dataBridge.getProfiles(100);
+      if (sbUsers && sbUsers.length > 0) {
+        setAllUsers(sbUsers as any);
+        setLoading(false);
+        return;
+      }
+
+      // 2. Fallback to Firestore
+      const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(50));
       const snap = await getDocs(q);
       setAllUsers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
     } catch (error) {
@@ -1021,21 +1050,52 @@ export default function Admin() {
     e.preventDefault();
     if (!notifData.title || !notifData.message) return;
 
+    setLoading(true);
     try {
-      const usersSnap = await getDocs(collection(db, 'users'));
-      const batch = usersSnap.docs.map(userDoc => 
-        addDoc(collection(db, 'notifications'), {
-          userId: userDoc.id,
-          ...notifData,
-          read: false,
-          timestamp: new Date().toISOString()
-        })
-      );
-      await Promise.all(batch);
+      let userIds: string[] = [];
+      
+      // Try Supabase first (cheaper/faster for bulk IDs)
+      if (supabase) {
+        const { data } = await supabase.from('profiles').select('id');
+        if (data) userIds = data.map(u => u.id);
+      }
+      
+      // Fallback only if Supabase returned nothing
+      if (userIds.length === 0) {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        userIds = usersSnap.docs.map(u => u.id);
+      }
+
+      if (userIds.length === 0) {
+        toast.error("No users found to notify.");
+        return;
+      }
+      
+      // Batch writes in Firestore for notifications
+      const batchSize = 500;
+      for (let i = 0; i < userIds.length; i += batchSize) {
+        const chunk = userIds.slice(i, i + batchSize);
+        const batch = writeBatch(db);
+        
+        chunk.forEach(uid => {
+          const newNotifRef = doc(collection(db, 'notifications'));
+          batch.set(newNotifRef, {
+            userId: uid,
+            ...notifData,
+            read: false,
+            timestamp: new Date().toISOString()
+          });
+        });
+        await batch.commit();
+      }
+
       setNotifData({ title: '', message: '', type: 'info' });
-      toast.success("Notification sent to all users!");
+      toast.success(`Broadcast sent to ${userIds.length} users! 📢`);
     } catch (error) {
       console.error("Error sending global notification:", error);
+      toast.error("Broadcast failed.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1783,17 +1843,21 @@ export default function Admin() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
                 { label: 'Total Revenue', value: `₹${analyticsData.totalRevenue}`, icon: DollarSign, color: 'text-green-500', bg: 'bg-green-500/10' },
-                { label: 'Active Students', value: activeUsers, icon: UserCheck, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+                { label: 'Total Students', value: analyticsData.totalUsers, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
                 { label: 'Total Sales', value: analyticsData.salesCount, icon: TrendingUp, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+                { label: 'Premium Users', value: analyticsData.premiumUsers, icon: ShieldCheck, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
+                { label: 'New Today', value: analyticsData.newUsersToday, icon: Zap, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
+                { label: 'Active (24h)', value: analyticsData.activeToday, icon: UserCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+                { label: 'Active Now', value: activeUsers, icon: Clock, color: 'text-pink-500', bg: 'bg-pink-500/10' },
                 { label: 'Burned IDs', value: registry.length, icon: Database, color: 'text-orange-500', bg: 'bg-orange-500/10' },
               ].map((stat, i) => (
                 <div key={i} className="glass-card p-6 rounded-[2rem] bg-white/5 flex flex-col gap-4">
-                  <div className={`${stat.bg} w-12 h-12 rounded-2xl flex items-center justify-center`}>
-                    <stat.icon className={`w-6 h-6 ${stat.color}`} />
+                  <div className={`${stat.bg} w-10 h-10 rounded-2xl flex items-center justify-center`}>
+                    <stat.icon className={`w-5 h-5 ${stat.color}`} />
                   </div>
                   <div>
                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{stat.label}</p>
-                    <p className="text-3xl font-black tabular-nums">{stat.value}</p>
+                    <p className="text-2xl font-black tabular-nums">{stat.value}</p>
                   </div>
                 </div>
               ))}
@@ -2247,16 +2311,27 @@ CREATE TABLE IF NOT EXISTS public.promo_banners (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 2. Fix profiles table for Premium & Unlocks
+-- 2. Create valid_payments table (Whitelist)
+CREATE TABLE IF NOT EXISTS public.valid_payments (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  transaction_id TEXT UNIQUE NOT NULL,
+  whatsapp TEXT,
+  amount DECIMAL DEFAULT 0,
+  is_used BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 3. Fix profiles table for Premium & Unlocks
 ALTER TABLE public.profiles 
 ADD COLUMN IF NOT EXISTS unlocked_resources TEXT[] DEFAULT '{}',
 ADD COLUMN IF NOT EXISTS unlocked_classes TEXT[] DEFAULT '{}',
 ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT false;
 
--- 3. Enable Row Level Security (RLS)
+-- 4. Enable Row Level Security (RLS)
 ALTER TABLE public.promo_banners ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.valid_payments ENABLE ROW LEVEL SECURITY;
 
--- 4. Allow Public Read for Banners
+-- 5. Allow Public Read for Banners
 CREATE POLICY "Public Read Banners" ON public.promo_banners FOR SELECT USING (true);
                           `;
                           navigator.clipboard.writeText(sql.trim());

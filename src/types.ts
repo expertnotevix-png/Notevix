@@ -66,16 +66,20 @@ export interface Chapter {
   subject: string;
   title: string;
   summary: string;
-  keyPoints: string[];
-  formulas: string[];
-  diagrams: string[];
-  importantQuestions: {
+  keyPoints?: string[];
+  formulas?: string[];
+  diagrams?: string[];
+  importantQuestions?: {
     question: string;
     answer: string;
   }[];
   pdfUrl?: string;
   coverUrl?: string;
   driveLink?: string;
+  onePageNotesUrl?: string;
+  fullNotesUrl?: string;
+  importantQuestionsUrl?: string;
+  examOrientedQuestionsUrl?: string;
   isPremium: boolean;
 }
 

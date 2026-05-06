@@ -620,6 +620,78 @@ export const dataBridge = {
   },
 
   /**
+   * Admin: Get all profiles
+   */
+  async getProfiles(limitCount = 100) {
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('updated_at', { ascending: false })
+          .limit(limitCount);
+        
+        if (data && !error) {
+           return data.map(d => ({
+             ...d,
+             uid: d.id,
+             displayName: d.full_name,
+             photoURL: d.avatar_url,
+             class: d.class_level,
+             totalPoints: d.xp,
+             isPremium: d.is_premium,
+             createdAt: d.created_at,
+             source: 'supabase'
+           }));
+        }
+      } catch (err) {
+        console.warn("Supabase profiles bulk fetch failed:", err);
+      }
+    }
+    return [];
+  },
+
+  /**
+   * Admin: Get Stats Summary
+   */
+  async getAdminStats() {
+    const stats = {
+      totalUsers: 0,
+      premiumUsers: 0,
+      newUsersToday: 0,
+      activeToday: 0
+    };
+
+    if (supabase) {
+      try {
+        // Total Users
+        const { count: total } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+        stats.totalUsers = total || 0;
+
+        // Premium Users
+        const { count: premium } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_premium', true);
+        stats.premiumUsers = premium || 0;
+
+        // New Users Today
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const { count: newToday } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).gt('created_at', today.toISOString());
+        stats.newUsersToday = newToday || 0;
+
+        // Active Today (Last 24h)
+        const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const { count: active } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).gt('updated_at', dayAgo);
+        stats.activeToday = active || 0;
+
+        return stats;
+      } catch (err) {
+        console.warn("Supabase stats fetch failed:", err);
+      }
+    }
+    return stats;
+  },
+
+  /**
    * Community Chat
    */
   async getChatMessages(limitCount = 50) {
