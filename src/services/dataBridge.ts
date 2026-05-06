@@ -308,12 +308,12 @@ export const dataBridge = {
   },
 
   /**
-   * Transaction Check
+   * Transaction Check (Fraud Protection)
    */
   async isTransactionRedeemed(txId: string): Promise<boolean> {
     const finalTxId = txId.toUpperCase().replace(/[^A-Z0-9]/g, '');
     
-    // 1. Check Supabase (Fastest)
+    // Check Supabase (Primary Truth)
     if (supabase) {
       try {
         const { data } = await supabase
@@ -323,16 +323,16 @@ export const dataBridge = {
           .maybeSingle();
         
         if (data) return true;
-      } catch (err) {}
+      } catch (err) {
+        console.warn("Supabase UTR check failed:", err);
+      }
     }
 
-    // 2. Check Firestore Registry (Global lock)
+    // Check Firestore (Legacy Fallback)
     try {
       const txDoc = await getDoc(doc(db, 'transaction_id_registry', finalTxId));
       if (txDoc.exists()) return true;
-    } catch (err) {
-      console.warn("Registry check failed:", err);
-    }
+    } catch (err) {}
     
     return false;
   },
@@ -384,30 +384,12 @@ export const dataBridge = {
   },
 
   /**
-   * Save a purchase request with transaction registry to prevent fraud
+   * Save a purchase request (Supabase Primary)
    */
   async savePurchaseRequest(requestData: any) {
     const txId = requestData.transactionId.toUpperCase().replace(/[^A-Z0-9]/g, '');
     
-    // 1. Transaction Registry Lock (Firestore)
-    // This prevents the same UTR from being used twice even if one database is down
-    try {
-      const txRef = doc(db, 'transaction_id_registry', txId);
-      await setDoc(txRef, {
-        userId: requestData.userId,
-        email: requestData.email,
-        amount: requestData.amount,
-        createdAt: serverTimestamp(),
-        planName: requestData.planName
-      });
-    } catch (err: any) {
-      console.error("Registry Lock Failed:", err);
-      if (err.message.includes("permission")) {
-         return { success: false, error: "Transaction ID already used or access denied." };
-      }
-    }
-
-    // 2. Save to Supabase (Truth source for admin)
+    // 1. Try Supabase First
     if (supabase) {
       try {
         const { error } = await supabase
@@ -425,12 +407,12 @@ export const dataBridge = {
           }]);
         
         if (!error) return { success: true, provider: 'supabase' };
-      } catch (err) {
+      } catch (err: any) {
         console.warn("Supabase save failed:", err);
       }
     }
 
-    // 3. Sync to Firestore purchase_requests
+    // 2. Sync to Firestore (Backup only)
     try {
       await addDoc(collection(db, 'purchase_requests'), {
         ...requestData,

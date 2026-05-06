@@ -69,7 +69,19 @@ export default function Leaderboard({ user }: LeaderboardProps) {
         // Add Firestore users first
         fsData.forEach(u => userMap.set(u.uid, u));
         // Overwrite/Add Supabase users (they are the modern truth)
-        sbData.forEach(u => userMap.set(u.uid, u));
+        sbData.forEach(u => {
+          const existing = userMap.get(u.uid);
+          if (existing) {
+            // Keep the version with more points during transition
+            userMap.set(u.uid, {
+              ...existing,
+              ...u,
+              totalPoints: Math.max(existing.totalPoints || 0, u.totalPoints || 0)
+            });
+          } else {
+            userMap.set(u.uid, u);
+          }
+        });
 
         // Sort by points
         const mergedData = Array.from(userMap.values())

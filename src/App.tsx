@@ -6,6 +6,7 @@ import { logEvent } from 'firebase/analytics';
 import { auth, db, handleFirestoreError, OperationType, analytics, checkQuotaLock, listenToQuotaLock, setQuotaLock } from './components/firebase';
 import { UserProfile } from './types';
 import { dataBridge } from './services/dataBridge';
+import { supabase } from './lib/supabase';
 import { Zap } from 'lucide-react';
 
 const CACHED_USER_KEY = 'notevix_user_profile_v1';
@@ -146,6 +147,43 @@ export default function App() {
             setUser(mergedProfile);
             localStorage.setItem(CACHED_USER_KEY, JSON.stringify(mergedProfile));
             localStorage.setItem(CACHED_USER_KEY + '_time', Date.now().toString());
+
+            // 1.5 SETUP REAL-TIME PROFILE SYNC (Supabase)
+            if (supabase) {
+              const profileChannel = supabase
+                .channel(`profile_sync_${firebaseUser.uid}`)
+                .on('postgres_changes', { 
+                  event: 'UPDATE', 
+                  schema: 'public', 
+                  table: 'profiles',
+                  filter: `id=eq.${firebaseUser.uid}`
+                }, (payload) => {
+                  console.log("App: Profile updated in Supabase:", payload.new);
+                  setUser(current => {
+                    if (!current) return null;
+                    const updated = {
+                      ...current,
+                      displayName: payload.new.full_name || current.displayName,
+                      totalPoints: payload.new.xp ?? current.totalPoints,
+                      xp: payload.new.xp ?? current.totalPoints,
+                      totalFocusMinutes: payload.new.focus_minutes ?? current.totalFocusMinutes,
+                      streak: { 
+                        currentCount: payload.new.streak ?? current.streak?.currentCount,
+                        lastUpdateDate: current.streak?.lastUpdateDate
+                      },
+                      isPremium: payload.new.is_premium ?? current.isPremium,
+                      class: payload.new.class_level ?? current.class
+                    };
+                    localStorage.setItem(CACHED_USER_KEY, JSON.stringify(updated));
+                    return updated;
+                  });
+                })
+                .subscribe();
+              
+              unsubscribeUser = () => {
+                profileChannel.unsubscribe();
+              };
+            }
           }
 
           if (false) {

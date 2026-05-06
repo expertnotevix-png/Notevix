@@ -8,7 +8,7 @@ import {
   MessageSquare, Bell, Send, CheckCircle2, Clock, ShieldCheck,
   Shield, RefreshCw, CreditCard, Check, XCircle, Users, 
   Instagram, LayoutDashboard, BarChart3, Settings, Menu, LogOut, Search, TrendingUp, DollarSign, UserCheck,
-  BookOpen, Zap, AlertCircle
+  BookOpen, Zap, AlertCircle, AlertTriangle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -65,7 +65,10 @@ export default function Admin() {
     if (activeTab === 'chapters') fetchChapters();
     if (activeTab === 'messages') fetchMessages();
     if (activeTab === 'notifications') fetchNotifications();
-    if (activeTab === 'payments') fetchPurchaseRequests();
+    if (activeTab === 'payments') {
+      fetchPurchaseRequests();
+      fetchRegistry();
+    }
     if (activeTab === 'users') fetchUsers();
     if (activeTab === 'registry') fetchRegistry();
     if (activeTab === 'resources') fetchSubjectResources();
@@ -1972,8 +1975,15 @@ export default function Admin() {
                       <div className="space-y-4">
                         <div className="space-y-1">
                           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Transaction Snapshot</p>
-                          <div className="bg-white/5 p-4 rounded-2xl border border-white/5 font-mono text-sm text-purple-400 break-all">
+                          <div className="bg-white/5 p-4 rounded-2xl border border-white/5 font-mono text-sm text-purple-400 break-all relative group">
                             {req.transactionId}
+                            {/* Check if UTR is in registry */}
+                            {registry?.find(r => r.id === req.transactionId) && (
+                              <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow-lg flex items-center gap-1">
+                                <AlertTriangle className="w-2.5 h-2.5" />
+                                DUPLICATE UTR
+                              </div>
+                            )}
                           </div>
                         </div>
                         {req.status === 'pending' && req.screenshotUrl && (

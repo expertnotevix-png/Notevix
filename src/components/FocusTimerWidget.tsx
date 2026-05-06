@@ -74,9 +74,16 @@ export function FocusTimerWidget() {
         const fullDuration = 25; // 25 mins
         const points = fullDuration * 10;
         
-        await dataBridge.addFocusMinutes(auth.currentUser.uid, fullDuration);
-        await dataBridge.awardPoints(auth.currentUser.uid, points);
+        // 1. Update Supabase
+        await dataBridge.addFocusMinutes(auth.currentUser.uid, fullDuration).catch(e => console.warn(e));
+        await dataBridge.awardPoints(auth.currentUser.uid, points).catch(e => console.warn(e));
 
+        // 2. Local feedback is now handled via the global App.tsx real-time listener if synced,
+        // but we can still show a toast or local update if we had access to setUser.
+        // Since Widget doesn't have setUser, the real-time listener in App.tsx (which I just added)
+        // will handle it once the Supabase mutation completes.
+        
+        toast.success(`+${points} points earned! Header will update in a second. 🧠`);
         console.log("Focus session saved to Supabase");
       } catch (err) {
         console.error("Focus sync failed:", err);

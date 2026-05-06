@@ -54,7 +54,7 @@ service cloud.firestore {
 
     // Users
     match /users/{userId} {
-      allow list: if isAdmin();
+      allow list: if true; // Public for leaderboard
       allow read: if isOwner(userId) || isAdmin();
       allow create: if (isAuthenticated() && userId == request.auth.uid) || isAdmin();
       allow update: if isAdmin() || (isOwner(userId) && (
