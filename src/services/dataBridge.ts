@@ -312,6 +312,8 @@ export const dataBridge = {
    */
   async isTransactionRedeemed(txId: string): Promise<boolean> {
     const finalTxId = txId.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    
+    // 1. Check Supabase (Fastest)
     if (supabase) {
       try {
         const { data } = await supabase
@@ -323,6 +325,15 @@ export const dataBridge = {
         if (data) return true;
       } catch (err) {}
     }
+
+    // 2. Check Firestore Registry (Global lock)
+    try {
+      const txDoc = await getDoc(doc(db, 'transaction_id_registry', finalTxId));
+      if (txDoc.exists()) return true;
+    } catch (err) {
+      console.warn("Registry check failed:", err);
+    }
+    
     return false;
   },
 
@@ -373,10 +384,30 @@ export const dataBridge = {
   },
 
   /**
-   * Save a purchase request to Supabase
+   * Save a purchase request with transaction registry to prevent fraud
    */
   async savePurchaseRequest(requestData: any) {
-    // 1. Try Supabase First
+    const txId = requestData.transactionId.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    
+    // 1. Transaction Registry Lock (Firestore)
+    // This prevents the same UTR from being used twice even if one database is down
+    try {
+      const txRef = doc(db, 'transaction_id_registry', txId);
+      await setDoc(txRef, {
+        userId: requestData.userId,
+        email: requestData.email,
+        amount: requestData.amount,
+        createdAt: serverTimestamp(),
+        planName: requestData.planName
+      });
+    } catch (err: any) {
+      console.error("Registry Lock Failed:", err);
+      if (err.message.includes("permission")) {
+         return { success: false, error: "Transaction ID already used or access denied." };
+      }
+    }
+
+    // 2. Save to Supabase (Truth source for admin)
     if (supabase) {
       try {
         const { error } = await supabase
@@ -385,7 +416,7 @@ export const dataBridge = {
             user_id: requestData.userId,
             email: requestData.email,
             whatsapp: requestData.whatsapp,
-            transactionId: requestData.transactionId,
+            transactionId: txId,
             amount: requestData.amount,
             planId: requestData.planId,
             planName: requestData.planName,
@@ -395,25 +426,23 @@ export const dataBridge = {
         
         if (!error) return { success: true, provider: 'supabase' };
       } catch (err) {
-        console.warn("Supabase save failed, trying Firestore:", err);
+        console.warn("Supabase save failed:", err);
       }
     }
 
-    // 2. Fallback to Firestore
-    if (true) {
-      try {
-        await addDoc(collection(db, 'purchase_requests'), {
-          ...requestData,
-          status: 'pending',
-          createdAt: serverTimestamp()
-        });
-        return { success: true, provider: 'firestore' };
-      } catch (err: any) {
-        return { success: false, error: err.message };
-      }
+    // 3. Sync to Firestore purchase_requests
+    try {
+      await addDoc(collection(db, 'purchase_requests'), {
+        ...requestData,
+        transactionId: txId,
+        status: 'pending',
+        createdAt: serverTimestamp()
+      });
+      return { success: true, provider: 'firestore' };
+    } catch (err: any) {
+      console.error("Firestore Save Failed:", err);
+      return { success: false, error: err.message };
     }
-
-    return { success: false, error: "Database unavailable" };
   },
 
   /**

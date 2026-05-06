@@ -758,20 +758,30 @@ export default function Admin() {
           const { data, error } = await supabase
             .from('purchase_requests')
             .select('*')
-            .order('timestamp', { ascending: false })
+            .order('created_at', { ascending: false })
             .limit(100);
           
           if (data) {
-            sbData = data.map(d => ({ ...d, source: 'supabase' } as unknown as PurchaseRequest));
+            sbData = data.map(d => ({ 
+              ...d, 
+              source: 'supabase',
+              // Normalize for admin view
+              timestamp: d.created_at || d.timestamp,
+              transactionId: d.transactionId || d.transaction_id
+            } as unknown as PurchaseRequest));
           }
         } catch (e) {
           console.warn("Supabase purchase fetch failed:", e);
         }
       }
 
-      // Merge and sort, favoring Supabase versions if IDs match (though IDs differ)
-      const merged = [...sbData, ...fsData].sort((a, b) => 
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      // Merge and sort
+      const merged = [...sbData, ...fsData].map(item => ({
+        ...item,
+        // Ensure every item has a sortable timestamp
+        sortDate: item.timestamp || item.createdAt || item.created_at || new Date().toISOString()
+      })).sort((a, b) => 
+        new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime()
       );
 
       setPurchaseRequests(merged);
