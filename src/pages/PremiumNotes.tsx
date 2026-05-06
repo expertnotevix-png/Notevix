@@ -426,14 +426,25 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                            <p className="text-xs text-gray-400 font-medium leading-relaxed italic">“{res.description || 'Step-by-step notes curated specifically for the latest board exams.'}”</p>
                         </div>
                         
+                        <div className="grid grid-cols-2 gap-3">
+                          {(res.features || ['Digital E-Library', 'PYQ Collection', 'AI Mentor']).map((f, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                              <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{f}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="pt-6 border-t border-white/5 space-y-3">
                         {unlocked && (
-                          <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-2">
+                          <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-2 mb-2">
                             <div className="flex items-center gap-2">
                               <Key className="w-3 h-3 text-emerald-400" />
                               <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">PDF Password (All Caps)</span>
                             </div>
                             <div className="flex items-center justify-between">
-                              <code className="text-lg font-black text-white tracking-widest">{SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "SEE_ADMIN"}</code>
+                              <code className="text-xl font-black text-white tracking-widest leading-none">{SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "SEE_ADMIN"}</code>
                               <button 
                                 onClick={() => {
                                   navigator.clipboard.writeText(SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "");
@@ -446,18 +457,6 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                             </div>
                           </div>
                         )}
-
-                        <div className="grid grid-cols-2 gap-3">
-                          {(res.features || ['Digital E-Library', 'PYQ Collection', 'AI Mentor']).map((f, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                              <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{f}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="pt-6 border-t border-white/5 space-y-3">
                         <a 
                           href={res.driveLink || res.fullNotesUrl} 
                           target="_blank" 
