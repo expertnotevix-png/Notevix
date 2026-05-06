@@ -298,10 +298,9 @@ export const geminiService = {
     4. Success Indicators: Large Green Checkmark, "Payment Successful", "Money sent", "Paid successfully".
     
     CRITICAL INSTRUCTIONS:
+    - VALID AMOUNTS: A valid payment MUST be exactly ₹39 (Single Subject) or ₹99 (Master Pack/Combo). If the amount is any other value, set isValid: false.
+    - TRANSACTION ID: You MUST extract the 12-digit UTR or alphanumeric Transaction ID.
     - IDENTIFY STATUS: Valid only if "Success", "Completed", or similar terminal state. "Processing/Pending" = invalid.
-    - EXTRACT "transactionId": Prioritize UTR (usually 12 digits) or alphanumeric ID. Remove spaces.
-    - EXTRACT "amount": Look for ₹ or Rs. Numeric only.
-    - FORGERY CHECK: If fonts or alignment looks fake or manipulated, set isValid: false.
     - OUTPUT: Only return raw JSON: {"isValid": boolean, "transactionId": string, "amount": number, "error"?: string}`;
 
     const prompt = "Extract the Transaction ID and Amount from this receipt. Determine if the payment was successful. Respond ONLY with JSON.";

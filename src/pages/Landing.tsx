@@ -163,20 +163,20 @@ export default function Landing() {
         throw new Error(result.error || "AI could not verify this receipt. Please ensure UTR/Ref ID is visible.");
       }
 
-      if (result.amount && result.amount < (selectedPlan?.price || 0)) {
-        throw new Error(`Amount mismatch: Detected ₹${result.amount} but required ₹${selectedPlan?.price}.`);
+      if (result.amount !== (selectedPlan?.price || 0)) {
+        throw new Error(`Amount mismatch! AI detected ₹${result.amount} but this plan costs ₹${selectedPlan?.price}. Please pay the correct amount.`);
       }
 
       const finalTxId = result.transactionId?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
       
       if (!finalTxId || finalTxId.length < 6) {
-        throw new Error("Could not extract a valid Transaction ID. Please try another screenshot.");
+        throw new Error("Could not extract a valid Transaction ID from the screenshot. Please ensure the UTR/Reference number is clearly visible.");
       }
 
       // Check double-spend using bridge
       const isRedeemed = await dataBridge.isTransactionRedeemed(finalTxId);
       if (isRedeemed) {
-        throw new Error("This Transaction ID has already been redeemed.");
+        throw new Error(`Transaction ID ${finalTxId} has already been used.`);
       }
       
       const saveResult = await dataBridge.savePurchaseRequest({

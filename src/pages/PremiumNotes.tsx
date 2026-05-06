@@ -183,20 +183,20 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         throw new Error(result.error || "AI could not verify this receipt. Please ensure UTR/Ref ID is visible.");
       }
 
-      if (result.amount && result.amount < (selectedPlan?.price || 0)) {
-         throw new Error(`Amount mismatch: Detected ₹${result.amount} but required ₹${selectedPlan?.price}.`);
+      if (result.amount !== (selectedPlan?.price || 0)) {
+         throw new Error(`Amount mismatch! AI detected ₹${result.amount} but this plan costs ₹${selectedPlan?.price}. Please pay the correct amount.`);
       }
 
       const finalTxId = result.transactionId?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
       
       if (!finalTxId || finalTxId.length < 6) {
-        throw new Error("Invalid Transaction ID extracted. Please try again with a clearer screenshot.");
+        throw new Error("Could not find a valid Transaction ID. Please ensure the UTR/Reference number is clearly visible.");
       }
 
       // DOUBLE-SPEND PROTECTION using bridge
       const isRedeemed = await dataBridge.isTransactionRedeemed(finalTxId);
       if (isRedeemed) {
-        throw new Error("This Transaction ID has already been redeemed.");
+        throw new Error(`Transaction ID ${finalTxId} has already been used to unlock resources.`);
       }
       
       const purchaseData = {
@@ -222,7 +222,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
         if (saveResult.success) {
           // Attempt instant local access grant
-          toast.success("AI Verified Successfully! Instant access granted.", {
+          toast.success("AI Verified Successfully! Instant access granted. Refreshing...", {
             duration: 8000,
             icon: '✅'
           });
@@ -242,7 +242,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         });
 
         if (saveResult.success) {
-          toast.success("Payment verified! Since you're not logged in, please save your receipt screenshot. Access will be linked to your email shortly.");
+          toast.success("Payment verified! Access will be linked to your email shortly. Please keep your receipt safe.");
           setSelectedPlan(null);
           return;
         }
@@ -254,10 +254,10 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       const waMessage = `Hi Admin, I just paid ₹${purchaseData.amount} for ${purchaseData.planName} (Tx: ${purchaseData.transactionId}). My email is ${user?.email || email}. Please verify my access!`;
       const waLink = `https://wa.me/${waNumber}?text=${encodeURIComponent(waMessage)}`;
 
-      toast.error(saveResult?.error || "Database sync failed.", {
+      toast.error(saveResult?.error || "Database sync failed. Payment was verified but we couldn't link it to your account.", {
         duration: 10000,
         action: {
-          label: "Send via WhatsApp",
+          label: "Fix via WhatsApp",
           onClick: () => window.open(waLink, '_blank')
         }
       });

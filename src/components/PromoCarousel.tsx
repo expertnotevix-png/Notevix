@@ -4,6 +4,7 @@ import { collection, query, orderBy, getDocs, limit } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, getCachedData, setCachedData, checkQuotaLock } from './firebase';
 import { PromoBanner } from '../types';
 import { useNavigate } from 'react-router-dom';
+import { dataBridge } from '../services/dataBridge';
 
 export function PromoCarousel() {
   const [banners, setBanners] = useState<PromoBanner[]>([]);
@@ -21,18 +22,9 @@ export function PromoCarousel() {
       }
 
       try {
-        const q = query(
-          collection(db, 'promo_banners'), 
-          orderBy('createdAt', 'desc'),
-          limit(5)
-        );
-        const snapshot = await getDocs(q);
-        const data = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as PromoBanner[];
+        const data = await dataBridge.getPromoBanners(5);
         
-        if (data.length > 0) {
+        if (data && data.length > 0) {
           setBanners(data);
           setCachedData(cacheKey, data, 60); // Cache for 60 mins
           return;
@@ -46,12 +38,6 @@ export function PromoCarousel() {
           id: 'fallback_1',
           imageUrl: 'https://images.unsplash.com/photo-1513258496099-48168024aec0?q=80&w=2070&auto=format&fit=crop',
           link: '/premium-notes',
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: 'fallback_2',
-          imageUrl: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?q=80&w=2070&auto=format&fit=crop',
-          link: '/ai-doubts',
           createdAt: new Date().toISOString()
         }
       ];

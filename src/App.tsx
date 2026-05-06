@@ -128,16 +128,25 @@ export default function App() {
         setIsAuthReady(true); // Allow components to render immediately
         setLoading(false);
 
-        // SYNC TO SUPABASE
-        dataBridge.syncProfile(firebaseUser.uid, basicProfile).catch(e => console.warn("Supabase initial sync deferred", e));
+        // 1. Load from Cache immediately for zero-latency startup
+        const cached = localStorage.getItem(CACHED_USER_KEY);
+        const cachedTime = localStorage.getItem(CACHED_USER_KEY + '_time');
+        const isCacheValid = cached && cachedTime && (Date.now() - parseInt(cachedTime) < 10 * 60 * 1000);
+
+        if (isCacheValid && isMounted) {
+          try {
+            const cachedData = JSON.parse(cached);
+            setUser({ ...basicProfile, ...cachedData });
+          } catch (e) {}
+        }
 
         try {
-          // Check Supabase profile first
+          // Check Supabase profile (True source for payments)
           const supabaseProfile = await dataBridge.getProfile(firebaseUser.uid);
           if (supabaseProfile && isMounted) {
             const mergedProfile = { ...basicProfile, ...supabaseProfile };
             
-            // FORCE ADMIN CHECK AGAIN AFTER MERGE
+            // FORCE ADMIN CHECK
             const isAdminSync = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(firebaseUser.email || '');
             if (isAdminSync) {
               mergedProfile.role = 'admin';
@@ -148,7 +157,7 @@ export default function App() {
             localStorage.setItem(CACHED_USER_KEY, JSON.stringify(mergedProfile));
             localStorage.setItem(CACHED_USER_KEY + '_time', Date.now().toString());
 
-            // 1.5 SETUP REAL-TIME PROFILE SYNC (Supabase)
+            // SETUP REAL-TIME PROFILE SYNC (Supabase)
             if (supabase) {
               const profileChannel = supabase
                 .channel(`profile_sync_${firebaseUser.uid}`)
@@ -158,7 +167,6 @@ export default function App() {
                   table: 'profiles',
                   filter: `id=eq.${firebaseUser.uid}`
                 }, (payload) => {
-                  console.log("App: Profile updated in Supabase:", payload.new);
                   setUser(current => {
                     if (!current) return null;
                     const updated = {
@@ -172,6 +180,8 @@ export default function App() {
                         lastUpdateDate: current.streak?.lastUpdateDate
                       },
                       isPremium: payload.new.is_premium ?? current.isPremium,
+                      unlockedResources: payload.new.unlocked_resources ?? current.unlockedResources,
+                      unlockedClasses: payload.new.unlocked_classes ?? current.unlockedClasses,
                       class: payload.new.class_level ?? current.class
                     };
                     localStorage.setItem(CACHED_USER_KEY, JSON.stringify(updated));
@@ -186,186 +196,15 @@ export default function App() {
             }
           }
 
-          if (false) {
-            console.log("App: Profile update skipped (quota locked)");
-            return;
+          // Legacy / Fallback checks for premium status
+          const isPremiumSupabase = await dataBridge.checkPremiumStatus(firebaseUser.uid, firebaseUser.email);
+          const isPremium = isPremiumSupabase || isAdmin;
+
+          if (isPremium && !basicProfile.isPremium) {
+            setUser(current => current ? ({ ...current, isPremium: true }) : null);
           }
-
-          const userRef = doc(db, 'users', firebaseUser.uid);
-          let userData: UserProfile | null = null;
-          
-          // Task 2: Cache-first profile loading (10 min expiry)
-          const cached = localStorage.getItem(CACHED_USER_KEY);
-          const cachedTime = localStorage.getItem(CACHED_USER_KEY + '_time');
-          const isCacheValid = cached && cachedTime && (Date.now() - parseInt(cachedTime) < 10 * 60 * 1000);
-
-          if (isCacheValid) {
-            userData = JSON.parse(cached);
-            setUser(userData);
-            setIsAuthReady(true);
-            setLoading(false);
-          }
-          
-          try {
-            // ALWAYS check Supabase first if available (immediate truth for payments)
-            const isPremiumSupabase = await dataBridge.checkPremiumStatus(firebaseUser.uid, firebaseUser.email);
-            const isPremium = isPremiumSupabase || isAdmin;
-
-            if (quotaLockRef.current) {
-              if (userData) {
-                userData.isPremium = isPremium || userData.isPremium;
-                setUser(userData);
-              } else {
-                setUser({ uid: firebaseUser.uid, email: firebaseUser.email, isPremium, role: isAdmin ? 'admin' : 'student' } as any);
-              }
-              setIsAuthReady(true);
-              setLoading(false);
-              return;
-            }
-
-            // If cache invalid or not present, fetch from server (Firestore)
-            if (!isCacheValid) {
-              const userDoc = await getDoc(userRef);
-              
-              if (userDoc.exists()) {
-                userData = userDoc.data() as UserProfile;
-                
-                // Sync premium status from Supabase truth to Firestore profile if needed
-                if (!userData.isPremium && isPremium) {
-                  userData.isPremium = true;
-                  if (!quotaLockRef.current) updateDoc(userRef, { isPremium: true }).catch(() => {});
-                }
-                
-                // ENSURE ADMIN ROLE IS PERSISTENT
-                const isAdminEmail = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(userData.email || '');
-                if (isAdminEmail) {
-                  userData.role = 'admin';
-                  userData.isPremium = true;
-                }
-                
-                localStorage.setItem(CACHED_USER_KEY, JSON.stringify(userData));
-                localStorage.setItem(CACHED_USER_KEY + '_time', Date.now().toString());
-                
-                // Streak Logic (Crucial so we only do this once a day)
-                const today = new Date().toISOString().split('T')[0];
-                const lastUpdate = userData.streak?.lastUpdateDate;
-                
-                if (lastUpdate !== today) {
-                  const yesterday = new Date();
-                  yesterday.setDate(yesterday.getDate() - 1);
-                  const yesterdayStr = yesterday.toISOString().split('T')[0];
-                  
-                  let newCount = userData.streak?.currentCount || 0;
-                  if (lastUpdate === yesterdayStr) {
-                    newCount += 1;
-                  } else {
-                    newCount = 1; 
-                  }
-                  
-                  await updateDoc(userRef, {
-                    'streak.currentCount': newCount,
-                    'streak.lastUpdateDate': today
-                  }).catch(e => console.warn("Streak update failed:", e));
-                  
-                  // Sync to Supabase
-                  dataBridge.updateStreak(firebaseUser.uid, newCount);
-                  
-                  userData.streak = { currentCount: newCount, lastUpdateDate: today };
-                  toast.success(`Welcome back! Your streak is now ${newCount} days! 🔥`);
-                  localStorage.setItem(CACHED_USER_KEY, JSON.stringify(userData));
-                }
-              } else {
-                console.log("App: Creating new user document...");
-                const referredBy = localStorage.getItem('referredBy');
-                const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-
-                userData = {
-                  uid: firebaseUser.uid,
-                  email: firebaseUser.email || '',
-                  displayName: firebaseUser.displayName || 'Student',
-                  photoURL: firebaseUser.photoURL || '',
-                  role: ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(firebaseUser.email || '') ? 'admin' : 'student',
-                  savedNotes: [],
-                  notificationsEnabled: true,
-                  studyModeEnabled: false,
-                  streak: { currentCount: 1, lastUpdateDate: new Date().toISOString().split('T')[0] },
-                  totalFocusMinutes: 0,
-                  totalPoints: 0,
-                  referralCode,
-                  referralCount: 0,
-                  isPremium: false,
-                  createdAt: new Date().toISOString(),
-                  ...(referredBy ? { referredBy } : {}),
-                };
-
-                await setDoc(userRef, userData);
-                localStorage.setItem(CACHED_USER_KEY, JSON.stringify(userData));
-                localStorage.setItem(CACHED_USER_KEY + '_time', Date.now().toString());
-              }
-            }
-          } catch (docError: any) {
-            const isQuotaError = docError.message?.toLowerCase().includes('quota') || 
-                                docError.message?.toLowerCase().includes('lockout active');
-                                
-            if (!isQuotaError) {
-              console.error("App: Firestore error fetching profile:", docError);
-            }
-            
-            if (cached) {
-              userData = JSON.parse(cached);
-              const isAdminEmail = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(userData.email || '');
-              if (isAdminEmail) {
-                userData.role = 'admin';
-                userData.isPremium = true;
-              }
-            } else {
-              userData = {
-                uid: firebaseUser.uid,
-                email: firebaseUser.email || '',
-                displayName: firebaseUser.displayName || 'Student',
-                photoURL: firebaseUser.photoURL || '',
-                role: ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(firebaseUser.email || '') ? 'admin' : 'student',
-                savedNotes: [],
-                notificationsEnabled: true,
-                totalFocusMinutes: 0,
-                totalPoints: 0,
-                referralCode: 'TEMP',
-                referralCount: 0,
-                isPremium: false,
-                createdAt: new Date().toISOString(),
-                streak: { currentCount: 0, lastUpdateDate: '' }
-              };
-            }
-          }
-
-          if (userData) {
-            setUser(userData);
-          } else if (firebaseUser) {
-            // Task 3: Emergency fallback Profile if Firestore is Down & No Cache
-            const fallbackProfile: UserProfile = {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              displayName: firebaseUser.displayName || 'Student',
-              photoURL: firebaseUser.photoURL || '',
-              role: ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(firebaseUser.email || '') ? 'admin' : 'student',
-              savedNotes: [],
-              notificationsEnabled: true,
-              totalFocusMinutes: 0,
-              totalPoints: 0,
-              referralCode: 'OFFLINE',
-              referralCount: 0,
-              isPremium: false,
-              createdAt: new Date().toISOString(),
-              streak: { currentCount: 0, lastUpdateDate: '' }
-            };
-            setUser(fallbackProfile);
-            if (quotaLockRef.current) {
-              // Removed toast to avoid annoying users during quota periods
-            }
-          }
-
-        } catch (err: any) {
-          console.error("App: Auth processing error:", err);
+        } catch (err) {
+          console.error("App: Auth sync error:", err);
         } finally {
           setIsAuthReady(true);
           setLoading(false);

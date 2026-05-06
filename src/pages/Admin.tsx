@@ -246,12 +246,28 @@ export default function Admin() {
   const fetchBanners = async () => {
     setLoading(true);
     try {
-      if (false) return;
+      if (supabase) {
+        const { data, error } = await supabase
+          .from('promo_banners')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (!error && data) {
+          setBanners(data.map(b => ({
+            id: b.id,
+            imageUrl: b.image_url || b.imageUrl,
+            link: b.link,
+            createdAt: b.created_at || b.createdAt
+          })));
+          return;
+        }
+      }
+      
+      // Fallback
       const q = query(collection(db, 'promo_banners'), orderBy('createdAt', 'desc'));
       const snap = await getDocs(q);
       setBanners(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'promo_banners');
       console.error(error);
     } finally {
       setLoading(false);
@@ -314,17 +330,33 @@ export default function Admin() {
     }
     setLoading(true);
     try {
-      await addDoc(collection(db, 'promo_banners'), {
-        ...bannerFormData,
-        imageUrl: bannerImagePreview || bannerFormData.imageUrl,
-        createdAt: new Date().toISOString()
-      });
+      const finalImageUrl = bannerImagePreview || bannerFormData.imageUrl;
+      
+      if (supabase) {
+        const { error } = await supabase.from('promo_banners').insert([{
+          image_url: finalImageUrl,
+          link: bannerFormData.link,
+          created_at: new Date().toISOString()
+        }]);
+        if (error) throw error;
+      } else {
+        await addDoc(collection(db, 'promo_banners'), {
+          ...bannerFormData,
+          imageUrl: finalImageUrl,
+          createdAt: new Date().toISOString()
+        });
+      }
+      
+      // Invalidate cache
+      localStorage.removeItem('cached_promo_banners');
+      
       toast.success("Banner added!");
       setIsAddingBanner(false);
       setBannerFormData({ imageUrl: '', link: '' });
       setBannerImagePreview(null);
       fetchBanners();
     } catch (e) {
+      console.error(e);
       toast.error("Failed to add banner");
     } finally {
       setLoading(false);
@@ -334,7 +366,11 @@ export default function Admin() {
   const handleDeleteBanner = async (id: string) => {
     if (!window.confirm("Delete this banner?")) return;
     try {
-      await deleteDoc(doc(db, 'promo_banners', id));
+      if (supabase && typeof id === 'string' && id.includes('-')) {
+        await supabase.from('promo_banners').delete().eq('id', id);
+      } else {
+        await deleteDoc(doc(db, 'promo_banners', id));
+      }
       toast.success("Banner deleted");
       fetchBanners();
     } catch (e) {
@@ -2195,6 +2231,43 @@ export default function Admin() {
                     >
                       Emergency Fix App
                     </button>
+                  </div>
+
+                  <div className="p-6 rounded-3xl bg-emerald-500/5 border border-emerald-500/10 space-y-4 md:col-span-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-bold text-lg">Supabase Schema Fix</h4>
+                      <button 
+                        onClick={() => {
+                          const sql = `
+-- 1. Create promo_banners table
+CREATE TABLE IF NOT EXISTS public.promo_banners (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  image_url TEXT NOT NULL,
+  link TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 2. Fix profiles table for Premium & Unlocks
+ALTER TABLE public.profiles 
+ADD COLUMN IF NOT EXISTS unlocked_resources TEXT[] DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS unlocked_classes TEXT[] DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT false;
+
+-- 3. Enable Row Level Security (RLS)
+ALTER TABLE public.promo_banners ENABLE ROW LEVEL SECURITY;
+
+-- 4. Allow Public Read for Banners
+CREATE POLICY "Public Read Banners" ON public.promo_banners FOR SELECT USING (true);
+                          `;
+                          navigator.clipboard.writeText(sql.trim());
+                          toast.success("SQL Copied! Paste this in Supabase SQL Editor to fix Banner & Premium issues.");
+                        }}
+                        className="bg-emerald-500 text-black px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-transform"
+                      >
+                        Copy SQL Fix
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500">If your Added Banners or Premium Access aren't showing up, your Supabase tables might be missing columns. Click 'Copy SQL Fix', go to Supabase Dashboard → SQL Editor, paste and run it.</p>
                   </div>
                 </div>
              </div>

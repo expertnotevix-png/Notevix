@@ -36,6 +36,8 @@ export const dataBridge = {
           xp: profileData.totalPoints || profileData.xp || 0,
           streak: profileData.streak?.currentCount || profileData.streakCount || 0,
           is_premium: profileData.isPremium || false,
+          unlocked_resources: profileData.unlockedResources || [],
+          unlocked_classes: profileData.unlockedClasses || [],
           updated_at: new Date().toISOString()
         }, { onConflict: 'id' });
       
@@ -58,7 +60,21 @@ export const dataBridge = {
           .eq('id', uid)
           .maybeSingle();
         
-        if (data) return data;
+        if (data && !error) {
+           // Normalize for the app
+           return {
+             ...data,
+             uid: data.id,
+             displayName: data.full_name,
+             photoURL: data.avatar_url,
+             class: data.class_level,
+             totalPoints: data.xp,
+             isPremium: data.is_premium,
+             unlockedResources: data.unlocked_resources || [],
+             unlockedClasses: data.unlocked_classes || [],
+             streak: { currentCount: data.streak || 0 }
+           };
+        }
       } catch (err) {
         console.warn("Supabase profile fetch failed:", err);
       }
@@ -68,7 +84,13 @@ export const dataBridge = {
     if (true) {
       try {
         const userDoc = await getDoc(doc(db, 'users', uid));
-        if (userDoc.exists()) return userDoc.data();
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          return {
+            ...userData,
+            uid: uid // ensure uid is set
+          };
+        }
       } catch (err) {
         console.warn("Firestore profile fetch failed:", err);
       }
@@ -410,16 +432,56 @@ export const dataBridge = {
         if (!error) {
           // IF INSTANTLY APPROVED (AI Verified), UPDATE USER PROFILE IMMEDIATELY
           if (status === 'approved' && requestData.userId && requestData.userId !== 'GUEST') {
-             const updates: any = {};
-             if (requestData.planId === 'plus_sub' || requestData.planId === 'monthly_sub') {
-               updates.is_premium = true;
+             try {
+                // Fetch current profile to get existing unlocked items
+                const { data: profile } = await supabase.from('profiles').select('*').eq('id', requestData.userId).maybeSingle();
+                
+                const updates: any = {};
+                
+                // Handle Premium Subscription
+                if (requestData.planId === 'plus_sub' || requestData.planId === 'monthly_sub') {
+                  updates.is_premium = true;
+                }
+                
+                // Handle Individual Resource Purchase (res_<id>)
+                if (requestData.planId?.startsWith('res_')) {
+                   const resIdToken = requestData.planId.replace('res_', '');
+                   const currentResources = profile?.unlocked_resources || [];
+                   if (!currentResources.includes(resIdToken)) {
+                     updates.unlocked_resources = [...currentResources, resIdToken];
+                   }
+                }
+
+                // Handle individual resourceId if provided separately
+                if (requestData.resourceId) {
+                   const currentResources = profile?.unlocked_resources || (updates.unlocked_resources) || [];
+                   if (!currentResources.includes(requestData.resourceId)) {
+                     updates.unlocked_resources = [...currentResources, requestData.resourceId];
+                   }
+                }
+
+                // Handle Master Pack Purchase (class_<cls>_one_time)
+                if (requestData.planId?.includes('_one_time')) {
+                   const classMatch = requestData.planId.match(/class_(\d+)_/);
+                   if (classMatch) {
+                      const cls = classMatch[1];
+                      const currentClasses = profile?.unlocked_classes || [];
+                      if (!currentClasses.includes(cls)) {
+                        updates.unlocked_classes = [...currentClasses, cls];
+                      }
+                   }
+                }
+                
+                // Update the profile in Supabase
+                if (Object.keys(updates).length > 0) {
+                  await supabase.from('profiles').update({
+                    ...updates,
+                    updated_at: new Date().toISOString()
+                  }).eq('id', requestData.userId);
+                }
+             } catch (updateErr) {
+                console.error("Instant access grant failed:", updateErr);
              }
-             
-             // Update the profile in Supabase
-             await supabase.from('profiles').update({
-               ...updates,
-               updated_at: new Date().toISOString()
-             }).eq('id', requestData.userId);
           }
           return { success: true, provider: 'supabase' };
         }
@@ -441,6 +503,41 @@ export const dataBridge = {
       console.error("Database Save Failed:", err);
       return { success: false, error: err.message };
     }
+  },
+
+  /**
+   * Promo Banners - List from Supabase primarily
+   */
+  async getPromoBanners(limitCount = 5) {
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('promo_banners')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(limitCount);
+        
+        if (!error && data) {
+           return data.map(b => ({
+             id: b.id,
+             imageUrl: b.image_url || b.imageUrl,
+             link: b.link,
+             createdAt: b.created_at || b.createdAt
+           }));
+        }
+      } catch (err) {
+        console.warn("Supabase banners failed:", err);
+      }
+    }
+
+    // Firestore fallback
+    try {
+      const q = query(collection(db, 'promo_banners'), orderBy('createdAt', 'desc'), limit(limitCount));
+      const snap = await getDocs(q);
+      return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+    } catch (err) {}
+
+    return [];
   },
 
   /**
