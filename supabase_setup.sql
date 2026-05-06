@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS public.purchase_requests (
     amount NUMERIC NOT NULL,
     plan_id TEXT,
     plan_name TEXT,
+    resource_id TEXT,
     status TEXT DEFAULT 'pending',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

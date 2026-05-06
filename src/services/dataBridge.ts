@@ -81,16 +81,16 @@ export const dataBridge = {
            if (result.email) {
              const { data: emailPurchases } = await supabase
                .from('purchase_requests')
-               .select('resourceId, planId')
+               .select('resource_id, plan_id')
                .eq('email', result.email)
                .eq('status', 'approved');
              
              if (emailPurchases && emailPurchases.length > 0) {
-               const emailRes = emailPurchases.filter(p => !!p.resourceId).map(p => p.resourceId);
+               const emailRes = emailPurchases.filter(p => !!p.resource_id).map(p => p.resource_id);
                result.unlockedResources = Array.from(new Set([...result.unlockedResources, ...emailRes]));
                
                // If any purchase is for a master pack or premium sub
-               if (emailPurchases.some(p => p.planId === 'plus_sub' || p.planId === 'monthly_sub')) {
+               if (emailPurchases.some(p => p.plan_id === 'plus_sub' || p.plan_id === 'monthly_sub')) {
                  result.isPremium = true;
                }
              }
@@ -349,7 +349,7 @@ export const dataBridge = {
         const { data } = await supabase
           .from('purchase_requests')
           .select('id')
-          .eq('transactionId', finalTxId)
+          .eq('transaction_id', finalTxId)
           .maybeSingle();
         
         if (data) return true;
@@ -438,11 +438,11 @@ export const dataBridge = {
             user_id: activeUserId,
             email: requestData.email,
             whatsapp: requestData.whatsapp,
-            transactionId: txId,
+            transaction_id: txId,
             amount: requestData.amount,
-            planId: requestData.planId,
-            planName: requestData.planName,
-            resourceId: requestData.resourceId || null,
+            plan_id: requestData.planId,
+            plan_name: requestData.planName,
+            resource_id: requestData.resourceId || null,
             status: status,
             created_at: new Date().toISOString()
           }]);
@@ -459,6 +459,7 @@ export const dataBridge = {
                 // Handle Premium Subscription
                 if (requestData.planId === 'plus_sub' || requestData.planId === 'monthly_sub') {
                   updates.is_premium = true;
+                  updates.plan_type = requestData.planId;
                 }
                 
                 const currentResources = profile?.unlocked_resources || [];
