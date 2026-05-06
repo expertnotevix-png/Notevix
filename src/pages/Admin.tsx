@@ -43,6 +43,7 @@ export default function Admin() {
   const [isAddingBanner, setIsAddingBanner] = useState(false);
   const [bannerFormData, setBannerFormData] = useState({ imageUrl: '', link: '' });
   const [bannerImagePreview, setBannerImagePreview] = useState<string | null>(null);
+  const lastAdminAiAttemptRef = useRef<number>(0);
   
   const coverInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -181,29 +182,38 @@ export default function Admin() {
     setLoading(true);
     try {
       const resourceData = {
+        id: `note_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         subject: resourceFormData.subject,
         class: resourceFormData.class,
         price: Number(resourceFormData.price) || 0,
         description: resourceFormData.description || 'Premium curated digital resources for board prep.',
-        cover_url: resourceCoverPreview || '',
-        drive_link: resourceFormData.driveLink || '',
+        coverUrl: resourceCoverPreview || '',
+        driveLink: resourceFormData.driveLink || '',
         features: ['Chapter-wise Notes', 'PYQs Included', 'AI Doubt Support'],
-        is_free: Number(resourceFormData.price) === 0,
-        created_at: new Date().toISOString()
+        isFree: Number(resourceFormData.price) === 0,
+        createdAt: new Date().toISOString()
       };
 
       // STRICT Supabase for Resources (Primary)
       if (supabase) {
-        const { error } = await supabase.from('subject_resources').insert([resourceData]);
+        // We use both name variations to be safe against different table schemas
+        const { error } = await supabase.from('subject_resources').insert([{
+          ...resourceData,
+          // Support for both snake_case and camelCase
+          cover_url: resourceData.coverUrl,
+          drive_link: resourceData.driveLink,
+          is_free: resourceData.isFree,
+          created_at: resourceData.createdAt
+        }]);
+        
         if (error) throw error;
         toast.success("Book Created (Saved to Supabase)!");
       } else {
         // Fallback to Firestore
         try {
           await addDoc(collection(db, 'subject_resources'), resourceData);
-          toast.success("Book Created (Saved to Firestore - Supabase Not Configured)!");
+          toast.success("Book Created (Saved to Firestore)!");
         } catch (e) {
-          toast.error("Failed to save to Firestore. Check quota.");
           throw e;
         }
       }
@@ -340,10 +350,10 @@ export default function Admin() {
           if (error) throw error;
           data = (sbData || []).map((d: any) => ({
             ...d,
-            coverUrl: d.cover_url,
-            driveLink: d.drive_link,
-            isFree: d.is_free,
-            createdAt: d.created_at
+            coverUrl: d.coverUrl || d.cover_url,
+            driveLink: d.driveLink || d.drive_link,
+            isFree: d.isFree || (d.is_free !== undefined ? d.is_free : true),
+            createdAt: d.createdAt || d.created_at
           }));
         } catch (err) {
           console.warn("Supabase resource fetch failed, trying Firestore...");
@@ -693,6 +703,14 @@ export default function Admin() {
       toast.error("No screenshot provided for this request.");
       return;
     }
+    
+    // Admin Quota Protection
+    const now = Date.now();
+    if (now - lastAdminAiAttemptRef.current < 4000) {
+      toast.error("AI is cooling down. Please wait 4 seconds.");
+      return;
+    }
+    lastAdminAiAttemptRef.current = now;
     
     setLoading(true);
     const toastId = toast.loading("AI is analyzing the receipt...");
@@ -1665,18 +1683,26 @@ export default function Admin() {
                         if(window.confirm("Delete this book?")) {
                           setLoading(true);
                           try {
-                            // 1. Supabase Delete
+                            // 1. Supabase Delete (Primary)
                             if (supabase) {
-                              await supabase.from('subject_resources').delete().eq('id', res.id);
+                              const { error: sbError } = await supabase.from('subject_resources').delete().eq('id', res.id);
+                              if (sbError) {
+                                console.error("Supabase Delete Error:", sbError);
+                                throw new Error(`Supabase Error: ${sbError.message}`);
+                              }
                             }
                             // 2. Firestore Sync
-                            if (true) {
+                            try {
                               await deleteDoc(doc(db, 'subject_resources', res.id));
+                            } catch (fsErr) {
+                              console.warn("Firestore delete sync skipped or failed");
                             }
-                            toast.success("Deleted");
+                            
+                            toast.success("Book Deleted Permanently!");
                             fetchSubjectResources();
-                          } catch (err) {
-                            toast.error("Failed to delete");
+                          } catch (err: any) {
+                            console.error("Delete failure:", err);
+                            toast.error(`Delete failed: ${err.message || "Unknown error"}`);
                           } finally {
                             setLoading(false);
                           }

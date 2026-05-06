@@ -32,9 +32,9 @@ function handleAIError(error: any): never {
     throw new Error(`AI Key Error: The key appears invalid. Please verify your NVIDIA/Gemini API key in Settings.`);
   }
 
-  if (errorString.includes('429') || error?.status === 429 || errorString.includes('quota') || errorString.includes('exhausted')) {
-    const service = errorString.includes('nvidia') || errorString.includes('llama') ? 'NVIDIA' : 'Gemini';
-    throw new Error(`AI Limit Reached: ${service} is busy. Please wait a moment! ⏳`);
+  if (errorString.includes('429') || error?.status === 429 || errorString.includes('quota') || errorString.includes('exhausted') || errorString.includes('resource_exhausted')) {
+    const service = errorString.includes('nvidia') || errorString.includes('llama') ? 'NVIDIA' : 'Gemini AI';
+    throw new Error(`AI Limit Reached: ${service} is busy. Please wait 60 seconds before trying again! ⏳`);
   }
   
   if (errorString.includes('404') || errorString.includes('not found')) {
@@ -304,10 +304,22 @@ export const geminiService = {
     - FORGERY CHECK: If fonts or alignment looks fake or manipulated, set isValid: false.
     - OUTPUT: Only return raw JSON: {"isValid": boolean, "transactionId": string, "amount": number, "error"?: string}`;
 
-    const prompt = "Extract the Transaction ID and Amount from this receipt. Determine if the payment was successful.";
+    const prompt = "Extract the Transaction ID and Amount from this receipt. Determine if the payment was successful. Respond ONLY with JSON.";
 
     try {
-      // 1. Try Server-Side Proxy First (Safest, handles hidden keys)
+      const { apiKey, nvidiaKey } = getAI();
+
+      // 1. Try NVIDIA Vision First (Better Quota)
+      if (nvidiaKey) {
+        try {
+          const res = await this.callNvidiaAPI(prompt, system, true, "meta/llama-3.2-11b-vision-instruct", 30000, imageData);
+          return this.parsePaymentResult(res);
+        } catch (nvidiaErr) {
+          console.warn("NVIDIA Forensic failed, trying Gemini...", nvidiaErr);
+        }
+      }
+
+      // 2. Try Gemini (via Proxy or Direct)
       try {
         const response = await fetch("/api/ai/gemini", {
           method: "POST",
@@ -320,11 +332,10 @@ export const geminiService = {
           return this.parsePaymentResult(data.text);
         }
       } catch (proxyErr) {
-        console.warn("Gemini Proxy failed, trying direct browser call if key exists...");
+        console.warn("Gemini Proxy failed, trying direct browser call...");
       }
 
-      // 2. Browser-side Fallback (if VITE_GEMINI_API_KEY is present)
-      const { apiKey } = getAI();
+      // 3. Direct Browser Fallback
       if (!apiKey) throw new Error("Verification engine offline. Please finish Supabase/Gemini setup in Settings.");
 
       const ai = new GoogleGenAI({ apiKey });
@@ -342,10 +353,7 @@ export const geminiService = {
       return this.parsePaymentResult(response.text || "");
     } catch (error: any) {
       console.error("Forensic Hardware Failure:", error);
-      return { 
-        isValid: false, 
-        error: error.message || "Forensic scanning failed. Please try again with a clearer receipt screenshot." 
-      };
+      return handleAIError(error);
     }
   },
 

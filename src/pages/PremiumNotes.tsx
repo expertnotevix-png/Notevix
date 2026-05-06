@@ -79,6 +79,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiVerifying, setAiVerifying] = useState(false);
+  const lastAttemptRef = useRef<number>(0);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const upiId = (import.meta as any).env?.VITE_UPI_ID || '9236489649@mbk';
@@ -109,7 +110,8 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
   const isUnlocked = (res: SubjectResource) => {
     if (!user) return false;
-    if (user.role === 'admin' || user.email === 'expertraj8@gmail.com') return true;
+    const isAdmin = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(user.email || '');
+    if (user.role === 'admin' || isAdmin) return true;
     if (user.isPremium && user.planType === 'monthly_sub') return true;
     if (user.unlockedClasses?.includes(res.class)) return true;
     return user.unlockedResources?.includes(res.id);
@@ -162,6 +164,14 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       return;
     }
 
+    // RATE LIMITING PROTECTION
+    const now = Date.now();
+    if (now - lastAttemptRef.current < 5000) {
+       toast.error("Please wait a few seconds before retrying.");
+       return;
+    }
+    lastAttemptRef.current = now;
+
     setIsSubmitting(true);
     setAiVerifying(true);
 
@@ -211,12 +221,15 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
         if (saveResult.success) {
           // Attempt instant local access grant
-          toast.success(`AI Verified! Access granted via ${saveResult.provider.toUpperCase()}.`);
+          toast.success("AI Verified Successfully! Instant access granted.", {
+            duration: 5000,
+            icon: '✅'
+          });
           
           // Force a small delay then reload to ensure checkPremiumStatus picks it up
           setTimeout(() => {
             window.location.reload();
-          }, 1500);
+          }, 1000);
           return;
         }
       } else {
@@ -228,7 +241,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         });
 
         if (saveResult.success) {
-          toast.success(`Payment verified via ${saveResult.provider.toUpperCase()}! Admin will contact you soon.`);
+          toast.success("Payment verified! Since you're not logged in, please save your receipt. Admin will contact you on WhatsApp.");
           setSelectedPlan(null);
           return;
         }
@@ -592,6 +605,14 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
                           AI will automatically extract your <span className="text-white">Transaction ID</span> from the screenshot. Please ensure it is clear.
                         </p>
+                      </div>
+                      <div className="pt-3 border-t border-indigo-500/10 text-center space-y-1">
+                         <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
+                           Payment Issues / Stuck? Contact Admin
+                         </p>
+                         <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest leading-relaxed">
+                           WhatsApp: 9236489649 <br/> Gmail: expertnotevix@gmail.com
+                         </p>
                       </div>
                     </div>
 

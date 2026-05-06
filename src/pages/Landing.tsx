@@ -77,6 +77,7 @@ export default function Landing() {
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiVerifying, setAiVerifying] = useState(false);
+  const lastAttemptRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -142,6 +143,14 @@ export default function Landing() {
       toast.error('Please provide Email, WhatsApp, and Payment Screenshot.');
       return;
     }
+
+    // RATE LIMITING PROTECTION
+    const now = Date.now();
+    if (now - lastAttemptRef.current < 5000) {
+      toast.error("Please wait a few seconds before retrying.");
+      return;
+    }
+    lastAttemptRef.current = now;
 
     try {
       setIsSubmitting(true);
@@ -481,6 +490,15 @@ export default function Landing() {
                     )}
                   </div>
                   <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*" />
+                  
+                  <div className="p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 text-center space-y-1">
+                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
+                      Payment Stuck? Contact Admin
+                    </p>
+                    <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest leading-relaxed">
+                      WhatsApp: 9236489649 <br/> Gmail: expertnotevix@gmail.com
+                    </p>
+                  </div>
                 </div>
               </div>
 
