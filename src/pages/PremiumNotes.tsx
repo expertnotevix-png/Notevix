@@ -109,18 +109,21 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   }, [activeClass]);
 
   const isUnlocked = (res: SubjectResource) => {
+    // 0. Free resources are always unlocked
+    if (res.isFree) return true;
+
     if (!user) return false;
     
     // 1. Admin Overrides
     const isAdmin = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(user.email || '');
     if (user.role === 'admin' || isAdmin) return true;
     
-    // 2. Subscription Check
-    if (user.isPremium && user.planType === 'monthly_sub') return true;
+    // 2. Subscription Check (Master access)
+    if (user.isPremium && (user.planType === 'monthly_sub' || user.planType === 'plus_sub')) return true;
     
     // 3. Class-wide Master Pack Check
     const unlockedClasses = user.unlockedClasses || [];
-    if (unlockedClasses.includes(res.class) || unlockedClasses.includes(String(res.class))) return true;
+    if (unlockedClasses.some(c => String(c) === String(res.class))) return true;
     
     // 4. Individual Resource Check
     const unlockedResources = user.unlockedResources || [];

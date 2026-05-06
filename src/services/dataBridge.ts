@@ -51,6 +51,8 @@ export const dataBridge = {
    * Gets a user profile with Firebase fallback
    */
   async getProfile(uid: string) {
+    let result: any = null;
+
     // 1. Try Supabase
     if (supabase) {
       try {
@@ -61,8 +63,7 @@ export const dataBridge = {
           .maybeSingle();
         
         if (data && !error) {
-           // Normalize for the app
-           return {
+           result = {
              ...data,
              uid: data.id,
              displayName: data.full_name,
@@ -80,23 +81,36 @@ export const dataBridge = {
       }
     }
 
-    // 2. Try Firestore fallback
-    if (true) {
-      try {
-        const userDoc = await getDoc(doc(db, 'users', uid));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          return {
+    // 2. Try Firestore and MERGE
+    try {
+      const userDoc = await getDoc(doc(db, 'users', uid));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        if (!result) {
+          result = {
             ...userData,
-            uid: uid // ensure uid is set
+            uid: uid
           };
+        } else {
+          // Merge logic: Take premium and unlocked counts from Firestore too if they are more comprehensive
+          result.isPremium = result.isPremium || userData.isPremium || false;
+          
+          const fsResources = userData.unlockedResources || [];
+          result.unlockedResources = Array.from(new Set([...(result.unlockedResources || []), ...fsResources]));
+          
+          const fsClasses = userData.unlockedClasses || [];
+          result.unlockedClasses = Array.from(new Set([...(result.unlockedClasses || []), ...fsClasses]));
+
+          // Sync other fields if missing in Supabase
+          if (!result.displayName && userData.displayName) result.displayName = userData.displayName;
+          if (!result.savedNotes?.length && userData.savedNotes?.length) result.savedNotes = userData.savedNotes;
         }
-      } catch (err) {
-        console.warn("Firestore profile fetch failed:", err);
       }
+    } catch (err) {
+      console.warn("Firestore profile fetch failed:", err);
     }
 
-    return null;
+    return result;
   },
 
   /**
@@ -272,6 +286,9 @@ export const dataBridge = {
    * Checks Supabase first, then local resources.json as a secondary safety.
    */
   async getResources(classLevel: string): Promise<SubjectResource[]> {
+    let dbResources: SubjectResource[] = [];
+
+    // 1. Try Supabase
     if (supabase) {
       try {
         const { data, error } = await supabase
@@ -279,9 +296,8 @@ export const dataBridge = {
           .select('*')
           .eq('class', classLevel);
         
-        if (error) throw error;
-        if (data && data.length > 0) {
-          return data.map((d: any) => ({
+        if (!error && data && data.length > 0) {
+          dbResources = data.map((d: any) => ({
             id: d.id,
             subject: d.subject,
             class: d.class,
@@ -295,38 +311,40 @@ export const dataBridge = {
           })) as SubjectResource[];
         }
       } catch (err) {
-        console.error("Supabase resource fetch failed:", err);
+        console.warn("Supabase resource fetch failed:", err);
       }
     }
 
-    // 2. Try Firestore fallback
-    try {
-      const q = query(collection(db, 'subject_resources'), where('class', '==', classLevel));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectResource));
+    // 2. Try Firestore if Supabase empty
+    if (dbResources.length === 0) {
+      try {
+        const q = query(collection(db, 'subject_resources'), where('class', '==', classLevel));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          dbResources = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectResource));
+        }
+      } catch (err) {
+        console.warn("Firestore resource fetch failed:", err);
       }
-    } catch (err) {
-      console.warn("Firestore resource fetch failed:", err);
     }
 
-    // 3. Last Resort: Local JSON Fallback (always works)
-    try {
-      const response = await fetch('/data/resources.json');
-      const jsonData = await response.json();
-      const filtered = jsonData.resources.filter((r: any) => r.class === classLevel);
-      return filtered.map((r: any) => ({
-        ...r,
-        subject: r.subject ? r.subject.charAt(0).toUpperCase() + r.subject.slice(1).toLowerCase() : 'Subject',
-        price: r.price || 0,
-        isFree: r.isFree !== undefined ? r.isFree : true,
-        description: r.description || `Notes for Class ${classLevel} ${r.subject || ''}.`
-      }));
-    } catch (e) {
-      console.warn("Fallback resources fetch failed:", e);
-    }
+    // 3. Always include/merge with Local JSON Fallback (curated list)
+    const localResources = (resourcesData.resources || []).filter(r => r.class === classLevel).map(r => ({
+      ...r,
+      price: r.price || 39,
+      isFree: !r.isPremium,
+      description: r.summary || `Comprehensive notes for Class ${classLevel} ${r.subject}.`
+    } as any));
 
-    return [];
+    // Merge logic: Combine by ID, prefer DB version if exists
+    const mergedMap = new Map<string, SubjectResource>();
+    
+    // Add local first
+    localResources.forEach(r => mergedMap.set(r.id, r));
+    // Overwrite with DB
+    dbResources.forEach(r => mergedMap.set(r.id, r));
+
+    return Array.from(mergedMap.values());
   },
 
   /**
@@ -471,6 +489,20 @@ export const dataBridge = {
                     ...updates,
                     updated_at: new Date().toISOString()
                   }).eq('id', requestData.userId);
+                }
+
+                // IMPORTANT: ALSO UPDATE FIRESTORE PROFILE FOR INSTANT ACCESS SYNC
+                try {
+                   const firestoreUpdates: any = {};
+                   if (updates.is_premium) firestoreUpdates.isPremium = true;
+                   if (updates.unlocked_resources) firestoreUpdates.unlockedResources = updates.unlocked_resources;
+                   if (updates.unlocked_classes) firestoreUpdates.unlockedClasses = updates.unlocked_classes;
+                   
+                   if (Object.keys(firestoreUpdates).length > 0) {
+                      await firestoreUpdateDoc(doc(db, 'users', requestData.userId), firestoreUpdates);
+                   }
+                } catch (fsErr) {
+                   console.error("Firestore instant sync failed:", fsErr);
                 }
              } catch (updateErr) {
                 console.error("Instant access grant failed:", updateErr);

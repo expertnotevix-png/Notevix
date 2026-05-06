@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     study_mode BOOLEAN DEFAULT FALSE,
     instagram TEXT,
     saved_notes JSONB DEFAULT '[]',
+    unlocked_resources JSONB DEFAULT '[]',
+    unlocked_classes JSONB DEFAULT '[]',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
