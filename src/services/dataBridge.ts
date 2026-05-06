@@ -384,12 +384,13 @@ export const dataBridge = {
   },
 
   /**
-   * Save a purchase request (Supabase Primary)
+   * Save a purchase request (Supabase Primary) with Instant Approval helper
    */
   async savePurchaseRequest(requestData: any) {
     const txId = requestData.transactionId.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const status = requestData.status || 'pending';
     
-    // 1. Try Supabase First
+    // 1. Try Supabase First (Truth source)
     if (supabase) {
       try {
         const { error } = await supabase
@@ -402,27 +403,42 @@ export const dataBridge = {
             amount: requestData.amount,
             planId: requestData.planId,
             planName: requestData.planName,
-            status: 'pending',
+            status: status,
             created_at: new Date().toISOString()
           }]);
         
-        if (!error) return { success: true, provider: 'supabase' };
+        if (!error) {
+          // IF INSTANTLY APPROVED (AI Verified), UPDATE USER PROFILE IMMEDIATELY
+          if (status === 'approved' && requestData.userId && requestData.userId !== 'GUEST') {
+             const updates: any = {};
+             if (requestData.planId === 'plus_sub' || requestData.planId === 'monthly_sub') {
+               updates.is_premium = true;
+             }
+             
+             // Update the profile in Supabase
+             await supabase.from('profiles').update({
+               ...updates,
+               updated_at: new Date().toISOString()
+             }).eq('id', requestData.userId);
+          }
+          return { success: true, provider: 'supabase' };
+        }
       } catch (err: any) {
         console.warn("Supabase save failed:", err);
       }
     }
 
-    // 2. Sync to Firestore (Backup only)
+    // 2. Sync to Firestore (Backup only - silent)
     try {
       await addDoc(collection(db, 'purchase_requests'), {
         ...requestData,
         transactionId: txId,
-        status: 'pending',
+        status: status,
         createdAt: serverTimestamp()
       });
-      return { success: true, provider: 'firestore' };
+      return { success: true, provider: 'fallback' };
     } catch (err: any) {
-      console.error("Firestore Save Failed:", err);
+      console.error("Database Save Failed:", err);
       return { success: false, error: err.message };
     }
   },

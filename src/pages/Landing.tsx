@@ -189,7 +189,7 @@ export default function Landing() {
         subject: selectedPlan?.subject || null,
         class: selectedPlan?.class || null,
         amount: result.amount || selectedPlan?.price || 0,
-        status: 'pending',
+        status: 'approved',
         isGuest: true
       });
 
@@ -197,7 +197,9 @@ export default function Landing() {
         throw new Error(saveResult.error || "Failed to save purchase request. Please contact support.");
       }
 
-      toast.success(`AI Verified! Saved via ${saveResult.provider.toUpperCase()}. We will contact you soon.`);
+      toast.success("AI Verified! Your access is being linked to this email. Please check your mail or WhatsApp shortly.", {
+        duration: 8000
+      });
       setSelectedPlan(null);
       setScreenshotPreview(null);
       setWhatsapp('');

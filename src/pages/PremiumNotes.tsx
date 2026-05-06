@@ -207,7 +207,8 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         planName: selectedPlan?.name,
         class: selectedPlan?.class || activeClass,
         resourceId: selectedPlan?.resourceId || null,
-        isGuest: !user
+        isGuest: !user,
+        status: 'approved' // AI Verified = Approved
       };
 
       let saveResult;
@@ -222,14 +223,14 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         if (saveResult.success) {
           // Attempt instant local access grant
           toast.success("AI Verified Successfully! Instant access granted.", {
-            duration: 5000,
+            duration: 8000,
             icon: '✅'
           });
           
-          // Force a small delay then reload to ensure checkPremiumStatus picks it up
+          // Force a small delay then reload
           setTimeout(() => {
             window.location.reload();
-          }, 1000);
+          }, 1500);
           return;
         }
       } else {
@@ -241,7 +242,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         });
 
         if (saveResult.success) {
-          toast.success("Payment verified! Since you're not logged in, please save your receipt. Admin will contact you on WhatsApp.");
+          toast.success("Payment verified! Since you're not logged in, please save your receipt screenshot. Access will be linked to your email shortly.");
           setSelectedPlan(null);
           return;
         }

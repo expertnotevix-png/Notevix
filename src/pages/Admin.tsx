@@ -210,12 +210,12 @@ export default function Admin() {
         }]);
         
         if (error) throw error;
-        toast.success("Book Created (Saved to Supabase)!");
+        toast.success("Resource Created Successfully!");
       } else {
         // Fallback to Firestore
         try {
           await addDoc(collection(db, 'subject_resources'), resourceData);
-          toast.success("Book Created (Saved to Firestore)!");
+          toast.success("Resource Created!");
         } catch (e) {
           throw e;
         }
@@ -743,51 +743,49 @@ export default function Admin() {
   const fetchPurchaseRequests = async () => {
     setLoading(true);
     try {
-      let fsData: any[] = [];
-      let sbData: any[] = [];
+      let data: any[] = [];
 
-      // 1. Fetch from Firestore (Fallback)
-      try {
-        const q = query(collection(db, 'purchase_requests'), orderBy('timestamp', 'desc'), limit(50));
-        const snapshot = await getDocs(q);
-        fsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, source: 'firebase' } as PurchaseRequest));
-      } catch (e) {
-        console.warn("Firestore purchase fetch skipped");
-      }
-
-      // 2. Fetch from Supabase (Primary)
+      // 1. Fetch from Supabase (Primary - No Quota issues)
       if (supabase) {
         try {
-          const { data, error } = await supabase
+          const { data: sbData, error } = await supabase
             .from('purchase_requests')
             .select('*')
             .order('created_at', { ascending: false })
-            .limit(100);
+            .limit(200);
           
-          if (data) {
-            sbData = data.map(d => ({ 
+          if (!error && sbData) {
+            data = sbData.map(d => ({ 
               ...d, 
               source: 'supabase',
-              // Normalize for admin view
               timestamp: d.created_at || d.timestamp,
               transactionId: d.transactionId || d.transaction_id
-            } as unknown as PurchaseRequest));
+            } as any));
           }
         } catch (e) {
           console.warn("Supabase purchase fetch failed:", e);
         }
       }
 
-      // Merge and sort
-      const merged = [...sbData, ...fsData].map(item => ({
-        ...item,
-        // Ensure every item has a sortable timestamp
-        sortDate: item.timestamp || item.createdAt || item.created_at || new Date().toISOString()
-      })).sort((a, b) => 
-        new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime()
-      );
+      // 2. Fetch from Firestore (Fallback - only if Supabase returned nothing)
+      if (data.length === 0) {
+        try {
+          const q = query(collection(db, 'purchase_requests'), orderBy('timestamp', 'desc'), limit(50));
+          const snapshot = await getDocs(q);
+          data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, source: 'firebase' } as any));
+        } catch (e) {
+          console.warn("Firestore purchase fetch skipped");
+        }
+      }
 
-      setPurchaseRequests(merged);
+      // Sort final list
+      const sorted = data.sort((a, b) => {
+        const dateA = new Date(a.created_at || a.timestamp || 0).getTime();
+        const dateB = new Date(b.created_at || b.timestamp || 0).getTime();
+        return dateB - dateA;
+      });
+
+      setPurchaseRequests(sorted);
     } catch (error: any) {
       console.error("Error fetching purchase requests:", error);
     } finally {
