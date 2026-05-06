@@ -76,6 +76,25 @@ export const dataBridge = {
              unlockedClasses: data.unlocked_classes || [],
              streak: { currentCount: data.streak || 0 }
            };
+
+           // MERGE: Search for any approved individual purchases linked by email
+           if (result.email) {
+             const { data: emailPurchases } = await supabase
+               .from('purchase_requests')
+               .select('resourceId, planId')
+               .eq('email', result.email)
+               .eq('status', 'approved');
+             
+             if (emailPurchases && emailPurchases.length > 0) {
+               const emailRes = emailPurchases.filter(p => !!p.resourceId).map(p => p.resourceId);
+               result.unlockedResources = Array.from(new Set([...result.unlockedResources, ...emailRes]));
+               
+               // If any purchase is for a master pack or premium sub
+               if (emailPurchases.some(p => p.planId === 'plus_sub' || p.planId === 'monthly_sub')) {
+                 result.isPremium = true;
+               }
+             }
+           }
         }
       } catch (err) {
         console.warn("Supabase profile fetch failed:", err);
@@ -401,29 +420,39 @@ export const dataBridge = {
     const txId = requestData.transactionId.toUpperCase().replace(/[^A-Z0-9]/g, '');
     const status = requestData.status || 'pending';
     
+    // Attempt to resolve real userId if 'GUEST' but email exists
+    let activeUserId = requestData.userId;
+    if (activeUserId === 'GUEST' && requestData.email && supabase) {
+      try {
+        const { data: profile } = await supabase.from('profiles').select('id').eq('email', requestData.email).maybeSingle();
+        if (profile) activeUserId = profile.id;
+      } catch (err) {}
+    }
+
     // 1. Try Supabase First (Truth source)
     if (supabase) {
       try {
         const { error } = await supabase
           .from('purchase_requests')
           .insert([{
-            user_id: requestData.userId,
+            user_id: activeUserId,
             email: requestData.email,
             whatsapp: requestData.whatsapp,
             transactionId: txId,
             amount: requestData.amount,
             planId: requestData.planId,
             planName: requestData.planName,
+            resourceId: requestData.resourceId || null,
             status: status,
             created_at: new Date().toISOString()
           }]);
         
         if (!error) {
           // IF INSTANTLY APPROVED (AI Verified), UPDATE USER PROFILE IMMEDIATELY
-          if (status === 'approved' && requestData.userId && requestData.userId !== 'GUEST') {
+          if (status === 'approved' && activeUserId && activeUserId !== 'GUEST') {
              try {
                 // Fetch current profile to get existing unlocked items
-                const { data: profile } = await supabase.from('profiles').select('*').eq('id', requestData.userId).maybeSingle();
+                const { data: profile } = await supabase.from('profiles').select('*').eq('id', activeUserId).maybeSingle();
                 
                 const updates: any = {};
                 
@@ -459,7 +488,7 @@ export const dataBridge = {
                   await supabase.from('profiles').update({
                     ...updates,
                     updated_at: new Date().toISOString()
-                  }).eq('id', requestData.userId);
+                  }).eq('id', activeUserId);
                 }
 
                 // IMPORTANT: ALSO UPDATE FIRESTORE PROFILE FOR INSTANT ACCESS SYNC
@@ -470,7 +499,7 @@ export const dataBridge = {
                    if (updates.unlocked_classes) firestoreUpdates.unlockedClasses = updates.unlocked_classes;
                    
                    if (Object.keys(firestoreUpdates).length > 0) {
-                      await firestoreUpdateDoc(doc(db, 'users', requestData.userId), firestoreUpdates);
+                      await firestoreUpdateDoc(doc(db, 'users', activeUserId), firestoreUpdates);
                    }
                 } catch (fsErr) {
                    console.error("Firestore instant sync failed:", fsErr);

@@ -134,7 +134,8 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     
     // 4. Individual Resource Check
     const unlockedResources = user.unlockedResources || [];
-    if (unlockedResources.includes(res.id)) return true;
+    const resId = String(res.id);
+    if (unlockedResources.some(id => String(id) === resId)) return true;
     
     return false;
   };

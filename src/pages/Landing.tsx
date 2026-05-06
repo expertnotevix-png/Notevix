@@ -186,6 +186,7 @@ export default function Landing() {
         transactionId: finalTxId,
         planId: selectedPlan?.id,
         planName: selectedPlan?.name,
+        resourceId: selectedPlan?.resourceId || null,
         subject: selectedPlan?.subject || null,
         class: selectedPlan?.class || null,
         amount: result.amount || selectedPlan?.price || 0,
