@@ -120,6 +120,8 @@ export default function App() {
           referralCode: 'SYNCING',
           referralCount: 0,
           isPremium: isAdmin, // Admin is always premium
+          unlockedResources: [],
+          unlockedClasses: [],
           createdAt: new Date().toISOString(),
           streak: { currentCount: 0, lastUpdateDate: '' }
         };

@@ -110,11 +110,23 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
   const isUnlocked = (res: SubjectResource) => {
     if (!user) return false;
+    
+    // 1. Admin Overrides
     const isAdmin = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(user.email || '');
     if (user.role === 'admin' || isAdmin) return true;
+    
+    // 2. Subscription Check
     if (user.isPremium && user.planType === 'monthly_sub') return true;
-    if (user.unlockedClasses?.includes(res.class)) return true;
-    return user.unlockedResources?.includes(res.id);
+    
+    // 3. Class-wide Master Pack Check
+    const unlockedClasses = user.unlockedClasses || [];
+    if (unlockedClasses.includes(res.class) || unlockedClasses.includes(String(res.class))) return true;
+    
+    // 4. Individual Resource Check
+    const unlockedResources = user.unlockedResources || [];
+    if (unlockedResources.includes(res.id)) return true;
+    
+    return false;
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -538,13 +550,16 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                   <div className="p-6 bg-indigo-600/5 border border-indigo-600/20 rounded-[2rem] flex flex-col items-center gap-6">
                     <div className="p-4 bg-white rounded-3xl">
                       <img 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=${upiId}&pn=NoteVix&am=${selectedPlan.price}&cu=INR`}
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=${upiId}&pn=Poonam%20Devi&am=${selectedPlan.price}&cu=INR`}
                         alt="QR"
                         className="w-32 h-32"
                       />
                     </div>
                     <div className="text-center space-y-2">
-                       <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Tap to copy UPI ID</p>
+                       <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
+                         Pay to: <span className="text-white">Poonam Devi</span> <br />
+                         ID: <span className="text-white">{upiId}</span>
+                       </p>
                        <button 
                         onClick={() => {
                           navigator.clipboard.writeText(upiId);

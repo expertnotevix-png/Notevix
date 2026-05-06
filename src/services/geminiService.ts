@@ -298,7 +298,8 @@ export const geminiService = {
     4. Success Indicators: Large Green Checkmark, "Payment Successful", "Money sent", "Paid successfully".
     
     CRITICAL INSTRUCTIONS:
-    - VALID AMOUNTS: A valid payment MUST be exactly ₹39 (Single Subject) or ₹99 (Master Pack/Combo). If the amount is any other value, set isValid: false.
+    - RECIPIENT VERIFICATION: The payment MUST be made to "Poonam Devi". Look for the name or the MobiKwik ID "9236489649@mbk". If the recipient is anyone else, set isValid: false with error: "Recipient mismatch".
+    - VALID AMOUNTS: A valid payment MUST be exactly ₹39 (Single Subject) or ₹99 (Master Pack/Combo). If the amount is any other value, set isValid: false with error: "Invalid amount".
     - TRANSACTION ID: You MUST extract the 12-digit UTR or alphanumeric Transaction ID.
     - IDENTIFY STATUS: Valid only if "Success", "Completed", or similar terminal state. "Processing/Pending" = invalid.
     - OUTPUT: Only return raw JSON: {"isValid": boolean, "transactionId": string, "amount": number, "error"?: string}`;

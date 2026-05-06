@@ -443,32 +443,25 @@ export const dataBridge = {
                   updates.is_premium = true;
                 }
                 
-                // Handle Individual Resource Purchase (res_<id>)
-                if (requestData.planId?.startsWith('res_')) {
-                   const resIdToken = requestData.planId.replace('res_', '');
-                   const currentResources = profile?.unlocked_resources || [];
-                   if (!currentResources.includes(resIdToken)) {
-                     updates.unlocked_resources = [...currentResources, resIdToken];
-                   }
-                }
-
-                // Handle individual resourceId if provided separately
-                if (requestData.resourceId) {
-                   const currentResources = profile?.unlocked_resources || (updates.unlocked_resources) || [];
-                   if (!currentResources.includes(requestData.resourceId)) {
-                     updates.unlocked_resources = [...currentResources, requestData.resourceId];
-                   }
-                }
+                const currentResources = profile?.unlocked_resources || [];
+                const currentClasses = profile?.unlocked_classes || [];
 
                 // Handle Master Pack Purchase (class_<cls>_one_time)
                 if (requestData.planId?.includes('_one_time')) {
                    const classMatch = requestData.planId.match(/class_(\d+)_/);
                    if (classMatch) {
                       const cls = classMatch[1];
-                      const currentClasses = profile?.unlocked_classes || [];
                       if (!currentClasses.includes(cls)) {
-                        updates.unlocked_classes = [...currentClasses, cls];
+                        updates.unlocked_classes = Array.from(new Set([...currentClasses, cls]));
                       }
+                   }
+                }
+                
+                // Handle Individual Resource Purchase
+                const targetResId = requestData.resourceId || (requestData.planId?.startsWith('res_') ? requestData.planId.replace('res_', '') : null);
+                if (targetResId) {
+                   if (!currentResources.includes(targetResId)) {
+                     updates.unlocked_resources = Array.from(new Set([...currentResources, targetResId]));
                    }
                 }
                 

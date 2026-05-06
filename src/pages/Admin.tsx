@@ -952,24 +952,50 @@ export default function Admin() {
         await updateDoc(finalUserRef, updateData);
         // Supabase Sync
         if (supabase) {
-          await supabase.from('profiles').update({ is_premium: true }).eq('id', req.userId);
+          await supabase.from('profiles').update({ is_premium: true, updated_at: new Date().toISOString() }).eq('id', req.userId);
         }
-      } else if (req.planType === 'one-time' && req.targetClass) {
-        const currentUnlocked = (userData?.unlockedClasses || []) as string[];
-        if (!currentUnlocked.includes(req.targetClass)) {
-          const updateData = { 
-            unlockedClasses: [...currentUnlocked, req.targetClass]
-          };
-          await updateDoc(finalUserRef, updateData);
-          // Supabase Sync (optional: track unlocked classes in Supabase too if needed)
+      } else if (req.planId?.startsWith('res_') || req.resourceId) {
+        const resId = req.resourceId || req.planId.replace('res_', '');
+        const currentUnlocked = (userData?.unlockedResources || []) as string[];
+        if (!currentUnlocked.includes(resId)) {
+          const newResources = Array.from(new Set([...currentUnlocked, resId]));
+          await updateDoc(finalUserRef, { 
+            unlockedResources: newResources
+          });
+          
           if (supabase) {
-            await supabase.from('profiles').update({ is_premium: true }).eq('id', req.userId);
+             // Sync to Supabase profile
+             const { data: profile } = await supabase.from('profiles').select('unlocked_resources').eq('id', req.userId).maybeSingle();
+             const sbResources = Array.from(new Set([...(profile?.unlocked_resources || []), resId]));
+             await supabase.from('profiles').update({ 
+               unlocked_resources: sbResources,
+               updated_at: new Date().toISOString()
+             }).eq('id', req.userId);
+          }
+        }
+      } else if (req.targetClass || req.planId?.includes('_one_time')) {
+        const targetCls = req.targetClass || (req.planId?.match(/class_(\d+)_/)?.[1]);
+        const currentClasses = (userData?.unlockedClasses || []) as string[];
+        
+        if (targetCls && !currentClasses.includes(targetCls)) {
+          const newClasses = Array.from(new Set([...currentClasses, targetCls]));
+          await updateDoc(finalUserRef, { 
+            unlockedClasses: newClasses
+          });
+          
+          if (supabase) {
+             const { data: profile } = await supabase.from('profiles').select('unlocked_classes').eq('id', req.userId).maybeSingle();
+             const sbClasses = Array.from(new Set([...(profile?.unlocked_classes || []), targetCls]));
+             await supabase.from('profiles').update({ 
+               unlocked_classes: sbClasses,
+               updated_at: new Date().toISOString()
+             }).eq('id', req.userId);
           }
         }
       } else {
         await updateDoc(finalUserRef, { isPremium: true });
         if (supabase) {
-          await supabase.from('profiles').update({ is_premium: true }).eq('id', req.userId);
+          await supabase.from('profiles').update({ is_premium: true, updated_at: new Date().toISOString() }).eq('id', req.userId);
         }
       }
       
