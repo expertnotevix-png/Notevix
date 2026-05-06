@@ -15,7 +15,6 @@ import {
 import { db, checkQuotaLock } from '../components/firebase';
 import { supabase } from '../lib/supabase';
 import { SubjectResource } from '../types';
-import { resourcesData } from '../data/resources';
 
 export const dataBridge = {
   /**
@@ -63,6 +62,7 @@ export const dataBridge = {
           .maybeSingle();
         
         if (data && !error) {
+           const isAdmin = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(data.email?.toLowerCase());
            result = {
              ...data,
              uid: data.id,
@@ -70,7 +70,7 @@ export const dataBridge = {
              photoURL: data.avatar_url,
              class: data.class_level,
              totalPoints: data.xp,
-             isPremium: data.is_premium,
+             isPremium: data.is_premium || isAdmin,
              unlockedResources: data.unlocked_resources || [],
              unlockedClasses: data.unlocked_classes || [],
              streak: { currentCount: data.streak || 0 }
@@ -282,13 +282,10 @@ export const dataBridge = {
   },
 
   /**
-   * Get subject resources (Notes, etc)
-   * Checks Supabase first, then local resources.json as a secondary safety.
+   * Get subject resources (Notes, etc) from Supabase primarily
    */
   async getResources(classLevel: string): Promise<SubjectResource[]> {
-    let dbResources: SubjectResource[] = [];
-
-    // 1. Try Supabase
+    // 1. Try Supabase (Absolute Truth)
     if (supabase) {
       try {
         const { data, error } = await supabase
@@ -297,11 +294,11 @@ export const dataBridge = {
           .eq('class', classLevel);
         
         if (!error && data && data.length > 0) {
-          dbResources = data.map((d: any) => ({
+          return data.map((d: any) => ({
             id: d.id,
             subject: d.subject,
             class: d.class,
-            price: d.price,
+            price: d.price || 39,
             description: d.description,
             coverUrl: d.cover_url,
             driveLink: d.drive_link,
@@ -315,36 +312,18 @@ export const dataBridge = {
       }
     }
 
-    // 2. Try Firestore if Supabase empty
-    if (dbResources.length === 0) {
-      try {
-        const q = query(collection(db, 'subject_resources'), where('class', '==', classLevel));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          dbResources = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectResource));
-        }
-      } catch (err) {
-        console.warn("Firestore resource fetch failed:", err);
+    // 2. Try Firestore fallback only if Supabase is down
+    try {
+      const q = query(collection(db, 'subject_resources'), where('class', '==', classLevel));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectResource));
       }
+    } catch (err) {
+      console.warn("Firestore resource fetch failed:", err);
     }
 
-    // 3. Always include/merge with Local JSON Fallback (curated list)
-    const localResources = (resourcesData.resources || []).filter(r => r.class === classLevel).map(r => ({
-      ...r,
-      price: r.price || 39,
-      isFree: !r.isPremium,
-      description: r.summary || `Comprehensive notes for Class ${classLevel} ${r.subject}.`
-    } as any));
-
-    // Merge logic: Combine by ID, prefer DB version if exists
-    const mergedMap = new Map<string, SubjectResource>();
-    
-    // Add local first
-    localResources.forEach(r => mergedMap.set(r.id, r));
-    // Overwrite with DB
-    dbResources.forEach(r => mergedMap.set(r.id, r));
-
-    return Array.from(mergedMap.values());
+    return [];
   },
 
   /**
@@ -508,6 +487,15 @@ export const dataBridge = {
                 console.error("Instant access grant failed:", updateErr);
              }
           }
+          
+          // ALSO MARK TRANSACTION AS USED IN FIRESTORE REGISTRY
+          try {
+             await setDoc(doc(db, 'transaction_id_registry', txId), {
+               email: requestData.email,
+               usedAt: serverTimestamp()
+             });
+          } catch(e) {}
+
           return { success: true, provider: 'supabase' };
         }
       } catch (err: any) {
@@ -566,30 +554,53 @@ export const dataBridge = {
   },
 
   /**
-   * Resources
+   * Resources - Exclusively from Database
    */
   async getResourcesByClassAndSubject(classLevel: string, subjectId: string) {
-    if (subjectId === 'all') {
-      return resourcesData.resources.filter(r => r.class === classLevel);
+    if (supabase) {
+      try {
+        let q = supabase.from('subject_resources').select('*').eq('class', classLevel);
+        if (subjectId !== 'all') q = q.eq('subject', subjectId);
+        const { data } = await q;
+        if (data && data.length > 0) return data;
+      } catch (err) {}
     }
-    return resourcesData.resources.filter(r => r.class === classLevel && r.subject === subjectId);
+    return [];
   },
 
   async getResourceById(noteId: string) {
-    return resourcesData.resources.find(r => r.id === noteId) || null;
+    if (supabase) {
+      try {
+        const { data } = await supabase.from('subject_resources').select('*').eq('id', noteId).maybeSingle();
+        if (data) return data;
+      } catch (err) {}
+    }
+    return null;
   },
 
   async searchResources(term: string) {
-    const lowerTerm = term.toLowerCase();
-    return resourcesData.resources.filter(r => 
-      r.title?.toLowerCase().includes(lowerTerm) ||
-      r.subject?.toLowerCase().includes(lowerTerm)
-    ).slice(0, 30);
+    if (supabase) {
+      try {
+        const { data } = await supabase
+          .from('subject_resources')
+          .select('*')
+          .or(`title.ilike.%${term}%,subject.ilike.%${term}%`)
+          .limit(20);
+        if (data) return data;
+      } catch (err) {}
+    }
+    return [];
   },
 
   async getSavedNotes(noteIds: string[]) {
     if (!noteIds || noteIds.length === 0) return [];
-    return resourcesData.resources.filter(r => noteIds.includes(r.id));
+    if (supabase) {
+      try {
+        const { data } = await supabase.from('subject_resources').select('*').in('id', noteIds);
+        if (data) return data;
+      } catch (err) {}
+    }
+    return [];
   },
 
   async toggleSavedNote(uid: string, currentSavedNotes: string[], noteId: string) {

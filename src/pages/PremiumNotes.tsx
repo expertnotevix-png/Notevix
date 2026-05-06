@@ -114,12 +114,14 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
     if (!user) return false;
     
-    // 1. Admin Overrides
-    const isAdmin = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(user.email || '');
+    // 1. Admin Overrides - Use absolute email check as backup
+    const adminEmails = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'];
+    const isAdmin = adminEmails.includes(user.email?.toLowerCase());
     if (user.role === 'admin' || isAdmin) return true;
     
     // 2. Subscription Check (Master access)
-    if (user.isPremium && (user.planType === 'monthly_sub' || user.planType === 'plus_sub')) return true;
+    // If user is premium, they get everything. planType check was too restrictive.
+    if (user.isPremium) return true;
     
     // 3. Class-wide Master Pack Check
     const unlockedClasses = user.unlockedClasses || [];
