@@ -125,7 +125,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     
     // 2. Subscription Check (Master access)
     // Only grant blanket access if the user is premium AND has a recurring plan type (not just a single purchase)
-    if (user.isPremium && (user.planType === 'monthly_sub' || user.planType === 'plus_sub' || user.role === 'admin')) {
+    if (user.isPremium && (user.planType === 'monthly_sub' || user.planType === 'plus_sub')) {
       return true;
     }
     

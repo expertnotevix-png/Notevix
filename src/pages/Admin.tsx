@@ -1798,14 +1798,19 @@ export default function Admin() {
                       onClick={() => {
                         setEditingResource(res);
                         setResourceFormData({
-                          subject: res.subject,
-                          class: res.class,
-                          price: res.price.toString(),
-                          description: res.description,
-                          driveLink: res.driveLink
+                          subject: res.subject || '',
+                          class: res.class || '10',
+                          price: (res.price !== undefined && res.price !== null) ? res.price.toString() : '0',
+                          description: res.description || '',
+                          driveLink: res.driveLink || ''
                         });
-                        setResourceCoverPreview(res.coverUrl);
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        setResourceCoverPreview(res.coverUrl || null);
+                        setIsAddingResource(true);
+                        // Using a more reliable scroll for nested containers
+                        const container = document.querySelector('.overflow-y-auto');
+                        if (container) {
+                          container.scrollTo({ top: 0, behavior: 'smooth' });
+                        }
                       }}
                       className="flex-1 bg-white/5 hover:bg-white/10 py-4 rounded-2xl text-[10px] font-black uppercase transition-all tracking-widest border border-white/5"
                     >

@@ -134,6 +134,7 @@ export interface SubjectResource {
   description?: string;
   features?: string[];
   isFree?: boolean;
+  createdAt?: string;
 }
 
 export interface PurchaseRequest {
