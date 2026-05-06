@@ -1,12 +1,13 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, FlaskConical, Globe, Languages, Shield, Zap, Trophy, ChevronRight, Crown, Upload, QrCode } from 'lucide-react';
+import { BookOpen, FlaskConical, Globe, Languages, Shield, Zap, Trophy, ChevronRight, Crown, Upload, QrCode, ShieldCheck, Copy, AlertCircle, Info } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { useState, useEffect, useRef } from 'react';
 import { db } from '../components/firebase';
 import { collection, addDoc, doc, setDoc, getDocs, query, orderBy, onSnapshot, where } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { geminiService } from '../services/geminiService';
+import { SUBJECT_PASSWORDS, PAYMENT_GUIDELINES } from '../constants';
 
 import { dataBridge } from '../services/dataBridge';
 
@@ -77,6 +78,7 @@ export default function Landing() {
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiVerifying, setAiVerifying] = useState(false);
+  const [purchaseSuccess, setPurchaseSuccess] = useState<{ password: string; subject: string } | null>(null);
   const lastAttemptRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -198,10 +200,22 @@ export default function Landing() {
         throw new Error(saveResult.error || "Failed to save purchase request. Please contact support.");
       }
 
-      toast.success("AI Verified! Your access is being linked to this email. Please check your mail or WhatsApp shortly.", {
-        duration: 8000
-      });
-      setSelectedPlan(null);
+      // Show instant password for individual subjects
+      const subjectKey = (selectedPlan?.subject || selectedPlan?.name || '').toLowerCase().split(' ')[0] || '';
+      const password = SUBJECT_PASSWORDS[subjectKey] || "CONTACT_ADMIN";
+
+      if (selectedPlan?.resourceId || selectedPlan?.id.startsWith('individual_')) {
+          setPurchaseSuccess({ 
+            password: password, 
+            subject: selectedPlan.name.replace(' Premium', '') 
+          });
+      } else {
+          toast.success("AI Verified! Your access is being linked to this email. Please check your mail or WhatsApp shortly.", {
+            duration: 8000
+          });
+          setSelectedPlan(null);
+      }
+
       setScreenshotPreview(null);
       setWhatsapp('');
       setEmail('');
@@ -396,6 +410,65 @@ export default function Landing() {
 
       {/* Guest Modal */}
       <AnimatePresence>
+        {purchaseSuccess && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/95 backdrop-blur-3xl">
+             <motion.div
+               initial={{ opacity: 0, scale: 0.9, y: 30 }}
+               animate={{ opacity: 1, scale: 1, y: 0 }}
+               className="w-full max-w-md bg-[#0a0a0a] border border-emerald-500/30 rounded-[3rem] p-10 text-center space-y-8 relative overflow-hidden"
+             >
+                <div className="absolute -top-24 -left-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-[80px]" />
+                
+                <div className="flex flex-col items-center gap-6">
+                   <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20">
+                     <ShieldCheck className="w-10 h-10 text-emerald-400" />
+                   </div>
+                   <div className="space-y-2">
+                     <h2 className="text-3xl font-black text-white uppercase tracking-tighter">AI VERIFIED</h2>
+                     <p className="text-emerald-400 text-xs font-black uppercase tracking-widest leading-none">{purchaseSuccess.subject} UNLOCKED</p>
+                   </div>
+                </div>
+
+                <div className="p-8 rounded-3xl bg-white/5 border border-white/10 space-y-4">
+                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">YOUR PDF PASSWORD</p>
+                   <div className="flex flex-col items-center gap-4">
+                      <code className="text-4xl font-black text-white tracking-[0.2em]">{purchaseSuccess.password}</code>
+                      <button 
+                        onClick={() => {
+                          navigator.clipboard.writeText(purchaseSuccess.password);
+                          toast.success("Password Copied!");
+                        }}
+                        className="p-3 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors"
+                      >
+                        <Copy className="w-5 h-5 text-emerald-400" />
+                      </button>
+                   </div>
+                </div>
+
+                <div className="space-y-6">
+                   <div className="flex items-start gap-3 bg-white/5 p-4 rounded-2xl text-left">
+                     <AlertCircle className="w-4 h-4 text-emerald-400 mt-1 flex-shrink-0" />
+                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
+                       This password works for the PDF link we have provided. Ensure all letters are <span className="text-white">CAPITAL</span>.
+                     </p>
+                   </div>
+                   
+                   <button 
+                    onClick={() => {
+                      setPurchaseSuccess(null);
+                      setSelectedPlan(null);
+                    }}
+                    className="w-full h-16 bg-white text-black rounded-3xl font-black text-sm uppercase tracking-[0.3em] active:scale-95 transition-all shadow-2xl"
+                   >
+                     CLOSE
+                   </button>
+                </div>
+             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {selectedPlan && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl">
             <motion.div 
@@ -494,13 +567,29 @@ export default function Landing() {
                   </div>
                   <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*" />
                   
-                  <div className="p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 text-center space-y-1">
-                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
-                      Payment Stuck? Contact Admin
-                    </p>
-                    <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest leading-relaxed">
-                      WhatsApp: 9236489649 <br/> Gmail: expertnotevix@gmail.com
-                    </p>
+                  <div className="p-5 bg-indigo-500/5 rounded-3xl border border-indigo-500/10 space-y-4">
+                    <div className="flex items-start gap-3 text-left">
+                      <Info className="w-5 h-5 text-indigo-400 mt-0.5" />
+                      <div className="space-y-2 flex-1">
+                        <p className="text-[11px] font-black text-white uppercase tracking-widest">How it works</p>
+                        <div className="space-y-1.5">
+                          {PAYMENT_GUIDELINES.map((guide, i) => (
+                            <div key={i} className="flex gap-2 text-[8px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
+                              <span>•</span>
+                              <span>{guide}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="pt-3 border-t border-indigo-500/10 text-center space-y-1">
+                      <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
+                        Payment Stuck? Contact Admin
+                      </p>
+                      <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest leading-relaxed">
+                        WhatsApp: 9236489649 <br/> Gmail: expertnotevix@gmail.com
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>

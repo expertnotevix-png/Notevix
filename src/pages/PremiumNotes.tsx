@@ -4,7 +4,7 @@ import {
   Crown, Check, ShieldCheck, Copy, ExternalLink, X, 
   CreditCard, Loader2, Zap, BookOpen, Lock, 
   ChevronRight, FileText, Upload, Image as ImageIcon,
-  SearchCheck, FilePlus, AlertCircle
+  SearchCheck, FilePlus, AlertCircle, Key, Info
 } from 'lucide-react';
 import { UserProfile, SubjectResource, ValidPayment } from '../types';
 import { db, handleFirestoreError, OperationType } from '../components/firebase';
@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { GoogleGenAI } from "@google/genai";
 import { useRef } from 'react';
 import { geminiService } from '../services/geminiService';
+import { SUBJECT_PASSWORDS, PAYMENT_GUIDELINES } from '../constants';
 
 import { dataBridge } from '../services/dataBridge';
 
@@ -79,6 +80,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiVerifying, setAiVerifying] = useState(false);
+  const [purchaseSuccess, setPurchaseSuccess] = useState<{ password: string; subject: string } | null>(null);
   const lastAttemptRef = useRef<number>(0);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -234,6 +236,10 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         status: 'approved' // AI Verified = Approved
       };
 
+      // Show instant password for individual subjects
+      const subjectKey = selectedPlan?.name?.toLowerCase().split(' ')[0] || '';
+      const password = SUBJECT_PASSWORDS[subjectKey] || "CONTACT_ADMIN";
+
       let saveResult;
       if (user) {
         // Logged-in user: Save to bridge
@@ -244,16 +250,20 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         });
 
         if (saveResult.success) {
-          // Attempt instant local access grant
-          toast.success("AI Verified Successfully! Instant access granted. Refreshing...", {
-            duration: 8000,
-            icon: '✅'
-          });
-          
-          // Force a small delay then reload
-          setTimeout(() => {
-            window.location.reload();
-          }, 1500);
+          // If it was an individual subject purchase, show password immediately
+          if (selectedPlan?.resourceId || selectedPlan?.id.startsWith('res_')) {
+             setPurchaseSuccess({ 
+               password: password, 
+               subject: selectedPlan.name.replace(' Premium', '') 
+             });
+          } else {
+             // Master pack or sub
+             toast.success("AI Verified Successfully! Master Pack Unlocked. Refreshing...", {
+               duration: 8000,
+               icon: '✅'
+             });
+             setTimeout(() => window.location.reload(), 2000);
+          }
           return;
         }
       } else {
@@ -265,8 +275,15 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         });
 
         if (saveResult.success) {
-          toast.success("Payment verified! Access will be linked to your email shortly. Please keep your receipt safe.");
-          setSelectedPlan(null);
+          if (selectedPlan?.resourceId || selectedPlan?.id.startsWith('res_')) {
+            setPurchaseSuccess({ 
+              password: password, 
+              subject: selectedPlan.name.replace(' Premium', '') 
+            });
+          } else {
+            toast.success("Payment verified! Access will be linked to your email shortly. Please keep your receipt safe.");
+            setSelectedPlan(null);
+          }
           return;
         }
       }
@@ -409,6 +426,27 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                            <p className="text-xs text-gray-400 font-medium leading-relaxed italic">“{res.description || 'Step-by-step notes curated specifically for the latest board exams.'}”</p>
                         </div>
                         
+                        {unlocked && (
+                          <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Key className="w-3 h-3 text-emerald-400" />
+                              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">PDF Password (All Caps)</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <code className="text-lg font-black text-white tracking-widest">{SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "SEE_ADMIN"}</code>
+                              <button 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "");
+                                  toast.success("Password Copied!");
+                                }}
+                                className="p-2 hover:bg-emerald-500/20 rounded-lg transition-colors text-emerald-400"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="grid grid-cols-2 gap-3">
                           {(res.features || ['Digital E-Library', 'PYQ Collection', 'AI Mentor']).map((f, i) => (
                             <div key={i} className="flex items-center gap-2">
@@ -419,18 +457,22 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                         </div>
                       </div>
 
-                      <div className="pt-6 border-t border-white/5">
-                        {unlocked ? (
-                          <a 
-                            href={res.driveLink || res.fullNotesUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="w-full h-16 bg-white text-black rounded-3xl flex items-center justify-center gap-4 font-black text-xs uppercase tracking-[0.3em] active:scale-95 transition-all shadow-2xl shadow-white/5 hover:bg-gray-200"
-                          >
-                            <ExternalLink className="w-5 h-5" />
-                            Open Library
-                          </a>
-                        ) : (
+                      <div className="pt-6 border-t border-white/5 space-y-3">
+                        <a 
+                          href={res.driveLink || res.fullNotesUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className={`w-full h-16 rounded-3xl flex items-center justify-center gap-4 font-black text-xs uppercase tracking-[0.3em] active:scale-95 transition-all shadow-2xl ${
+                            unlocked 
+                              ? 'bg-white text-black hover:bg-gray-200' 
+                              : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          <ExternalLink className="w-5 h-5" />
+                          {unlocked ? 'Open Library' : 'Open PDF (Locked)'}
+                        </a>
+
+                        {!unlocked && (
                           <button 
                             onClick={() => {
                               setSelectedPlan({
@@ -444,7 +486,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                             className="w-full h-16 bg-indigo-600 text-white rounded-3xl flex items-center justify-center gap-4 font-black text-xs uppercase tracking-[0.3em] active:scale-95 transition-all hover:bg-indigo-500 shadow-2xl shadow-indigo-600/30 group/btn"
                           >
                             <div className="flex items-center gap-2 group-hover/btn:translate-x-1 transition-transform">
-                              Get Access ₹{res.price || 49}
+                              Get Password ₹{res.price || 49}
                               <ChevronRight className="w-5 h-5" />
                             </div>
                           </button>
@@ -521,6 +563,66 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
            </div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {purchaseSuccess && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/95 backdrop-blur-3xl">
+             <motion.div
+               initial={{ opacity: 0, scale: 0.9, y: 30 }}
+               animate={{ opacity: 1, scale: 1, y: 0 }}
+               className="w-full max-w-md bg-[#0a0a0a] border border-emerald-500/30 rounded-[3rem] p-10 text-center space-y-8 relative overflow-hidden"
+             >
+                <div className="absolute -top-24 -left-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-[80px]" />
+                
+                <div className="flex flex-col items-center gap-6">
+                   <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20">
+                     <ShieldCheck className="w-10 h-10 text-emerald-400" />
+                   </div>
+                   <div className="space-y-2">
+                     <h2 className="text-3xl font-black text-white uppercase tracking-tighter">AI VERIFIED</h2>
+                     <p className="text-emerald-400 text-xs font-black uppercase tracking-widest leading-none">{purchaseSuccess.subject} UNLOCKED</p>
+                   </div>
+                </div>
+
+                <div className="p-8 rounded-3xl bg-white/5 border border-white/10 space-y-4">
+                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">YOUR PDF PASSWORD</p>
+                   <div className="flex flex-col items-center gap-4">
+                      <code className="text-4xl font-black text-white tracking-[0.2em]">{purchaseSuccess.password}</code>
+                      <button 
+                        onClick={() => {
+                          navigator.clipboard.writeText(purchaseSuccess.password);
+                          toast.success("Password Copied!");
+                        }}
+                        className="p-3 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors"
+                      >
+                        <Copy className="w-5 h-5 text-emerald-400" />
+                      </button>
+                   </div>
+                </div>
+
+                <div className="space-y-6">
+                   <div className="flex items-start gap-3 bg-white/5 p-4 rounded-2xl text-left">
+                     <AlertCircle className="w-4 h-4 text-emerald-400 mt-1 flex-shrink-0" />
+                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
+                       Password must be entered exactly in <span className="text-white">CAPITAL LETTERS</span> to open the PDF.
+                     </p>
+                   </div>
+                   
+                   <button 
+                    onClick={() => {
+                      setPurchaseSuccess(null);
+                      setSelectedPlan(null);
+                      window.location.reload();
+                    }}
+                    className="w-full h-16 bg-white text-black rounded-3xl font-black text-sm uppercase tracking-[0.3em] active:scale-95 transition-all shadow-2xl"
+                   >
+                     GO TO LIBRARY
+                   </button>
+                </div>
+             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {selectedPlan && (
@@ -626,13 +728,22 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                        )}
                     </div>
 
-                    <div className="p-5 bg-indigo-500/5 rounded-3xl border border-indigo-500/10 space-y-3">
+                    <div className="p-5 bg-indigo-500/5 rounded-3xl border border-indigo-500/10 space-y-4">
                       <div className="flex items-start gap-3">
-                        <AlertCircle className="w-4 h-4 text-indigo-400 mt-0.5" />
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
-                          AI will automatically extract your <span className="text-white">Transaction ID</span> from the screenshot. Please ensure it is clear.
-                        </p>
+                        <Info className="w-5 h-5 text-indigo-400 mt-0.5" />
+                        <div className="space-y-2 flex-1">
+                          <p className="text-[11px] font-black text-white uppercase tracking-widest">How it works</p>
+                          <div className="space-y-1.5">
+                            {PAYMENT_GUIDELINES.map((guide, i) => (
+                              <div key={i} className="flex gap-2 text-[8px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
+                                <span>•</span>
+                                <span>{guide}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
+                      
                       <div className="pt-3 border-t border-indigo-500/10 text-center space-y-1">
                          <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
                            Payment Issues / Stuck? Contact Admin
