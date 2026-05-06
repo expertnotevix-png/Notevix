@@ -25,29 +25,36 @@ export default function Leaderboard({ user }: LeaderboardProps) {
         setLoading(true);
         
         // 1. Fetch from Supabase (Primary Truth)
-        let sbData: any[] = [];
+        let mergedData: any[] = [];
         try {
           const data = await dataBridge.getLeaderboard(50);
-          sbData = data.map((d: any) => ({
-            ...d,
-            displayName: d.displayName || 'Student',
-            photoURL: d.photoURL || '',
-            totalPoints: d.totalPoints || 0,
-            streakCount: d.streak || 0,
-            source: 'supabase'
-          }));
+          if (data && data.length > 0) {
+            mergedData = data.map((d: any) => ({
+              ...d,
+              displayName: d.displayName || 'Student',
+              photoURL: d.photoURL || '',
+              totalPoints: d.totalPoints || 0,
+              streakCount: d.streak || 0,
+              source: 'supabase'
+            }));
+            
+            setTopUsers(mergedData.slice(0, 30));
+            localStorage.setItem(CACHED_LEADERBOARD_KEY, JSON.stringify(mergedData.slice(0, 30)));
+            localStorage.setItem(CACHED_LEADERBOARD_KEY + '_time', Date.now().toString());
+            setLoading(false);
+            return; // EXIT EARLY IF SUPABASE SUCCEEDS
+          }
         } catch (e) {
           console.warn("Supabase leaderboard fetch failed:", e);
         }
 
-        // 2. Fetch from Firestore (Fallback/Legacy)
-        let fsData: any[] = [];
+        // 2. Fetch from Firestore (Fallback ONLY if Supabase is empty or failed)
         try {
           const { collection, getDocs, query, orderBy, limit } = await import('firebase/firestore');
           const { db } = await import('../components/firebase');
-          const q = query(collection(db, 'users'), orderBy('totalPoints', 'desc'), limit(50));
+          const q = query(collection(db, 'users'), orderBy('totalPoints', 'desc'), limit(30));
           const snap = await getDocs(q);
-          fsData = snap.docs.map(doc => {
+          mergedData = snap.docs.map(doc => {
             const d = doc.data();
             return {
               uid: d.uid || doc.id,
@@ -59,38 +66,12 @@ export default function Leaderboard({ user }: LeaderboardProps) {
               source: 'firestore'
             };
           });
+          setTopUsers(mergedData);
         } catch (e) {
           console.warn("Firestore leaderboard fetch failed:", e);
+          const cached = localStorage.getItem(CACHED_LEADERBOARD_KEY);
+          if (cached) setTopUsers(JSON.parse(cached));
         }
-
-        // 3. Merge and De-duplicate by UID (Supabase version takes priority)
-        const userMap = new Map();
-        
-        // Add Firestore users first
-        fsData.forEach(u => userMap.set(u.uid, u));
-        // Overwrite/Add Supabase users (they are the modern truth)
-        sbData.forEach(u => {
-          const existing = userMap.get(u.uid);
-          if (existing) {
-            // Keep the version with more points during transition
-            userMap.set(u.uid, {
-              ...existing,
-              ...u,
-              totalPoints: Math.max(existing.totalPoints || 0, u.totalPoints || 0)
-            });
-          } else {
-            userMap.set(u.uid, u);
-          }
-        });
-
-        // Sort by points
-        const mergedData = Array.from(userMap.values())
-          .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0))
-          .slice(0, 30);
-
-        setTopUsers(mergedData);
-        localStorage.setItem(CACHED_LEADERBOARD_KEY, JSON.stringify(mergedData));
-        localStorage.setItem(CACHED_LEADERBOARD_KEY + '_time', Date.now().toString());
       } catch (error) {
         console.warn("Leaderboard merge failed:", error);
         const cached = localStorage.getItem(CACHED_LEADERBOARD_KEY);
