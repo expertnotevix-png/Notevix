@@ -94,6 +94,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 }
 
 // Pages - Lazy loaded for performance
+import PremiumNotes from './pages/PremiumNotes';
 const Articles = lazyWithRetry(() => import('./pages/Articles'));
 const ArticleDetail = lazyWithRetry(() => import('./pages/ArticleDetail'));
 const Disclaimer = lazyWithRetry(() => import('./pages/Disclaimer'));
@@ -109,7 +110,6 @@ const Admin = lazyWithRetry(() => import('./pages/Admin'));
 const Leaderboard = lazyWithRetry(() => import('./pages/Leaderboard'));
 const Schedule = lazyWithRetry(() => import('./pages/Schedule'));
 const Notifications = lazyWithRetry(() => import('./pages/Notifications'));
-const PremiumNotes = lazyWithRetry(() => import('./pages/PremiumNotes'));
 const PrivacyPolicy = lazyWithRetry(() => import('./pages/PrivacyPolicy'));
 const AboutUs = lazyWithRetry(() => import('./pages/AboutUs'));
 const Contact = lazyWithRetry(() => import('./pages/Contact'));

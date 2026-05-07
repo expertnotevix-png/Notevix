@@ -75,6 +75,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
   const [resources, setResources] = useState<SubjectResource[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingError, setLoadingError] = useState<string | null>(null);
   const [whatsapp, setWhatsapp] = useState('');
   const [email, setEmail] = useState('');
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
@@ -88,11 +89,23 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
   // Real-time listener removed to avoid Firestore quota, using Bridge (Supabase)
   useEffect(() => {
+    let isMounted = true;
+    const timeout = setTimeout(() => {
+      if (loading && isMounted) {
+        setLoadingError("Connection timed out. Please check your internet or try refreshing.");
+        setLoading(false);
+      }
+    }, 10000);
+
     const fetchResources = async () => {
+      if (!isMounted) return;
       setLoading(true);
+      setLoadingError(null);
       try {
         console.log("PremiumNotes: Fetching resources for class:", activeClass);
         const data = await dataBridge.getResources(activeClass);
+        if (!isMounted) return;
+        
         console.log("PremiumNotes: Received data:", data?.length, "items");
         if (data && data.length > 0) {
           const premiumOnly = data.filter((res: any) => res.isFree !== true);
@@ -102,12 +115,24 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         }
       } catch (err) {
         console.error("PremiumNotes: Fetch error:", err);
+        if (isMounted) setLoadingError("Failed to synchronize library. Please try again.");
         setResources([]);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+          clearTimeout(timeout);
+        }
       }
     };
-    fetchResources();
+
+    // Small delay to ensure component is fully mounted and route transition finished
+    const startFetch = setTimeout(fetchResources, 100);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeout);
+      clearTimeout(startFetch);
+    };
   }, [activeClass]);
 
   const isUnlocked = (res: SubjectResource) => {
@@ -364,6 +389,20 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
               {[1, 2, 3, 4].map(i => (
                 <div key={i} className="h-[500px] bg-white/5 animate-pulse rounded-[3rem]" />
               ))}
+            </div>
+          ) : loadingError ? (
+            <div className="flex flex-col items-center justify-center py-32 text-center bg-white/5 rounded-[4rem] border border-white/5 p-10">
+              <AlertCircle className="w-16 h-16 text-rose-500 mb-6" />
+              <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2">Sync Failed</h3>
+              <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest max-w-xs mb-8">
+                {loadingError}
+              </p>
+              <button 
+                onClick={() => window.location.reload()}
+                className="px-10 py-4 bg-indigo-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/40 active:scale-95 transition-transform"
+              >
+                Retry Synchronization
+              </button>
             </div>
           ) : resources.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
