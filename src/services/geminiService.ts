@@ -289,22 +289,24 @@ export const geminiService = {
   },
 
   async verifyPaymentScreenshot(imageData: string): Promise<{ isValid: boolean, transactionId?: string, amount?: number, error?: string }> {
-    const system = `You are the NoteVix Forensic AUDITOR. You are an expert at reading Indian payment receipts (GPay, PhonePe, Paytm, BHIM, Amazon Pay).
-    
-    TRAINING DATA & PATTERNS:
-    1. PhonePe: Usually has a Transaction ID starting with 'T' followed by 20+ digits (e.g., T2405...).
-    2. GPay (Google Pay): Always has a 12-digit UTR number (e.g., 4152...).
-    3. Paytm: Has a 'Wallet Txn ID' or 'Bank Ref No' (e.g., 4587...).
-    4. Success Indicators: Large Green Checkmark, "Payment Successful", "Money sent", "Paid successfully".
-    
-    CRITICAL INSTRUCTIONS:
-    - RECIPIENT VERIFICATION: The payment MUST be made to "Poonam Devi". Look for the name or the MobiKwik ID "9236489649@mbk". If the recipient is anyone else, set isValid: false with error: "Recipient mismatch".
-    - VALID AMOUNTS: A valid payment MUST be exactly ₹39 (Single Subject) or ₹99 (Master Pack/Combo). If the amount is any other value, set isValid: false with error: "Invalid amount".
-    - TRANSACTION ID: You MUST extract the 12-digit UTR or alphanumeric Transaction ID.
-    - IDENTIFY STATUS: Valid only if "Success", "Completed", or similar terminal state. "Processing/Pending" = invalid.
-    - OUTPUT: Only return raw JSON: {"isValid": boolean, "transactionId": string, "amount": number, "error"?: string}`;
+    const system = `You are the NoteVix Forensic AUDITOR. Your job is to strictly verify Indian payment receipts (GPay, PhonePe, Paytm, BHIM, Amazon Pay) to prevent fraud.
 
-    const prompt = "Extract the Transaction ID and Amount from this receipt. Determine if the payment was successful. Respond ONLY with JSON.";
+    STRICT VERIFICATION CRITERIA:
+    1. RECIPIENT NAME: The payment MUST be made to "POONAM DEVI" or "Poonam Devi". Look for the name in 'Paid to' or 'Recipient' section.
+    2. RECIPIENT ID/PHONE: Often shows as "9236489649@mbk" or "9236489649".
+    3. STATUS: The payment MUST be "Success", "Completed", or "Paid Successfully". "Pending", "Processing", or "Failed" are REJECTED.
+    4. AMOUNT: Only ₹39 (Single Subject) or ₹99 (Full Pack) are valid. Any other amount is a mismatch.
+    5. TRANSACTION ID (UTR): You MUST extract the unique 12-digit UTR number or the alphanumeric Transaction ID. This is critical for preventing duplicate uses of the same screenshot.
+
+    FRAUD WARNING:
+    - If any of these are missing or incorrect, set isValid: false.
+    - If the screenshot looks like a duplicate or edited, reject it.
+    - BE EXTREMELY PRECISE with the Transaction/UTR ID. Do not guess digits.
+
+    OUTPUT FORMAT (STRICT JSON ONLY):
+    {"isValid": boolean, "transactionId": "EXTRACTED_ID", "amount": number, "error": "Reason if invalid"}`;
+
+    const prompt = "Analyze this receipt. Is it a valid payment of ₹39 or ₹99 to Poonam Devi? Extract the exact Transaction ID/UTR and the Amount. Respond ONLY with JSON.";
 
     try {
       const { apiKey, nvidiaKey } = getAI();
@@ -363,16 +365,20 @@ export const geminiService = {
     // RESILIENT PARSING
     const jsonMatch = res.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-       // Regex fallback for high-precision extraction
-       const idMatch = res.match(/(FMPIB[A-Z0-9]+|T[0-9]{15,}|[0-9]{12})/i);
-       if (idMatch) {
+       // High-precision fallback for UTR (12 digits) or PhonePe Transaction IDs
+       const utrMatch = res.match(/\b\d{12}\b/);
+       const phonePeMatch = res.match(/\bT\d{18,}\b/i);
+       
+       const foundId = utrMatch ? utrMatch[0] : (phonePeMatch ? phonePeMatch[0] : null);
+       
+       if (foundId) {
          return {
            isValid: true,
-           transactionId: idMatch[0].toUpperCase(),
+           transactionId: foundId.toUpperCase(),
            amount: 0
          };
        }
-       throw new Error("Forensic engine couldn't find a clear UTR/Transaction ID. Please try a clearer screenshot.");
+       throw new Error("Forensic engine couldn't find a clear UTR/Transaction ID. Please ensure the screenshot is clear.");
     }
     
     try {

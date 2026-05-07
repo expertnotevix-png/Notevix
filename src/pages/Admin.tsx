@@ -2071,7 +2071,7 @@ export default function Admin() {
                           req.status === 'approved' ? 'bg-green-500/20 text-green-500' :
                           'bg-red-500/20 text-red-500'
                         }`}>
-                          {req.status}
+                          {req.status === 'approved' ? 'AI VERIFIED' : req.status}
                         </div>
                         <span className="text-[10px] text-gray-500 font-bold">{new Date(req.timestamp).toLocaleString()}</span>
                       </div>

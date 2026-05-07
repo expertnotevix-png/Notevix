@@ -447,9 +447,15 @@ export const dataBridge = {
             created_at: new Date().toISOString()
           }]);
         
-        if (!error) {
-          // IF INSTANTLY APPROVED (AI Verified), UPDATE USER PROFILE IMMEDIATELY
-          if (status === 'approved' && activeUserId && activeUserId !== 'GUEST') {
+        if (error) {
+          if (error.code === '23505') {
+            return { success: false, error: `Transaction ID ${txId} already verified/used.` };
+          }
+          throw error;
+        }
+
+        // IF INSTANTLY APPROVED (AI Verified), UPDATE USER PROFILE IMMEDIATELY
+        if (status === 'approved' && activeUserId && activeUserId !== 'GUEST') {
              try {
                 // Fetch current profile to get existing unlocked items
                 const { data: profile } = await supabase.from('profiles').select('*').eq('id', activeUserId).maybeSingle();
@@ -519,7 +525,6 @@ export const dataBridge = {
           } catch(e) {}
 
           return { success: true, provider: 'supabase' };
-        }
       } catch (err: any) {
         console.warn("Supabase save failed:", err);
       }
