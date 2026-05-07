@@ -17,6 +17,15 @@ import { db, checkQuotaLock } from '../components/firebase';
 import { supabase } from '../lib/supabase';
 import { SubjectResource } from '../types';
 
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 8000, context: string = 'Operation'): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => 
+      setTimeout(() => reject(new Error(`${context} timed out after ${timeoutMs}ms`)), timeoutMs)
+    )
+  ]);
+};
+
 export const dataBridge = {
   /**
    * Syncs a Firebase user profile to Supabase
@@ -25,23 +34,25 @@ export const dataBridge = {
   async syncProfile(uid: string, profileData: any) {
     if (!supabase) return;
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .upsert({
-          id: uid,
-          full_name: profileData.displayName || profileData.fullName || 'Student',
-          email: profileData.email,
-          avatar_url: profileData.photoURL || profileData.avatarUrl || '',
-          class_level: profileData.class || profileData.classLevel || 'N/A',
-          xp: profileData.totalPoints || profileData.xp || 0,
-          streak: profileData.streak?.currentCount || profileData.streakCount || 0,
-          is_premium: profileData.isPremium || false,
-          unlocked_resources: profileData.unlockedResources || [],
-          unlocked_classes: profileData.unlockedClasses || [],
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'id' });
-      
-      if (error) throw error;
+      await withTimeout(
+        supabase
+          .from('profiles')
+          .upsert({
+            id: uid,
+            full_name: profileData.displayName || profileData.fullName || 'Student',
+            email: profileData.email,
+            avatar_url: profileData.photoURL || profileData.avatarUrl || '',
+            class_level: profileData.class || profileData.classLevel || 'N/A',
+            xp: profileData.totalPoints || profileData.xp || 0,
+            streak: profileData.streak?.currentCount || profileData.streakCount || 0,
+            is_premium: profileData.isPremium || false,
+            unlocked_resources: profileData.unlockedResources || [],
+            unlocked_classes: profileData.unlockedClasses || [],
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'id' }),
+        5000,
+        'Profile Sync'
+      );
     } catch (err) {
       console.error("Profile sync failed:", err);
     }
@@ -56,11 +67,15 @@ export const dataBridge = {
     // 1. Try Supabase
     if (supabase) {
       try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', uid)
-          .maybeSingle();
+        const { data, error } = await withTimeout(
+          supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', uid)
+            .maybeSingle(),
+          6000,
+          'Profile Fetch'
+        );
         
         if (data && !error) {
            const isAdmin = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(data.email?.toLowerCase());
@@ -783,17 +798,21 @@ export const dataBridge = {
   async getChatMessages(limitCount = 50) {
     if (supabase) {
       try {
-        const { data, error } = await supabase
-          .from('community_chat')
-          .select(`
-            *,
-            profiles:user_id (
-              full_name,
-              avatar_url
-            )
-          `)
-          .order('created_at', { ascending: false })
-          .limit(limitCount);
+        const { data, error } = await withTimeout(
+          supabase
+            .from('community_chat')
+            .select(`
+              *,
+              profiles:user_id (
+                full_name,
+                avatar_url
+              )
+            `)
+            .order('created_at', { ascending: false })
+            .limit(limitCount),
+          7000,
+          'Chat Fetch'
+        );
         
         if (data) {
           return data.reverse().map((d: any) => ({

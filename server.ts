@@ -82,7 +82,7 @@ async function startServer() {
       directives: {
         ...helmet.contentSecurityPolicy.getDefaultDirectives(),
         "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://www.googletagmanager.com", "https://apis.google.com"],
-        "connect-src": ["'self'", "https://*.googleapis.com", "https://*.firebaseio.com", "https://*.firebaseapp.com", "https://www.google-analytics.com", "https://integrate.api.nvidia.com"],
+        "connect-src": ["'self'", "https://*.googleapis.com", "https://*.firebaseio.com", "https://*.firebaseapp.com", "https://www.google-analytics.com", "https://integrate.api.nvidia.com", "https://*.supabase.co"],
         "img-src": ["'self'", "data:", "https:", "https://picsum.photos"],
         "frame-src": ["'self'", "https://*.firebaseapp.com"],
         "frame-ancestors": ["'self'", "https://aistudio.google.com", "https://*.run.app"],
@@ -394,13 +394,18 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*', (req, res, next) => {
+      // Skip if looking for a file that doesn't exist to avoid returning index.html for broken assets
+      if (req.url.includes('.') && !req.url.endsWith('.html')) {
+        return next();
+      }
+
       try {
         const indexPath = path.join(distPath, 'index.html');
         if (fs.existsSync(indexPath)) {
           res.sendFile(indexPath);
         } else {
-          res.status(404).send("Application build not found. Please run 'npm run build' first.");
+          res.status(404).send("Application build not found. Please wait while NoteVix starts... (or run 'npm run build')");
         }
       } catch (err) {
         console.error("[Server] Error serving index.html:", err);

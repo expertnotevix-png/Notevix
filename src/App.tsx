@@ -42,6 +42,7 @@ const PostDetail = lazy(() => import('./pages/PostDetail'));
 // Components
 import BottomNav from './components/BottomNav';
 import { FloatingChatbot } from './components/FloatingChatbot';
+import ErrorBoundary from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
 
@@ -374,37 +375,39 @@ export default function App() {
             </motion.div>
           </div>
         }>
-          <Routes>
-            <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
-            
-            <Route path="/" element={user ? <Home user={user} /> : <Landing />} />
-            <Route path="/explore" element={<Explore />} />
-            <Route path="/leaderboard" element={<Leaderboard user={user} />} />
-            <Route path="/schedule" element={user ? <Schedule user={user} /> : <Navigate to="/login" />} />
-            <Route path="/notifications" element={user ? <Notifications user={user} /> : <Navigate to="/login" />} />
-            <Route path="/saved" element={user ? <Saved user={user} /> : <Navigate to="/login" />} />
-            <Route path="/profile" element={user ? <Profile user={user} setUser={setUser} /> : <Navigate to="/login" />} />
-            
-            <Route path="/class/:classId/:subjectId" element={<ChapterList />} />
-            <Route path="/note/:noteId" element={<NoteView user={user} setUser={setUser} />} />
-            <Route path="/premium-notes" element={<PremiumNotes user={user} />} />
-            <Route path="/privacy" element={<PrivacyPolicy />} />
-            <Route path="/about" element={<AboutUs />} />
-            <Route path="/contact" element={<Contact user={user} />} />
-            <Route path="/terms" element={<TermsOfService />} />
-            <Route path="/disclaimer" element={<Disclaimer />} />
-            <Route path="/articles" element={<Articles />} />
-            <Route path="/article/:id" element={<ArticleDetail />} />
-            
-            <Route path="/ai-doubts" element={user ? <AIDoubtSolver user={user} setUser={setUser} /> : <Navigate to="/login" />} />
-            <Route path="/ai-quiz" element={user ? <QuizGenerator /> : <Navigate to="/login" />} />
-            <Route path="/ai-summarizer" element={user ? <Summarizer /> : <Navigate to="/login" />} />
-            
-            <Route path="/community" element={<Community user={user} />} />
-            <Route path="/community/post/:postId" element={<PostDetail user={user} />} />
-            
-            <Route path="/admin" element={user?.role === 'admin' ? <Admin /> : <Navigate to="/" />} />
-          </Routes>
+          <ErrorBoundary>
+            <Routes>
+              <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
+              
+              <Route path="/" element={user ? <Home user={user} /> : <Landing />} />
+              <Route path="/explore" element={<Explore />} />
+              <Route path="/leaderboard" element={<Leaderboard user={user} />} />
+              <Route path="/schedule" element={user ? <Schedule user={user} /> : <Navigate to="/login" />} />
+              <Route path="/notifications" element={user ? <Notifications user={user} /> : <Navigate to="/login" />} />
+              <Route path="/saved" element={user ? <Saved user={user} /> : <Navigate to="/login" />} />
+              <Route path="/profile" element={user ? <Profile user={user} setUser={setUser} /> : <Navigate to="/login" />} />
+              
+              <Route path="/class/:classId/:subjectId" element={<ChapterList />} />
+              <Route path="/note/:noteId" element={<NoteView user={user} setUser={setUser} />} />
+              <Route path="/premium-notes" element={<PremiumNotes user={user} />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/about" element={<AboutUs />} />
+              <Route path="/contact" element={<Contact user={user} />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/disclaimer" element={<Disclaimer />} />
+              <Route path="/articles" element={<Articles />} />
+              <Route path="/article/:id" element={<ArticleDetail />} />
+              
+              <Route path="/ai-doubts" element={user ? <AIDoubtSolver user={user} setUser={setUser} /> : <Navigate to="/login" />} />
+              <Route path="/ai-quiz" element={user ? <QuizGenerator /> : <Navigate to="/login" />} />
+              <Route path="/ai-summarizer" element={user ? <Summarizer /> : <Navigate to="/login" />} />
+              
+              <Route path="/community" element={<Community user={user} />} />
+              <Route path="/community/post/:postId" element={<PostDetail user={user} />} />
+              
+              <Route path="/admin" element={user?.role === 'admin' ? <Admin /> : <Navigate to="/" />} />
+            </Routes>
+          </ErrorBoundary>
         </Suspense>
         
         <BottomNav user={user} />
