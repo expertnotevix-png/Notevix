@@ -410,13 +410,7 @@ export default function Admin() {
         try {
           const { data: sbData, error } = await supabase.from('subject_resources').select('*').order('subject', { ascending: true });
           if (error) throw error;
-          data = (sbData || []).map((d: any) => ({
-            ...d,
-            coverUrl: d.coverUrl || d.cover_url,
-            driveLink: d.driveLink || d.drive_link,
-            isFree: d.isFree || (d.is_free !== undefined ? d.is_free : true),
-            createdAt: d.createdAt || d.created_at
-          }));
+          data = (sbData || []).map((d: any) => dataBridge.mapResource(d));
         } catch (err) {
           console.warn("Supabase resource fetch failed, trying Firestore...");
         }
@@ -427,7 +421,7 @@ export default function Admin() {
         try {
           const q = query(collection(db, 'subject_resources'), orderBy('subject', 'asc'));
           const snap = await getDocs(q);
-          data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          data = snap.docs.map(doc => dataBridge.mapResource({ id: doc.id, ...doc.data() }));
         } catch (e) {
           console.warn("Firestore resource fetch failed");
         }

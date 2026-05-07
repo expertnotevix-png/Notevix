@@ -663,7 +663,19 @@ export const dataBridge = {
       importantQuestionsUrl: d.important_questions_url,
       examOrientedQuestionsUrl: d.exam_oriented_questions_url,
       isFree: d.is_free === true || d.isFree === true || false,
-      features: Array.isArray(d.features) ? d.features : (typeof d.features === 'string' ? JSON.parse(d.features) : []),
+      features: (() => {
+        try {
+          if (Array.isArray(d.features)) return d.features;
+          if (typeof d.features === 'string') {
+            const parsed = JSON.parse(d.features);
+            return Array.isArray(parsed) ? parsed : [d.features];
+          }
+          return [];
+        } catch (e) {
+          console.error("Failed to parse features:", e);
+          return [];
+        }
+      })(),
       createdAt: d.created_at
     };
   },
