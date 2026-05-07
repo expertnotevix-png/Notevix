@@ -403,6 +403,10 @@ async function startServer() {
       try {
         const indexPath = path.join(distPath, 'index.html');
         if (fs.existsSync(indexPath)) {
+          // Disable caching for index.html to ensure users always get the latest version with new asset hashes
+          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
           res.sendFile(indexPath);
         } else {
           res.status(404).send("Application build not found. Please wait while NoteVix starts... (or run 'npm run build')");

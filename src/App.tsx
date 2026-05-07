@@ -11,33 +11,54 @@ import { Zap } from 'lucide-react';
 
 const CACHED_USER_KEY = 'notevix_user_profile_v1';
 
-// Pages - Lazy loaded for performance
-const Articles = lazy(() => import('./pages/Articles'));
-const ArticleDetail = lazy(() => import('./pages/ArticleDetail'));
-const Disclaimer = lazy(() => import('./pages/Disclaimer'));
+const lazyWithRetry = (componentImport: () => Promise<any>) => 
+  lazy(async () => {
+    const pageHasBeenForceRefreshed = JSON.parse(
+      window.sessionStorage.getItem('page-has-been-force-refreshed') || 'false'
+    );
 
-const Home = lazy(() => import('./pages/Home'));
-const Explore = lazy(() => import('./pages/Explore'));
-const Saved = lazy(() => import('./pages/Saved'));
-const Profile = lazy(() => import('./pages/Profile'));
-const Login = lazy(() => import('./pages/Login'));
-const ChapterList = lazy(() => import('./pages/ChapterList'));
-const NoteView = lazy(() => import('./pages/NoteView'));
-const Admin = lazy(() => import('./pages/Admin'));
-const Leaderboard = lazy(() => import('./pages/Leaderboard'));
-const Schedule = lazy(() => import('./pages/Schedule'));
-const Notifications = lazy(() => import('./pages/Notifications'));
-const PremiumNotes = lazy(() => import('./pages/PremiumNotes'));
-const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
-const AboutUs = lazy(() => import('./pages/AboutUs'));
-const Contact = lazy(() => import('./pages/Contact'));
-const TermsOfService = lazy(() => import('./pages/TermsOfService'));
-const Landing = lazy(() => import('./pages/Landing'));
-const AIDoubtSolver = lazy(() => import('./pages/AIDoubtSolver'));
-const QuizGenerator = lazy(() => import('./pages/QuizGenerator'));
-const Summarizer = lazy(() => import('./pages/Summarizer'));
-const Community = lazy(() => import('./pages/Community'));
-const PostDetail = lazy(() => import('./pages/PostDetail'));
+    try {
+      const component = await componentImport();
+      window.sessionStorage.setItem('page-has-been-force-refreshed', 'false');
+      return component;
+    } catch (error) {
+      console.error("Lazy load failed:", error);
+      if (!pageHasBeenForceRefreshed) {
+        window.sessionStorage.setItem('page-has-been-force-refreshed', 'true');
+        window.location.reload();
+        return { default: () => null }; // Fallback while reloading
+      }
+      throw error;
+    }
+  });
+
+// Pages - Lazy loaded for performance
+const Articles = lazyWithRetry(() => import('./pages/Articles'));
+const ArticleDetail = lazyWithRetry(() => import('./pages/ArticleDetail'));
+const Disclaimer = lazyWithRetry(() => import('./pages/Disclaimer'));
+
+const Home = lazyWithRetry(() => import('./pages/Home'));
+const Explore = lazyWithRetry(() => import('./pages/Explore'));
+const Saved = lazyWithRetry(() => import('./pages/Saved'));
+const Profile = lazyWithRetry(() => import('./pages/Profile'));
+const Login = lazyWithRetry(() => import('./pages/Login'));
+const ChapterList = lazyWithRetry(() => import('./pages/ChapterList'));
+const NoteView = lazyWithRetry(() => import('./pages/NoteView'));
+const Admin = lazyWithRetry(() => import('./pages/Admin'));
+const Leaderboard = lazyWithRetry(() => import('./pages/Leaderboard'));
+const Schedule = lazyWithRetry(() => import('./pages/Schedule'));
+const Notifications = lazyWithRetry(() => import('./pages/Notifications'));
+const PremiumNotes = lazyWithRetry(() => import('./pages/PremiumNotes'));
+const PrivacyPolicy = lazyWithRetry(() => import('./pages/PrivacyPolicy'));
+const AboutUs = lazyWithRetry(() => import('./pages/AboutUs'));
+const Contact = lazyWithRetry(() => import('./pages/Contact'));
+const TermsOfService = lazyWithRetry(() => import('./pages/TermsOfService'));
+const Landing = lazyWithRetry(() => import('./pages/Landing'));
+const AIDoubtSolver = lazyWithRetry(() => import('./pages/AIDoubtSolver'));
+const QuizGenerator = lazyWithRetry(() => import('./pages/QuizGenerator'));
+const Summarizer = lazyWithRetry(() => import('./pages/Summarizer'));
+const Community = lazyWithRetry(() => import('./pages/Community'));
+const PostDetail = lazyWithRetry(() => import('./pages/PostDetail'));
 
 // Components
 import BottomNav from './components/BottomNav';
