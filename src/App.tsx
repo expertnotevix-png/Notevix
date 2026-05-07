@@ -15,16 +15,25 @@ const lazyWithRetry = (componentImport: () => Promise<any>) =>
   lazy(async () => {
     try {
       return await componentImport();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Lazy load failed:", error);
-      // Only reload if we haven't reloaded in the last 10 seconds to avoid loops
-      const lastReload = Number(window.sessionStorage.getItem('last-lazy-reload') || '0');
-      const now = Date.now();
       
-      if (now - lastReload > 10000) {
-        window.sessionStorage.setItem('last-lazy-reload', now.toString());
-        window.location.reload();
-        return { default: () => null };
+      const errorString = error?.toString() || "";
+      const isChunkLoadFailed = errorString.includes("Failed to fetch dynamically imported module") || 
+                                errorString.includes("Loading chunk") || 
+                                errorString.includes("Unexpected token <"); // Often happens when index.html is returned instead of JS
+
+      if (isChunkLoadFailed) {
+        // Force a reload to get the latest index.html and asset hashes
+        const lastReload = Number(window.sessionStorage.getItem('last-lazy-reload') || '0');
+        const now = Date.now();
+        
+        if (now - lastReload > 5000) { // 5s buffer
+          console.log("Chunk load failed - forcing reload to refresh asset manifests");
+          window.sessionStorage.setItem('last-lazy-reload', now.toString());
+          window.location.reload();
+          return { default: () => null };
+        }
       }
       throw error;
     }
@@ -61,7 +70,7 @@ const PostDetail = lazyWithRetry(() => import('./pages/PostDetail'));
 // Components
 import BottomNav from './components/BottomNav';
 import { FloatingChatbot } from './components/FloatingChatbot';
-import ErrorBoundary from '@/components/ErrorBoundary';
+import ErrorBoundary from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
 
