@@ -32,9 +32,18 @@ const lazyWithRetry = (componentImport: () => Promise<any>) =>
         const lastReload = Number(window.sessionStorage.getItem('last-lazy-reload') || '0');
         const now = Date.now();
         
-        if (now - lastReload > 5000) { // 5s buffer
-          console.log("Chunk load failed - forcing reload to refresh asset manifests");
+        if (now - lastReload > 10000) { // 10s buffer
+          console.log("Chunk load failed - forcing hard reload");
           window.sessionStorage.setItem('last-lazy-reload', now.toString());
+          
+          // Clear all caches if possible
+          if ('caches' in window) {
+            try {
+              const names = await caches.keys();
+              await Promise.all(names.map(name => caches.delete(name)));
+            } catch (e) {}
+          }
+          
           window.location.reload();
           return { default: () => null };
         }
