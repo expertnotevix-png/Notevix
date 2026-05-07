@@ -27,7 +27,11 @@ export default function Leaderboard({ user }: LeaderboardProps) {
         // 1. Fetch from Supabase (Primary Truth)
         let mergedData: any[] = [];
         try {
-          const data = await dataBridge.getLeaderboard(50);
+          const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 8000));
+          const dataPromise = dataBridge.getLeaderboard(50);
+          
+          const data = await Promise.race([dataPromise, timeout]) as any[];
+          
           if (data && data.length > 0) {
             mergedData = data.map((d: any) => ({
               ...d,
@@ -45,7 +49,7 @@ export default function Leaderboard({ user }: LeaderboardProps) {
             return; // EXIT EARLY IF SUPABASE SUCCEEDS
           }
         } catch (e) {
-          console.warn("Supabase leaderboard fetch failed:", e);
+          console.warn("Supabase leaderboard fetch failed or timed out:", e);
         }
 
         // 2. Fetch from Firestore (Fallback ONLY if Supabase is empty or failed)
@@ -286,6 +290,13 @@ export default function Leaderboard({ user }: LeaderboardProps) {
 
       {/* List */}
       <div className="space-y-3">
+        {topUsers.length === 0 && !loading && (
+          <div className="text-center py-20 bg-white/5 rounded-3xl border border-dashed border-white/10">
+            <Trophy size={40} className="text-gray-700 mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-gray-400">No ranks yet</h3>
+            <p className="text-xs text-gray-600 mt-1">Study more to appear on the leaderboard!</p>
+          </div>
+        )}
         {topUsers.slice(isSunday ? 3 : 0).map((u, index) => {
           const actualIndex = isSunday ? index + 3 : index;
           return (
@@ -305,8 +316,8 @@ export default function Leaderboard({ user }: LeaderboardProps) {
               <div className="flex-1">
                 <h4 className="font-bold text-sm">{u.displayName}</h4>
                 <div className="flex items-center gap-2">
-                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Class {u.class || '?'}</p>
-                  <span className="text-[10px] text-purple-400 font-bold">• {Math.max(u.streakCount || 0, 1)}/7 Days</span>
+                  <p className="text-[11px] text-gray-500 uppercase tracking-wider">Class {u.class || '?'}</p>
+                  <span className="text-[11px] text-purple-400 font-bold">• {Math.max(u.streakCount || 0, 1)}/7 Days</span>
                 </div>
               </div>
               <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl">

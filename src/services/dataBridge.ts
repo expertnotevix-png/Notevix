@@ -10,7 +10,8 @@ import {
   setDoc,
   updateDoc as firestoreUpdateDoc,
   limit,
-  orderBy
+  orderBy,
+  increment
 } from 'firebase/firestore';
 import { db, checkQuotaLock } from '../components/firebase';
 import { supabase } from '../lib/supabase';
@@ -679,27 +680,29 @@ export const dataBridge = {
    * Leaderboard
    */
   async getLeaderboard(limitCount = 30) {
-    if (supabase) {
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('id, full_name, avatar_url, xp, streak, class_level')
-          .order('xp', { ascending: false })
-          .limit(limitCount);
-        
-        if (data) return data.map(d => ({
-          uid: d.id,
-          displayName: d.full_name || 'Student',
-          photoURL: d.avatar_url || '',
-          totalPoints: d.xp || 0,
-          streak: d.streak || 0,
-          class: d.class_level
-        }));
-      } catch (err) {
-        console.error("Leaderboard fetch failed:", err);
-      }
+    if (!supabase) return [];
+    
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url, xp, streak, class_level')
+        .order('xp', { ascending: false })
+        .limit(limitCount);
+      
+      if (error) throw error;
+      
+      return (data || []).map(d => ({
+        uid: d.id,
+        displayName: d.full_name || 'Student',
+        photoURL: d.avatar_url || '',
+        totalPoints: d.xp || 0,
+        streak: d.streak || 0,
+        class: d.class_level
+      }));
+    } catch (err) {
+      console.error("Leaderboard fetch failed:", err);
+      throw err;
     }
-    return [];
   },
 
   /**
@@ -810,8 +813,15 @@ export const dataBridge = {
   },
 
   async sendChatMessage(uid: string, content: string) {
-    if (supabase) {
-      try {
+    if (!supabase) throw new Error("Connection lost. Please try again.");
+    
+    // Add a 10-second timeout to prevent infinite "sending" state
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Request timed out. Please try again.")), 10000)
+    );
+
+    try {
+      const sendPromise = (async () => {
         const { data, error } = await supabase
           .from('community_chat')
           .insert([{
@@ -821,10 +831,16 @@ export const dataBridge = {
           }])
           .select()
           .single();
-        if (!error) return data;
-      } catch (err) {}
+        
+        if (error) throw error;
+        return data;
+      })();
+
+      return await Promise.race([sendPromise, timeoutPromise]);
+    } catch (err: any) {
+      console.error("Chat send error:", err);
+      throw err;
     }
-    return null;
   },
 
   /**
@@ -853,12 +869,32 @@ export const dataBridge = {
    * Award points to user
    */
   async awardPoints(uid: string, amount: number) {
+    // 1. Supabase update (Secondary Truth for now)
     if (supabase) {
       try {
-        await supabase.rpc('increment_xp', { user_id: uid, amount });
+        const { error } = await supabase.rpc('increment_xp', { user_id: uid, amount: amount });
+        if (error) {
+           // Fallback: manually update profile if RPC fails
+           const { data: profile } = await supabase.from('profiles').select('xp').eq('id', uid).maybeSingle();
+           if (profile) {
+              await supabase.from('profiles').update({ 
+                xp: (profile.xp || 0) + amount,
+                updated_at: new Date().toISOString()
+              }).eq('id', uid);
+           }
+        }
       } catch (err) {
         console.error("Supabase point award failed:", err);
       }
+    }
+    // 2. Firestore update (Primary Truth for many features)
+    try {
+      const userRef = doc(db, 'users', uid);
+      await firestoreUpdateDoc(userRef, {
+        totalPoints: increment(amount)
+      });
+    } catch (e) {
+      console.warn("Firestore point award failed:", e);
     }
   },
 

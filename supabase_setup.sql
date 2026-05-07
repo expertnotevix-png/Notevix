@@ -112,23 +112,12 @@ CREATE POLICY "Users can manage own schedules" ON public.schedules
 
 -- RPC Functions
 
--- Increment XP
+-- Increment XP (Main points handler)
 CREATE OR REPLACE FUNCTION increment_xp(user_id UUID, amount INTEGER)
 RETURNS void AS $$
 BEGIN
     UPDATE public.profiles
     SET xp = xp + amount,
-        updated_at = NOW()
-    WHERE id = user_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Increment XP (Alias for points)
-CREATE OR REPLACE FUNCTION increment_xp(user_id UUID, amount INTEGER)
-RETURNS void AS $$
-BEGIN
-    UPDATE public.profiles
-    SET total_points = total_points + amount,
         updated_at = NOW()
     WHERE id = user_id;
 END;

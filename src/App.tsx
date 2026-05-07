@@ -159,6 +159,9 @@ export default function App() {
             localStorage.setItem(CACHED_USER_KEY, JSON.stringify(mergedProfile));
             localStorage.setItem(CACHED_USER_KEY + '_time', Date.now().toString());
 
+            // SYNC BACK TO SUPABASE (Ensure Supabase has the latest merged data from Firestore fallback)
+            dataBridge.syncProfile(firebaseUser.uid, mergedProfile).catch(e => console.warn("Update sync failed:", e));
+
             // SETUP REAL-TIME PROFILE SYNC (Supabase)
             if (supabase) {
               const profileChannel = supabase

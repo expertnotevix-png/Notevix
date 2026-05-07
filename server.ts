@@ -11,31 +11,65 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 
 // Read config safely for ESM
-const firebaseConfig = JSON.parse(
-  fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8")
-);
+function getFirebaseConfig() {
+  try {
+    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+    if (fs.existsSync(configPath)) {
+      return JSON.parse(fs.readFileSync(configPath, "utf8"));
+    }
+  } catch (e) {
+    console.error("[Server] Critical error reading firebase-applet-config.json:", e);
+  }
+  return { projectId: "placeholder-id" }; // Fallback to avoid crash
+}
+
+const firebaseConfig = getFirebaseConfig();
 
 dotenv.config();
 
 // Initialize Firebase Admin (Server-side)
-if (!getApps().length) {
-  initializeApp({
-    projectId: firebaseConfig.projectId,
-  });
+if (firebaseConfig.projectId && firebaseConfig.projectId !== "placeholder-id") {
+  if (!getApps().length) {
+    try {
+      initializeApp({
+        projectId: firebaseConfig.projectId,
+      });
+      console.log("[Server] Firebase Admin initialized for project:", firebaseConfig.projectId);
+    } catch (e) {
+      console.error("[Server] Firebase Admin initialization failed:", e);
+    }
+  }
+} else {
+  console.warn("[Server] Firebase Project ID missing. Admin features will be disabled.");
 }
 
 // Get Firestore instance safely
 const getDbAdmin = () => {
-  const dbId = firebaseConfig.firestoreDatabaseId;
-  // If ID is null, undefined or empty/default string, use default DB
-  if (!dbId || dbId === "(default)" || dbId === "default") {
-    return getFirestore();
+  if (!getApps().length) return null;
+  
+  try {
+    const dbId = firebaseConfig.firestoreDatabaseId;
+    if (!dbId || dbId === "(default)" || dbId === "default") {
+      return getFirestore();
+    }
+    return getFirestore(dbId);
+  } catch (e) {
+    console.error("[Server] Firestore Admin initialization failed:", e);
+    return null;
   }
-  return getFirestore(dbId);
 };
 
 const dbAdmin = getDbAdmin();
-const adminAuth = getAuth();
+const adminAuth = getApps().length ? getAuth() : null;
+
+// Global process error handling to prevent crash-looping with zero info
+process.on('uncaughtException', (err) => {
+  console.error("[Server] UNCAUGHT EXCEPTION:", err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error("[Server] UNHANDLED REJECTION at:", promise, 'reason:', reason);
+});
 
 async function startServer() {
   const app = express();
@@ -147,9 +181,7 @@ async function startServer() {
 
   // Manual Trigger for Admin (Optional safety endpoint)
   app.post("/api/admin/reset-leaderboard", async (req, res) => {
-    // Basic protection: check for a secret header or just rely on the fact that 
-    // it's only called from our internal tools. 
-    // For now, let's just make it available.
+    if (!dbAdmin) return res.status(503).json({ error: "Firestore Admin not initialized" });
     const success = await resetLeaderboard();
     if (success) res.json({ message: "Leaderboard reset triggered" });
     else res.status(500).json({ error: "Reset failed" });
@@ -157,6 +189,7 @@ async function startServer() {
 
   // Webhook for Automated Payment Verification
   app.all("/api/activate-premium", async (req, res) => {
+    if (!dbAdmin || !adminAuth) return res.status(503).json({ error: "Auth/DB Admin not initialized" });
     const correlationId = Math.random().toString(36).substring(7);
     console.log(`[Webhook][${correlationId}] Received ${req.method} /api/activate-premium`);
     
@@ -362,9 +395,28 @@ async function startServer() {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      try {
+        const indexPath = path.join(distPath, 'index.html');
+        if (fs.existsSync(indexPath)) {
+          res.sendFile(indexPath);
+        } else {
+          res.status(404).send("Application build not found. Please run 'npm run build' first.");
+        }
+      } catch (err) {
+        console.error("[Server] Error serving index.html:", err);
+        res.status(500).send("Internal Server Error during static serve");
+      }
     });
   }
+
+  // Global Error Handler Middleware
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("[Server Error Handler]", err);
+    res.status(500).json({ 
+      error: "Internal Server Error", 
+      message: process.env.NODE_ENV === 'production' ? "An unexpected error occurred" : err.message 
+    });
+  });
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);

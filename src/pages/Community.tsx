@@ -28,6 +28,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { UserProfile } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { useModeration } from '../hooks/useModeration';
+import { toast } from 'sonner';
 import CreatePostModal from '../components/community/CreatePostModal';
 import PostCard from '../components/community/PostCard';
 import StudyGroupList from '../components/community/StudyGroupList';
@@ -187,12 +188,16 @@ export default function Community({ user }: { user: UserProfile | null }) {
 
   }, [sortBy, filterSubject, filterClass]);
 
+  const [isSendingLocal, setIsSendingLocal] = useState(false);
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !newMessage.trim() || isBanned) return;
+    if (!user || !newMessage.trim() || isBanned || isSendingLocal) return;
 
-    const tempId = 'temp-' + Date.now();
     const messageContent = newMessage.trim();
+    setIsSendingLocal(true);
+    
+    const tempId = 'temp-' + Date.now();
     
     const optimisticMessage = {
       id: tempId,
@@ -212,12 +217,14 @@ export default function Community({ user }: { user: UserProfile | null }) {
     setTimeout(() => scrollToBottom('smooth'), 50);
 
     try {
+      // PROACTIVE PROFILE SYNC: Ensure user exists in Supabase before chatting (Non-blocking)
+      dataBridge.syncProfile(user.uid, user).catch(e => console.warn("Chat pre-sync failed:", e));
+      
       const saved = await dataBridge.sendChatMessage(user.uid, messageContent);
       if (saved) {
-        // Success handled by pulling latest? 
-        // In this simple manual mode, we just fetch again or add locally
+        // Remove the temporary message and replace with the real one from DB
+        setPendingMessages(prev => prev.filter(m => m.id !== tempId));
         setMessages(prev => [...prev, {
-          ...saved,
           id: saved.id,
           userId: user.uid,
           userName: user.displayName,
@@ -225,12 +232,15 @@ export default function Community({ user }: { user: UserProfile | null }) {
           content: messageContent,
           timestamp: saved.created_at
         }]);
-        setPendingMessages(prev => prev.filter(m => m.id !== tempId));
+      } else {
+        throw new Error("No data returned from chat server");
       }
     } catch (error) {
       console.error("Failed to send message:", error);
-      // Mark as error in local state
       setPendingMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
+      toast.error("Message failed to send. Please check your connection.");
+    } finally {
+      setIsSendingLocal(false);
     }
   };
 
@@ -379,23 +389,34 @@ export default function Community({ user }: { user: UserProfile | null }) {
                           <div className={`max-w-[80%] space-y-1 ${isMe ? 'items-end' : ''}`}>
                             {showAvatar && (
                               <div className={`flex items-center gap-2 px-1 ${isMe ? 'flex-row-reverse' : ''}`}>
-                                <span className="text-[9px] font-bold text-gray-500">{msg.userName}</span>
-                                <span className="text-[7px] text-gray-600 uppercase">
-                                  {msg.timestamp?.toDate ? formatDistanceToNow(msg.timestamp.toDate(), { addSuffix: true }) : msg.status === 'sending' ? 'sending...' : 'just now'}
+                                <span className="text-[10px] font-bold text-gray-400">{msg.userName}</span>
+                                <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
+                                  {msg.timestamp ? (
+                                    typeof msg.timestamp === 'string' ? 
+                                      formatDistanceToNow(new Date(msg.timestamp), { addSuffix: true }) :
+                                      msg.timestamp.toDate ? formatDistanceToNow(msg.timestamp.toDate(), { addSuffix: true }) :
+                                      'just now'
+                                  ) : msg.status === 'sending' ? 'sending...' : 'just now'}
                                 </span>
                               </div>
                             )}
                             <div className={`p-3 rounded-2xl text-sm leading-relaxed relative ${
                               isMe ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-white/5 border border-white/10 rounded-tl-none'
-                            } ${msg.status === 'sending' ? 'opacity-70 animate-pulse' : ''} ${msg.status === 'error' ? 'border-red-500/50 text-red-200' : ''}`}>
+                            } ${msg.status === 'sending' ? 'opacity-50 grayscale' : ''} ${msg.status === 'error' ? 'border-red-500/50 text-red-200' : ''}`}>
                               {msg.content}
                               {msg.status === 'error' && (
                                 <button 
                                   onClick={() => handleSendMessage({ preventDefault: () => {} } as any)}
-                                  className="absolute -left-10 top-1/2 -translate-y-1/2 p-2 text-red-500 hover:scale-110 transition-transform"
+                                  className="absolute -left-10 top-1/2 -translate-y-1/2 p-2 bg-red-500/20 rounded-full text-red-500 hover:scale-110 transition-transform flex items-center justify-center border border-red-500/30"
+                                  title="Retry sending"
                                 >
-                                  <Clock size={16} />
+                                  <Clock size={12} />
                                 </button>
+                              )}
+                              {msg.status === 'sending' && (
+                                <div className="absolute -left-10 top-1/2 -translate-y-1/2 p-2 animate-spin text-purple-500">
+                                   <Sparkles size={16} />
+                                </div>
                               )}
                             </div>
                           </div>
@@ -524,10 +545,17 @@ export default function Community({ user }: { user: UserProfile | null }) {
                   />
                   <button
                     type="submit"
-                    disabled={!newMessage.trim() || isBanned || !user}
-                    className="purple-gradient p-4 rounded-2xl text-white shadow-xl shadow-purple-500/30 active:scale-95 transition-transform disabled:opacity-50"
+                    disabled={!newMessage.trim() || isBanned || !user || isSendingLocal}
+                    className="purple-gradient p-4 rounded-2xl text-white shadow-xl shadow-purple-500/30 active:scale-95 transition-transform disabled:opacity-50 min-w-[56px] flex items-center justify-center"
                   >
-                    <Send size={20} />
+                    {isSendingLocal ? (
+                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25 shadow-[0_0_10px_rgba(255,255,255,0.5)]" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    ) : (
+                      <Send size={20} />
+                    )}
                   </button>
                 </form>
               </div>
