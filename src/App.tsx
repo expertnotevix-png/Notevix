@@ -61,7 +61,7 @@ const PostDetail = lazyWithRetry(() => import('./pages/PostDetail'));
 // Components
 import BottomNav from './components/BottomNav';
 import { FloatingChatbot } from './components/FloatingChatbot';
-import ErrorBoundary from './components/ErrorBoundary';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
 
