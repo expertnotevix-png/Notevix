@@ -13,20 +13,18 @@ const CACHED_USER_KEY = 'notevix_user_profile_v1';
 
 const lazyWithRetry = (componentImport: () => Promise<any>) => 
   lazy(async () => {
-    const pageHasBeenForceRefreshed = JSON.parse(
-      window.sessionStorage.getItem('page-has-been-force-refreshed') || 'false'
-    );
-
     try {
-      const component = await componentImport();
-      window.sessionStorage.setItem('page-has-been-force-refreshed', 'false');
-      return component;
+      return await componentImport();
     } catch (error) {
       console.error("Lazy load failed:", error);
-      if (!pageHasBeenForceRefreshed) {
-        window.sessionStorage.setItem('page-has-been-force-refreshed', 'true');
+      // Only reload if we haven't reloaded in the last 10 seconds to avoid loops
+      const lastReload = Number(window.sessionStorage.getItem('last-lazy-reload') || '0');
+      const now = Date.now();
+      
+      if (now - lastReload > 10000) {
+        window.sessionStorage.setItem('last-lazy-reload', now.toString());
         window.location.reload();
-        return { default: () => null }; // Fallback while reloading
+        return { default: () => null };
       }
       throw error;
     }

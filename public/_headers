@@ -1,0 +1,14 @@
+# Assets with hashes can be cached forever
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Ensure JS files have correct MIME type
+/*.js
+  Content-Type: application/javascript
+
+# Disable FLoC
+/*
+  Permissions-Policy: interest-cohort=()
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  X-XSS-Protection: 1; mode=block
