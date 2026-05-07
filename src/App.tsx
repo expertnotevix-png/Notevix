@@ -18,10 +18,14 @@ const lazyWithRetry = (componentImport: () => Promise<any>) =>
     } catch (error: any) {
       console.error("Lazy load failed:", error);
       
-      const errorString = error?.toString() || "";
+      const errorString = error?.toString() || (typeof error === 'string' ? error : "");
       const isChunkLoadFailed = errorString.includes("Failed to fetch dynamically imported module") || 
                                 errorString.includes("Loading chunk") || 
-                                errorString.includes("Unexpected token <"); // Often happens when index.html is returned instead of JS
+                                errorString.includes("Unexpected token <") ||
+                                errorString.includes("script error") ||
+                                errorString.includes("type error") ||
+                                errorString.includes("import") ||
+                                errorString.includes("fetch");
 
       if (isChunkLoadFailed) {
         // Force a reload to get the latest index.html and asset hashes
