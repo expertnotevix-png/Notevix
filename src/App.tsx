@@ -359,23 +359,23 @@ export default function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-black text-white pb-20">
-        <AnimatePresence mode="wait">
-        </AnimatePresence>
+      <ErrorBoundary>
+        <div className="min-h-screen bg-black text-white pb-20">
+          <AnimatePresence mode="wait">
+          </AnimatePresence>
 
-        <Suspense fallback={
-          <div className="min-h-[80vh] flex flex-col items-center justify-center p-6 bg-black">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex flex-col items-center"
-            >
-              <div className="w-10 h-10 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin mb-4" />
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Synchronizing...</p>
-            </motion.div>
-          </div>
-        }>
-          <ErrorBoundary>
+          <Suspense fallback={
+            <div className="min-h-[80vh] flex flex-col items-center justify-center p-6 bg-black">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex flex-col items-center"
+              >
+                <div className="w-10 h-10 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin mb-4" />
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Synchronizing...</p>
+              </motion.div>
+            </div>
+          }>
             <Routes>
               <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
               
@@ -407,13 +407,13 @@ export default function App() {
               
               <Route path="/admin" element={user?.role === 'admin' ? <Admin /> : <Navigate to="/" />} />
             </Routes>
-          </ErrorBoundary>
-        </Suspense>
-        
-        <BottomNav user={user} />
-        <FloatingChatbot />
-        <Toaster position="top-center" expand={true} richColors theme="dark" />
-      </div>
+          </Suspense>
+          
+          <BottomNav user={user} />
+          <FloatingChatbot />
+          <Toaster position="top-center" expand={true} richColors theme="dark" />
+        </div>
+      </ErrorBoundary>
     </Router>
   );
 }

@@ -17,9 +17,9 @@ import { db, checkQuotaLock } from '../components/firebase';
 import { supabase } from '../lib/supabase';
 import { SubjectResource } from '../types';
 
-const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 8000, context: string = 'Operation'): Promise<T> => {
+const withTimeout = async <T>(promiseOrThenable: any, timeoutMs: number = 8000, context: string = 'Operation'): Promise<T> => {
   return Promise.race([
-    promise,
+    Promise.resolve(promiseOrThenable),
     new Promise<T>((_, reject) => 
       setTimeout(() => reject(new Error(`${context} timed out after ${timeoutMs}ms`)), timeoutMs)
     )
@@ -67,7 +67,7 @@ export const dataBridge = {
     // 1. Try Supabase
     if (supabase) {
       try {
-        const { data, error } = await withTimeout(
+        const response: any = await withTimeout(
           supabase
             .from('profiles')
             .select('*')
@@ -76,6 +76,8 @@ export const dataBridge = {
           6000,
           'Profile Fetch'
         );
+        
+        const { data, error } = response;
         
         if (data && !error) {
            const isAdmin = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(data.email?.toLowerCase());
@@ -798,7 +800,7 @@ export const dataBridge = {
   async getChatMessages(limitCount = 50) {
     if (supabase) {
       try {
-        const { data, error } = await withTimeout(
+        const response: any = await withTimeout(
           supabase
             .from('community_chat')
             .select(`
@@ -813,6 +815,8 @@ export const dataBridge = {
           7000,
           'Chat Fetch'
         );
+        
+        const { data, error } = response;
         
         if (data) {
           return data.reverse().map((d: any) => ({
