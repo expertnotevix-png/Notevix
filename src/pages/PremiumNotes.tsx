@@ -438,21 +438,31 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
                       <div className="pt-6 border-t border-white/5 space-y-3">
                         {unlocked && (
-                          <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-2 mb-2">
-                            <div className="flex items-center gap-2">
-                              <Key className="w-3 h-3 text-emerald-400" />
-                              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">PDF Password (All Caps)</span>
+                          <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-3 mb-2">
+                            <div className="space-y-1">
+                              <span className="text-[8px] font-black text-rose-500 uppercase tracking-widest block">
+                                ⚠️ Password Required
+                              </span>
+                              <p className="text-[7px] text-rose-400 font-bold uppercase tracking-wider">
+                                Required to open the {res.subject} PDF notes.
+                              </p>
                             </div>
-                            <div className="flex items-center justify-between">
-                              <code className="text-xl font-black text-white tracking-widest leading-none">{SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "SEE_ADMIN"}</code>
+                            
+                            <div className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/10">
+                              <div className="overflow-hidden">
+                                <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400 block mb-0.5">PDF PASSWORD</span>
+                                <code className="text-sm font-black text-white tracking-widest truncate block">
+                                  {SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "SEE_ADMIN"}
+                                </code>
+                              </div>
                               <button 
                                 onClick={() => {
                                   navigator.clipboard.writeText(SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "");
                                   toast.success("Password Copied!");
                                 }}
-                                className="p-2 hover:bg-emerald-500/20 rounded-lg transition-colors text-emerald-400"
+                                className="p-2 hover:bg-emerald-500/20 rounded-lg transition-colors text-emerald-400 border border-white/5"
                               >
-                                <Copy className="w-4 h-4" />
+                                <Copy className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           </div>
@@ -583,19 +593,32 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                    </div>
                 </div>
 
-                <div className="p-8 rounded-3xl bg-white/5 border border-white/10 space-y-4">
-                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">YOUR PDF PASSWORD</p>
-                   <div className="flex flex-col items-center gap-4">
-                      <code className="text-4xl font-black text-white tracking-[0.2em]">{purchaseSuccess.password}</code>
-                      <button 
-                        onClick={() => {
-                          navigator.clipboard.writeText(purchaseSuccess.password);
-                          toast.success("Password Copied!");
-                        }}
-                        className="p-3 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors"
-                      >
-                        <Copy className="w-5 h-5 text-emerald-400" />
-                      </button>
+                <div className="space-y-4">
+                   <div className="flex flex-col gap-1 text-center">
+                     <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest animate-pulse">
+                       ⚠️ Critical Warning
+                     </span>
+                     <p className="text-[9px] text-rose-400 font-bold uppercase tracking-wider px-4">
+                       Remember the password without this you cant able to open the {purchaseSuccess.subject} PDF notes.
+                     </p>
+                   </div>
+
+                   <div className="p-8 rounded-3xl bg-white/5 border border-white/10 space-y-4">
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">YOUR PDF PASSWORD</p>
+                      <div className="flex flex-col items-center gap-4">
+                         <div className="w-full overflow-x-auto py-2 custom-scrollbar text-center">
+                           <code className="text-2xl sm:text-3xl font-black text-white tracking-[0.1em] whitespace-nowrap px-4">{purchaseSuccess.password}</code>
+                         </div>
+                         <button 
+                           onClick={() => {
+                             navigator.clipboard.writeText(purchaseSuccess.password);
+                             toast.success("Password Copied!");
+                           }}
+                           className="p-3 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors border border-white/10"
+                         >
+                           <Copy className="w-5 h-5 text-emerald-400" />
+                         </button>
+                      </div>
                    </div>
                 </div>
 

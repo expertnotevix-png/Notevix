@@ -429,19 +429,32 @@ export default function Landing() {
                    </div>
                 </div>
 
-                <div className="p-8 rounded-3xl bg-white/5 border border-white/10 space-y-4">
-                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">YOUR PDF PASSWORD</p>
-                   <div className="flex flex-col items-center gap-4">
-                      <code className="text-4xl font-black text-white tracking-[0.2em]">{purchaseSuccess.password}</code>
-                      <button 
-                        onClick={() => {
-                          navigator.clipboard.writeText(purchaseSuccess.password);
-                          toast.success("Password Copied!");
-                        }}
-                        className="p-3 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors"
-                      >
-                        <Copy className="w-5 h-5 text-emerald-400" />
-                      </button>
+                <div className="space-y-4">
+                   <div className="flex flex-col gap-1 text-center">
+                     <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest animate-pulse">
+                       ⚠️ Critical Warning
+                     </span>
+                     <p className="text-[9px] text-rose-400 font-bold uppercase tracking-wider px-4">
+                       Remember the password without this you cant able to open the {purchaseSuccess.subject} PDF notes.
+                     </p>
+                   </div>
+
+                   <div className="p-8 rounded-3xl bg-white/5 border border-white/10 space-y-4">
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">YOUR PDF PASSWORD</p>
+                      <div className="flex flex-col items-center gap-4">
+                         <div className="w-full overflow-x-auto py-2 custom-scrollbar text-center">
+                           <code className="text-2xl sm:text-3xl font-black text-white tracking-[0.1em] whitespace-nowrap px-4">{purchaseSuccess.password}</code>
+                         </div>
+                         <button 
+                           onClick={() => {
+                             navigator.clipboard.writeText(purchaseSuccess.password);
+                             toast.success("Password Copied!");
+                           }}
+                           className="p-3 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors border border-white/10"
+                         >
+                           <Copy className="w-5 h-5 text-emerald-400" />
+                         </button>
+                      </div>
                    </div>
                 </div>
 
