@@ -64,8 +64,12 @@ export const supabase = (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUr
  *   class TEXT,
  *   title TEXT,
  *   description TEXT,
- *   driveLink TEXT,
- *   coverUrl TEXT,
- *   createdAt TIMESTAMPTZ DEFAULT NOW()
+ *   price NUMERIC DEFAULT 0,
+ *   drive_link TEXT,
+ *   cover_url TEXT,
+ *   features TEXT, -- JSON string or JSONB
+ *   is_free BOOLEAN DEFAULT false,
+ *   created_at TIMESTAMPTZ DEFAULT NOW(),
+ *   updated_at TIMESTAMPTZ DEFAULT NOW()
  * );
  */

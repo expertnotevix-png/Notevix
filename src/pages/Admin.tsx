@@ -216,15 +216,21 @@ export default function Admin() {
 
       // STRICT Supabase for Resources (Primary)
       if (supabase) {
-        // We use both name variations to be safe against different table schemas
-        const { error } = await supabase.from('subject_resources').insert([{
-          ...resourceData,
-          // Support for both snake_case and camelCase
+        // Construct clean DB record without camelCase fields that trigger schema errors
+        const dbRecord = {
+          id: resourceData.id,
+          subject: resourceData.subject,
+          class: resourceData.class,
+          price: resourceData.price,
+          description: resourceData.description,
           cover_url: resourceData.coverUrl,
           drive_link: resourceData.driveLink,
           is_free: resourceData.isFree,
+          features: JSON.stringify(resourceData.features),
           created_at: resourceData.createdAt
-        }]);
+        };
+
+        const { error } = await supabase.from('subject_resources').insert([dbRecord]);
         
         if (error) throw error;
         toast.success("Resource Created Successfully!");
@@ -2362,6 +2368,22 @@ ALTER TABLE public.valid_payments ENABLE ROW LEVEL SECURITY;
 
 -- 5. Allow Public Read for Banners
 CREATE POLICY "Public Read Banners" ON public.promo_banners FOR SELECT USING (true);
+
+-- 6. Create Subject Resources Table
+CREATE TABLE IF NOT EXISTS public.subject_resources (
+  id TEXT PRIMARY KEY,
+  subject TEXT NOT NULL,
+  class TEXT NOT NULL,
+  description TEXT,
+  price NUMERIC DEFAULT 0,
+  drive_link TEXT,
+  cover_url TEXT,
+  features TEXT,
+  is_free BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+CREATE POLICY "Public Read Resources" ON public.subject_resources FOR SELECT USING (true);
                           `;
                           navigator.clipboard.writeText(sql.trim());
                           toast.success("SQL Copied! Paste this in Supabase SQL Editor to fix Banner & Premium issues.");
