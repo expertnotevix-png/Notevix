@@ -162,11 +162,7 @@ export default function Landing() {
       setAiVerifying(false);
       
       if (!result.isValid) {
-        throw new Error(result.error || "AI could not verify this receipt. Please ensure UTR/Ref ID is visible.");
-      }
-
-      if (result.amount !== (selectedPlan?.price || 0)) {
-        throw new Error(`Amount mismatch! AI detected ₹${result.amount} but this plan costs ₹${selectedPlan?.price}. Please pay the correct amount.`);
+        throw new Error(result.error || "The analyzed screenshot is not valid. Please ensure recipient name 'Poonam Devi' and correct amount (₹39/₹99) are visible.");
       }
 
       const finalTxId = result.transactionId?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
@@ -175,32 +171,25 @@ export default function Landing() {
         throw new Error("Could not extract a valid Transaction ID from the screenshot. Please ensure the UTR/Reference number is clearly visible.");
       }
 
-      // Check double-spend using bridge
+      // Check anti-fraud in Supabase: Reject if transaction_id already exists
       const isRedeemed = await dataBridge.isTransactionRedeemed(finalTxId);
       if (isRedeemed) {
-        throw new Error(`Transaction ID ${finalTxId} has already been used.`);
+        throw new Error("This screenshot has already been used");
       }
       
-      const saveResult = await dataBridge.savePurchaseRequest({
-        email,
-        whatsapp,
-        userId: 'GUEST',
+      // After verified: Save phone + purchase to Supabase verified_payments
+      const saveResult = await dataBridge.saveVerifiedPayment({
         transactionId: finalTxId,
-        planId: selectedPlan?.id,
-        planName: selectedPlan?.name,
-        resourceId: selectedPlan?.resourceId || null,
-        subject: selectedPlan?.subject || null,
-        class: selectedPlan?.class || null,
+        phoneNumber: whatsapp,
         amount: result.amount || selectedPlan?.price || 0,
-        status: 'approved',
-        isGuest: true
+        subject: selectedPlan?.subject || selectedPlan?.name || 'Unknown'
       });
 
       if (!saveResult.success) {
-        throw new Error(saveResult.error || "Failed to save purchase request. Please contact support.");
+        throw new Error(saveResult.error || "Failed to save verified payment. Please contact support.");
       }
 
-      // Show instant password for individual subjects
+      // Show PDF password on screen
       const subjectKey = (selectedPlan?.subject || selectedPlan?.name || '').toLowerCase().split(' ')[0] || '';
       const password = SUBJECT_PASSWORDS[subjectKey] || "CONTACT_ADMIN";
 
@@ -383,16 +372,16 @@ export default function Landing() {
                         
                         <div className="flex flex-col gap-2 pt-4">
                           <button 
-                            onClick={() => setSelectedPlan({ ...subjectPlan, subject: res.subject, class: res.class, resourceId: res.id })}
-                            className="w-full py-3.5 rounded-xl bg-white text-black font-black text-[10px] uppercase tracking-widest hover:bg-gray-100 transition-all shadow-xl active:scale-95"
+                            onClick={() => toast.info("PDF is locked. Please purchase the password to open.")}
+                            className="w-full py-3.5 rounded-xl bg-white/10 text-white font-black text-[10px] uppercase tracking-widest hover:bg-white/20 transition-all active:scale-95 border border-white/10"
                           >
-                            Buy PDF ₹39
+                            OPEN PDF (LOCKED)
                           </button>
                           <button 
-                            onClick={() => setSelectedPlan({ ...masterPlan, class: res.class })}
-                            className="w-full py-3.5 rounded-xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600/30 transition-all active:scale-95"
+                            onClick={() => setSelectedPlan({ ...subjectPlan, subject: res.subject, class: res.class, resourceId: res.id })}
+                            className="w-full py-3.5 rounded-xl bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl active:scale-95"
                           >
-                            Get All Subjects ₹99
+                            GET PASSWORD ₹39
                           </button>
                         </div>
                       </div>
@@ -534,6 +523,7 @@ export default function Landing() {
                     <div>
                       <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none mb-1">Pay with UPI</p>
                       <p className="text-lg font-black text-white">9236489649@mbk</p>
+                      <p className="text-[8px] font-bold text-gray-500 mt-1 uppercase tracking-wider">Pay ₹39 for this subject OR ₹99 for all subjects</p>
                     </div>
                     <div className="ml-auto text-2xl font-black text-white">₹{selectedPlan.price}</div>
                   </div>

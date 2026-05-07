@@ -289,24 +289,8 @@ export const geminiService = {
   },
 
   async verifyPaymentScreenshot(imageData: string): Promise<{ isValid: boolean, transactionId?: string, amount?: number, error?: string }> {
-    const system = `You are the NoteVix Forensic AUDITOR. Your job is to strictly verify Indian payment receipts (GPay, PhonePe, Paytm, BHIM, Amazon Pay) to prevent fraud.
-
-    STRICT VERIFICATION CRITERIA:
-    1. RECIPIENT NAME: The payment MUST be made to "POONAM DEVI" or "Poonam Devi". Look for the name in 'Paid to' or 'Recipient' section.
-    2. RECIPIENT ID/PHONE: Often shows as "9236489649@mbk" or "9236489649".
-    3. STATUS: The payment MUST be "Success", "Completed", or "Paid Successfully". "Pending", "Processing", or "Failed" are REJECTED.
-    4. AMOUNT: Only ₹39 (Single Subject) or ₹99 (Full Pack) are valid. Any other amount is a mismatch.
-    5. TRANSACTION ID (UTR): You MUST extract the unique 12-digit UTR number or the alphanumeric Transaction ID. This is critical for preventing duplicate uses of the same screenshot.
-
-    FRAUD WARNING:
-    - If any of these are missing or incorrect, set isValid: false.
-    - If the screenshot looks like a duplicate or edited, reject it.
-    - BE EXTREMELY PRECISE with the Transaction/UTR ID. Do not guess digits.
-
-    OUTPUT FORMAT (STRICT JSON ONLY):
-    {"isValid": boolean, "transactionId": "EXTRACTED_ID", "amount": number, "error": "Reason if invalid"}`;
-
-    const prompt = "Analyze this receipt. Is it a valid payment of ₹39 or ₹99 to Poonam Devi? Extract the exact Transaction ID/UTR and the Amount. Respond ONLY with JSON.";
+    const system = `Analyze this payment screenshot and return JSON only: { "recipientName": "string", "amount": number, "transactionId": "string", "isValid": boolean } - isValid must be true only if recipient name contains 'poonam devi' (case insensitive) and amount is exactly 39 or 99`;
+    const prompt = "Analyze this receipt. Return JSON ONLY.";
 
     try {
       const { apiKey, nvidiaKey } = getAI();

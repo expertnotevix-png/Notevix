@@ -3,7 +3,7 @@ import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, updateDoc, query, 
 import { db, handleFirestoreError, OperationType, checkQuotaLock, clearQuotaLock } from '../components/firebase';
 import { dataBridge } from '../services/dataBridge';
 import { geminiService } from '../services/geminiService';
-import { Chapter, Message, Notification, PurchaseRequest, UserProfile, ValidPayment, TransactionLedger } from '../types';
+import { Chapter, Message, Notification, PurchaseRequest, UserProfile, ValidPayment, TransactionLedger, VerifiedPayment } from '../types';
 import { 
   Plus, Trash2, Edit2, Save, X, ChevronLeft, Database, 
   MessageSquare, Bell, Send, CheckCircle2, Clock, ShieldCheck,
@@ -22,7 +22,7 @@ import {
 import { supabase } from '../lib/supabase';
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources' | 'valid_payments' | 'settings' | 'banners'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources' | 'valid_payments' | 'verified_payments' | 'settings' | 'banners'>('analytics');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -32,6 +32,7 @@ export default function Admin() {
   const [registry, setRegistry] = useState<any[]>([]);
   const [subjectResources, setSubjectResources] = useState<any[]>([]);
   const [validPayments, setValidPayments] = useState<ValidPayment[]>([]);
+  const [verifiedPayments, setVerifiedPayments] = useState<VerifiedPayment[]>([]);
   const [transactionLedger, setTransactionLedger] = useState<TransactionLedger[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -82,7 +83,38 @@ export default function Admin() {
       fetchValidPayments();
       fetchTransactionLedger();
     }
+    if (activeTab === 'verified_payments') {
+      fetchVerifiedPayments();
+    }
   }, [activeTab]);
+
+  const fetchVerifiedPayments = async () => {
+    setLoading(true);
+    try {
+      if (supabase) {
+        const { data, error } = await supabase.from('verified_payments').select('*').order('created_at', { ascending: false });
+        if (!error && data) {
+          setVerifiedPayments(data.map(d => ({
+            id: d.id,
+            transactionId: d.transaction_id,
+            phoneNumber: d.phone_number,
+            amount: d.amount,
+            subject: d.subject,
+            createdAt: d.created_at
+          })));
+          return;
+        }
+      }
+      // Fallback
+      const q = query(collection(db, 'verified_payments'), orderBy('createdAt', 'desc'));
+      const snap = await getDocs(q);
+      setVerifiedPayments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VerifiedPayment)));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchTransactionLedger = async () => {
     try {
@@ -1212,6 +1244,7 @@ export default function Admin() {
     { id: 'banners', label: 'Promotion Banners', icon: LayoutDashboard },
     { id: 'resources', label: 'Digital Library', icon: BookOpen },
     { id: 'valid_payments', label: 'Verify Keys', icon: ShieldCheck },
+    { id: 'verified_payments', label: 'AI Verified', icon: CheckCircle2 },
     { id: 'chapters', label: 'Flashcards', icon: Database },
     { id: 'messages', label: 'Support', icon: MessageSquare },
     { id: 'payments', label: 'Revenue', icon: CreditCard },
@@ -1488,6 +1521,57 @@ export default function Admin() {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        );
+      case 'verified_payments':
+        return (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <h3 className="text-2xl font-black uppercase tracking-tight">AI Verified Payments</h3>
+            <div className="relative max-w-md">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input 
+                type="text"
+                placeholder="Search by TxID or Phone..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 py-3 text-sm focus:border-purple-500 focus:outline-none"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {verifiedPayments.filter(p => p.transactionId.toUpperCase().includes(searchQuery.toUpperCase()) || p.phoneNumber.includes(searchQuery)).map((p) => (
+                <div key={p.id} className="glass-card p-6 rounded-[2rem] bg-white/5 border border-emerald-500/10 space-y-4">
+                  <div className="flex justify-between items-start">
+                    <div className="bg-emerald-500/10 text-emerald-500 text-[8px] font-black px-2 py-1 rounded uppercase tracking-widest">
+                      Verified
+                    </div>
+                    <span className="text-[10px] text-gray-500 font-bold">{new Date(p.createdAt).toLocaleDateString()}</span>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Phone Number</p>
+                    <p className="text-lg font-black">{p.phoneNumber}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Transaction ID</p>
+                    <p className="text-xs font-mono text-emerald-400 break-all">{p.transactionId}</p>
+                  </div>
+                  <div className="flex justify-between items-end pt-4 border-t border-white/5">
+                    <div>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Subject</p>
+                      <p className="text-xs font-bold text-white uppercase">{p.subject}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Amount</p>
+                      <p className="text-xl font-black text-emerald-500">₹{p.amount}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {verifiedPayments.length === 0 && (
+                <div className="col-span-full py-12 text-center text-gray-500 uppercase tracking-widest text-xs font-bold">
+                  No verified payments yet.
+                </div>
+              )}
             </div>
           </div>
         );
@@ -2378,6 +2462,17 @@ CREATE TABLE IF NOT EXISTS public.subject_resources (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 CREATE POLICY "Public Read Resources" ON public.subject_resources FOR SELECT USING (true);
+
+-- 7. Create Verified Payments Table (Manual AI Audit)
+CREATE TABLE IF NOT EXISTS public.verified_payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  transaction_id TEXT UNIQUE NOT NULL,
+  phone_number TEXT,
+  amount NUMERIC,
+  subject TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+CREATE POLICY "Public Read Verified" ON public.verified_payments FOR SELECT USING (true);
                           `;
                           navigator.clipboard.writeText(sql.trim());
                           toast.success("SQL Copied! Paste this in Supabase SQL Editor to fix Banner & Premium issues.");

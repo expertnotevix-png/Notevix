@@ -364,13 +364,21 @@ export const dataBridge = {
     // Check Supabase (Primary Truth)
     if (supabase) {
       try {
-        const { data } = await supabase
+        const { data: prData } = await supabase
           .from('purchase_requests')
           .select('id')
           .eq('transaction_id', finalTxId)
           .maybeSingle();
         
-        if (data) return true;
+        if (prData) return true;
+
+        const { data: vpData } = await supabase
+          .from('verified_payments')
+          .select('id')
+          .eq('transaction_id', finalTxId)
+          .maybeSingle();
+
+        if (vpData) return true;
       } catch (err) {
         console.warn("Supabase UTR check failed:", err);
       }
@@ -429,6 +437,35 @@ export const dataBridge = {
     }
 
     return false;
+  },
+
+  async saveVerifiedPayment(paymentData: { transactionId: string, phoneNumber: string, amount: number, subject: string }) {
+    if (supabase) {
+      try {
+        const { error } = await supabase.from('verified_payments').insert([{
+          transaction_id: paymentData.transactionId.toUpperCase().replace(/[^A-Z0-9]/g, ''),
+          phone_number: paymentData.phoneNumber,
+          amount: paymentData.amount,
+          subject: paymentData.subject,
+          created_at: new Date().toISOString()
+        }]);
+        if (error) throw error;
+        return { success: true };
+      } catch (err: any) {
+        console.error("Save verified payment failed:", err);
+        return { success: false, error: err.message };
+      }
+    }
+    // Firestore Fallback
+    try {
+      await addDoc(collection(db, 'verified_payments'), {
+        ...paymentData,
+        createdAt: serverTimestamp()
+      });
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
   },
 
   /**

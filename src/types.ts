@@ -91,6 +91,15 @@ export interface Doubt {
   timestamp: string;
 }
 
+export interface VerifiedPayment {
+  id: string;
+  transactionId: string;
+  phoneNumber: string;
+  amount: number;
+  subject: string;
+  createdAt: string;
+}
+
 export interface ValidPayment {
   id: string;
   transactionId: string;
