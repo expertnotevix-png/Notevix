@@ -442,17 +442,20 @@ export default function Landing() {
                    <div className="p-8 rounded-3xl bg-white/5 border border-white/10 space-y-4">
                       <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">YOUR PDF PASSWORD</p>
                       <div className="flex flex-col items-center gap-4">
-                         <div className="w-full overflow-x-auto py-2 custom-scrollbar text-center">
-                           <code className="text-2xl sm:text-3xl font-black text-white tracking-[0.1em] whitespace-nowrap px-4">{purchaseSuccess.password}</code>
+                         <div className="w-full py-2 text-center">
+                           <code className="text-sm sm:text-xl font-black text-white tracking-[0.15em] break-all px-4 block bg-white/5 py-4 rounded-2xl border border-white/10 select-all">
+                             {purchaseSuccess.password}
+                           </code>
                          </div>
                          <button 
                            onClick={() => {
                              navigator.clipboard.writeText(purchaseSuccess.password);
                              toast.success("Password Copied!");
                            }}
-                           className="p-3 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors border border-white/10"
+                           className="flex items-center gap-2 px-6 py-3 bg-indigo-500/10 rounded-2xl hover:bg-indigo-500/20 transition-all border border-indigo-500/20 text-indigo-400 group"
                          >
-                           <Copy className="w-5 h-5 text-emerald-400" />
+                           <Copy className="w-4 h-4" />
+                           <span className="text-[10px] font-black uppercase tracking-widest">Copy Password</span>
                          </button>
                       </div>
                    </div>
