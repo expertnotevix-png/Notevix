@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense, Component, ErrorInfo, ReactNode } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, getRedirectResult, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, query, collection, where, getDocs, addDoc, increment, orderBy, limit } from 'firebase/firestore';
@@ -17,40 +17,81 @@ const lazyWithRetry = (componentImport: () => Promise<any>) =>
       return await componentImport();
     } catch (error: any) {
       console.error("Lazy load failed:", error);
-      
-      const errorString = error?.toString() || (typeof error === 'string' ? error : "");
-      const isChunkLoadFailed = errorString.includes("Failed to fetch dynamically imported module") || 
-                                errorString.includes("Loading chunk") || 
-                                errorString.includes("Unexpected token <") ||
-                                errorString.includes("script error") ||
-                                errorString.includes("type error") ||
-                                errorString.includes("import") ||
-                                errorString.includes("fetch");
-
-      if (isChunkLoadFailed) {
-        // Force a reload to get the latest index.html and asset hashes
-        const lastReload = Number(window.sessionStorage.getItem('last-lazy-reload') || '0');
-        const now = Date.now();
-        
-        if (now - lastReload > 10000) { // 10s buffer
-          console.log("Chunk load failed - forcing hard reload");
-          window.sessionStorage.setItem('last-lazy-reload', now.toString());
-          
-          // Clear all caches if possible
-          if ('caches' in window) {
-            try {
-              const names = await caches.keys();
-              await Promise.all(names.map(name => caches.delete(name)));
-            } catch (e) {}
-          }
-          
-          window.location.reload();
-          return { default: () => null };
-        }
-      }
       throw error;
     }
   });
+
+interface ErrorBoundaryProps {
+  children?: ReactNode;
+  fallback?: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState = {
+    hasError: false
+  };
+
+  public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Uncaught error at ErrorBoundary:", error, errorInfo);
+  }
+
+  public render() {
+    if (this.state.hasError) {
+      const errorMsg = this.state.error?.message || "";
+      const isChunkError = errorMsg.includes("Failed to fetch dynamically imported module") || 
+                           errorMsg.includes("Loading chunk");
+
+      return this.props.fallback || (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-black overflow-y-auto">
+          <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
+            <span className="text-2xl">⚠️</span>
+          </div>
+          <h2 className="text-xl font-bold text-white uppercase tracking-tighter">Something went wrong</h2>
+          <p className="text-gray-400 text-sm mt-2 mb-8 max-w-xs leading-relaxed">
+            {isChunkError 
+              ? "We couldn't load some parts of the app. This usually happens after an update."
+              : "An unexpected error occurred in NoteVix."}
+          </p>
+          
+          <div className="flex flex-col gap-4 w-full max-w-xs">
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-8 py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-purple-600/20 active:scale-95 transition-all"
+            >
+              Reload Page
+            </button>
+            
+            <button 
+              onClick={() => {
+                window.location.href = '/';
+              }}
+              className="px-8 py-3 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white rounded-2xl font-bold text-[10px] uppercase tracking-widest border border-white/5 transition-all"
+            >
+              Emergency Fix (Refresh)
+            </button>
+          </div>
+
+          <div className="mt-12 p-4 bg-white/5 rounded-xl border border-white/5 w-full max-w-sm">
+            <p className="text-[9px] text-gray-600 font-mono text-left break-all">
+              Error: {this.state.error?.message || "Unknown"}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 // Pages - Lazy loaded for performance
 const Articles = lazyWithRetry(() => import('./pages/Articles'));
@@ -83,7 +124,6 @@ const PostDetail = lazyWithRetry(() => import('./pages/PostDetail'));
 // Components
 import BottomNav from './components/BottomNav';
 import { FloatingChatbot } from './components/FloatingChatbot';
-import ErrorBoundary from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
 
@@ -351,13 +391,11 @@ export default function App() {
             </button>
             <button 
               onClick={() => {
-                window.localStorage.clear();
-                window.sessionStorage.clear();
                 window.location.reload();
               }}
               className="px-6 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-white/50 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all border border-white/5"
             >
-              Emergency Fix (Clear Cache)
+              Force Refresh
             </button>
             <button 
               onClick={() => window.location.href = '/login'}

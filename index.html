@@ -38,53 +38,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <script>
-      // Asset Versioning & Chunk Error Recovery
-      (function() {
-        const ASSET_VERSION = 'v4'; // Increment this to force global clear
-        const lastVersion = localStorage.getItem('notevix_asset_version');
-        
-        if (lastVersion !== ASSET_VERSION) {
-          console.log("New version detected, clearing caches...");
-          localStorage.clear();
-          sessionStorage.clear();
-          localStorage.setItem('notevix_asset_version', ASSET_VERSION);
-          
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(regs => {
-              for(let reg of regs) reg.unregister();
-            });
-          }
-          
-          // Clear all caches
-          if ('caches' in window) {
-            caches.keys().then(names => {
-              for (const name of names) caches.delete(name);
-            });
-          }
-          
-          window.location.reload();
-        }
-
-        // Global chunk error handler
-        window.addEventListener('error', (e) => {
-          const msg = e.message || "";
-          if (msg.includes('Failed to fetch dynamically imported module') || 
-              msg.includes('Loading chunk') || 
-              e.target && e.target.tagName === 'SCRIPT' && e.target.src && e.target.src.includes('/assets/')) {
-            console.error("Critical Asset Error detected, forcing reload...");
-            
-            const lastReload = Number(sessionStorage.getItem('last-chunk-reload') || '0');
-            const now = Date.now();
-            
-            if (now - lastReload > 10000) { // 10s throttle
-              sessionStorage.setItem('last-chunk-reload', now.toString());
-              window.location.reload();
-            }
-          }
-        }, true);
-      })();
-    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

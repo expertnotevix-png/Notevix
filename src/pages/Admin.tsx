@@ -558,9 +558,7 @@ export default function Admin() {
   };
 
   const handleEmergencyReset = () => {
-    if (!window.confirm("This will clear your local app cache and reload. It resolves 'Unexpected State' and 'Internal Assertion' errors. You might need to login again. Proceed?")) return;
-    window.localStorage.clear();
-    window.sessionStorage.clear();
+    if (!window.confirm("This will refresh the page to resolve minor issues. Proceed?")) return;
     window.location.reload();
   };
 
