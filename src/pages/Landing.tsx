@@ -190,20 +190,27 @@ export default function Landing() {
       }
 
       // Show PDF password on screen
-      const subjectKey = (selectedPlan?.subject || selectedPlan?.name || '').toLowerCase().split(' ')[0] || '';
-      const password = SUBJECT_PASSWORDS[subjectKey] || "CONTACT_ADMIN";
+      let displayPassword = '';
+      let displaySubject = '';
 
-      if (selectedPlan?.resourceId || selectedPlan?.id.startsWith('individual_')) {
-          setPurchaseSuccess({ 
-            password: password, 
-            subject: selectedPlan.name.replace(' Premium', '') 
-          });
+      const paidAmount = result.amount || selectedPlan?.price || 0;
+
+      if (paidAmount >= 99) {
+          // If combo pack, show all passwords
+          displayPassword = Object.entries(SUBJECT_PASSWORDS)
+            .map(([subj, pass]) => `${subj.toUpperCase()}: ${pass}`)
+            .join('\n');
+          displaySubject = "All Subjects (Master Pack)";
       } else {
-          toast.success("AI Verified! Your access is being linked to this email. Please check your mail or WhatsApp shortly.", {
-            duration: 8000
-          });
-          setSelectedPlan(null);
+          const subjectKey = (selectedPlan?.subject || selectedPlan?.name || '').toLowerCase().split(' ')[0] || '';
+          displayPassword = SUBJECT_PASSWORDS[subjectKey] || "CONTACT_ADMIN";
+          displaySubject = selectedPlan?.name?.replace(' Premium', '') || 'Subject';
       }
+
+      setPurchaseSuccess({ 
+        password: displayPassword, 
+        subject: displaySubject 
+      });
 
       setScreenshotPreview(null);
       setWhatsapp('');
@@ -432,7 +439,7 @@ export default function Landing() {
                       <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">YOUR PDF PASSWORD</p>
                       <div className="flex flex-col items-center gap-4">
                          <div className="w-full py-2 text-center">
-                           <code className="text-sm sm:text-xl font-black text-white tracking-[0.15em] break-all px-4 block bg-white/5 py-4 rounded-2xl border border-white/10 select-all">
+                           <code className="text-[10px] sm:text-xs font-black text-white tracking-[0.1em] text-left inline-block bg-white/5 p-6 rounded-2xl border border-white/10 select-all whitespace-pre-line leading-relaxed">
                              {purchaseSuccess.password}
                            </code>
                          </div>
