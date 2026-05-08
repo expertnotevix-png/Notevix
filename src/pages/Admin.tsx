@@ -61,6 +61,7 @@ export default function Admin() {
     activeToday: 0,
     dailyRevenue: [] as any[],
     planDistribution: [] as any[],
+    burnedIds: 0,
   });
 
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
@@ -471,63 +472,72 @@ export default function Admin() {
   const fetchAnalytics = async () => {
     setLoading(true);
     try {
-      let docs: any[] = [];
-      
-      // 1. Fetch User Stats (Total, Premium, New) from Supabase
-      const stats = await dataBridge.getAdminStats();
-      
-      // 2. Try Supabase for payments (Primary)
-      if (supabase) {
-        try {
-          const { data, error } = await supabase
-            .from('purchase_requests')
-            .select('*')
-            .eq('status', 'approved');
-          if (error) throw error;
-          docs = data || [];
-        } catch (err) {
-          console.warn("Supabase analytics fetch failed, falling back to firebase...");
-        }
-      }
+      if (!supabase) return;
 
-      // 3. Try Firestore fallback (if Supabase failed or returned nothing)
-      if (docs.length === 0) {
-        try {
-          const q = query(collection(db, 'purchase_requests'), where('status', '==', 'approved'), orderBy('timestamp', 'desc'), limit(500));
-          const snap = await getDocs(q);
-          docs = snap.docs.map(d => d.data());
-        } catch (err) {
-          console.warn("Firestore analytics check skipped (quota)");
-        }
-      }
+      // 1. Fetch Students Stats from Profiles (Supabase)
+      const { count: totalStudents } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+      
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const { count: newToday } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).gt('created_at', today.toISOString());
+      
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { count: active24h } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).gt('updated_at', dayAgo);
 
-      let total = 0;
+      // 2. Fetch All Verified Payments
+      const { data: vPayments, error: vError } = await supabase
+        .from('verified_payments')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (vError) throw vError;
+
+      // 3. Simple Count of Burned IDs (Registry)
+      const { count: burnedCount } = await supabase.from('transaction_id_registry').select('*', { count: 'exact', head: true });
+
+      // 4. Process Payment Analytics
+      let totalRev = 0;
       const dailyMap: Record<string, number> = {};
-      const planMap: Record<string, number> = {};
+      const planMap: Record<string, number> = { 'Single Subject (₹39)': 0, 'All Subjects (₹99)': 0 };
+      const uniquePhones = new Set();
 
-      docs.forEach((d: any) => {
-        const amt = Number(d.amount) || 0;
-        total += amt;
+      vPayments?.forEach((p: any) => {
+        const amt = Number(p.amount) || 0;
+        totalRev += amt;
+        uniquePhones.add(p.phone_number);
         
-        const date = d.timestamp?.toDate ? d.timestamp.toDate().toLocaleDateString() : new Date(d.timestamp).toLocaleDateString();
+        // Growth Chart
+        const date = new Date(p.created_at).toLocaleDateString();
         dailyMap[date] = (dailyMap[date] || 0) + amt;
         
-        const plan = d.planName || 'Unknown';
-        planMap[plan] = (planMap[plan] || 0) + 1;
+        // Plan Distribution
+        if (amt === 39) planMap['Single Subject (₹39)']++;
+        else if (amt === 99) planMap['All Subjects (₹99)']++;
+        else {
+          const label = `Other (₹${amt})`;
+          planMap[label] = (planMap[label] || 0) + 1;
+        }
       });
 
-      const dailyRevenue = Object.entries(dailyMap).map(([date, amount]) => ({ date, amount })).reverse().slice(-7);
-      const planDistribution = Object.entries(planMap).map(([name, value]) => ({ name, value }));
+      // Format Charts
+      const dailyRevenue = Object.entries(dailyMap).map(([date, amount]) => ({ date, amount })).slice(-7);
+      const planDistribution = Object.entries(planMap).filter(([_, v]) => v > 0).map(([name, value]) => ({ name, value }));
 
       setAnalyticsData({
-        ...stats,
-        totalRevenue: total,
-        salesCount: docs.length,
+        totalRevenue: totalRev,
+        salesCount: vPayments?.length || 0,
+        totalUsers: totalStudents || 0,
+        premiumUsers: uniquePhones.size,
+        newUsersToday: newToday || 0,
+        activeToday: active24h || 0,
         dailyRevenue,
-        planDistribution
+        planDistribution,
+        burnedIds: burnedCount || 0
       });
+
     } catch (error) {
-      console.error("Analytics calculation error:", error);
+      console.error("Analytics fetch failed:", error);
+      toast.error("Failed to load real-time analytics");
     } finally {
       setLoading(false);
     }
@@ -1962,7 +1972,7 @@ export default function Admin() {
                 { label: 'New Today', value: analyticsData.newUsersToday, icon: Zap, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
                 { label: 'Active (24h)', value: analyticsData.activeToday, icon: UserCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
                 { label: 'Active Now', value: activeUsers, icon: Clock, color: 'text-pink-500', bg: 'bg-pink-500/10' },
-                { label: 'Burned IDs', value: registry.length, icon: Database, color: 'text-orange-500', bg: 'bg-orange-500/10' },
+                { label: 'Burned IDs', value: analyticsData.burnedIds, icon: Database, color: 'text-orange-500', bg: 'bg-orange-500/10' },
               ].map((stat, i) => (
                 <div key={i} className="glass-card p-6 rounded-[2rem] bg-white/5 flex flex-col gap-4">
                   <div className={`${stat.bg} w-10 h-10 rounded-2xl flex items-center justify-center`}>
