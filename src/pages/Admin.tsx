@@ -39,6 +39,13 @@ export default function Admin() {
   const [isAddingResource, setIsAddingResource] = useState(false);
   const [editingResource, setEditingResource] = useState<any | null>(null);
   const [resourceCoverPreview, setResourceCoverPreview] = useState<string | null>(null);
+  const [isAddingManualPayment, setIsAddingManualPayment] = useState(false);
+  const [manualPaymentData, setManualPaymentData] = useState({
+    transactionId: '',
+    phoneNumber: '',
+    amount: '39',
+    subject: ''
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [viewResourceMode, setViewResourceMode] = useState<'premium' | 'free'>('premium');
   const [banners, setBanners] = useState<any[]>([]);
@@ -112,6 +119,36 @@ export default function Admin() {
       setVerifiedPayments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VerifiedPayment)));
     } catch (e) {
       console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleManualPaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualPaymentData.transactionId || !manualPaymentData.phoneNumber || !manualPaymentData.subject) {
+      toast.error("Please fill all fields");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await dataBridge.saveVerifiedPayment({
+        transactionId: manualPaymentData.transactionId.trim(),
+        phoneNumber: manualPaymentData.phoneNumber.trim(),
+        amount: Number(manualPaymentData.amount),
+        subject: manualPaymentData.subject.trim()
+      });
+      if (res.success) {
+        toast.success("Manual Payment Recorded!");
+        setIsAddingManualPayment(false);
+        setManualPaymentData({ transactionId: '', phoneNumber: '', amount: '39', subject: '' });
+        fetchVerifiedPayments();
+        fetchAnalytics();
+      } else {
+        toast.error(res.error || "Failed to record payment");
+      }
+    } catch (err) {
+      toast.error("Error recording payment");
     } finally {
       setLoading(false);
     }
@@ -1537,7 +1574,92 @@ export default function Admin() {
       case 'verified_payments':
         return (
           <div className="space-y-6 animate-in fade-in duration-500">
-            <h3 className="text-2xl font-black uppercase tracking-tight">AI Verified Payments</h3>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white/5 p-6 rounded-[2rem] border border-white/10">
+              <div>
+                <h3 className="text-2xl font-black uppercase tracking-tight">AI Verified Payments</h3>
+                <p className="text-xs text-gray-500 font-bold mt-1 uppercase tracking-widest">Master Ledger of all confirmed transactions</p>
+              </div>
+              <button 
+                onClick={() => setIsAddingManualPayment(true)}
+                className="bg-emerald-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-xl active:scale-95"
+              >
+                <Plus className="w-4 h-4" /> Add Manual Entry
+              </button>
+            </div>
+
+            {isAddingManualPayment && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+                <div className="bg-[#0A0A0A] border border-white/10 p-8 rounded-[2.5rem] w-full max-w-lg space-y-6 relative shadow-2xl">
+                  <button 
+                    onClick={() => setIsAddingManualPayment(false)}
+                    className="absolute right-6 top-6 text-gray-500 hover:text-white transition-colors"
+                   >
+                    <X className="w-6 h-6" />
+                  </button>
+                  
+                  <div className="space-y-2">
+                    <h4 className="text-xl font-black uppercase tracking-tight">Manual Payment Entry</h4>
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Use this to fix missing or failed AI verifications</p>
+                  </div>
+
+                  <form onSubmit={handleManualPaymentSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-2">Transaction ID (UTR)</label>
+                      <input 
+                        type="text"
+                        placeholder="Ex: 412345678901"
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm focus:border-indigo-500 outline-none"
+                        value={manualPaymentData.transactionId}
+                        onChange={(e) => setManualPaymentData({...manualPaymentData, transactionId: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-2">Phone Number</label>
+                      <input 
+                        type="text"
+                        placeholder="Customer WhatsApp"
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm focus:border-indigo-500 outline-none"
+                        value={manualPaymentData.phoneNumber}
+                        onChange={(e) => setManualPaymentData({...manualPaymentData, phoneNumber: e.target.value})}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-2">Amount</label>
+                        <select 
+                          className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm focus:border-indigo-500 outline-none appearance-none"
+                          value={manualPaymentData.amount}
+                          onChange={(e) => setManualPaymentData({...manualPaymentData, amount: e.target.value})}
+                        >
+                          <option value="39">₹39 (Single)</option>
+                          <option value="99">₹99 (Combo)</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-2">Subject</label>
+                        <input 
+                          type="text"
+                          placeholder="Ex: Maths / Combo"
+                          className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm focus:border-indigo-500 outline-none"
+                          value={manualPaymentData.subject}
+                          onChange={(e) => setManualPaymentData({...manualPaymentData, subject: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                    
+                    <button 
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      {loading ? "Recording..." : "Save Transaction"}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
+
             <div className="relative max-w-md">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input 
