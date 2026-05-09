@@ -1379,18 +1379,21 @@ export const dataBridge = {
   },
 
   async getReferralStats(uid: string) {
-    if (!supabase) return { count: 0, verifiedCount: 0 };
+    if (!supabase || !uid || uid === 'GUEST') return { count: 0, verifiedCount: 0 };
     try {
       const { data, error } = await supabase
         .from('referrals')
         .select('is_verified')
         .eq('referrer_id', uid);
       
-      if (error) throw error;
+      if (error) {
+        if (error.code === 'PGRST205') console.warn("Referrals table not yet created.");
+        throw error;
+      }
       
       return {
-        count: data.length,
-        verifiedCount: data.filter(r => r.is_verified).length
+        count: (data || []).length,
+        verifiedCount: (data || []).filter(r => r.is_verified).length
       };
     } catch (err) {
       console.error("Fetch referral stats failed:", err);
@@ -1405,11 +1408,14 @@ export const dataBridge = {
     if (!supabase) return [];
     try {
       let queryBuilder = supabase.from('free_resources').select('*').order('created_at', { ascending: false });
-      if (classLevel) {
+      if (classLevel && classLevel !== 'All') {
         queryBuilder = queryBuilder.eq('class_level', classLevel);
       }
       const { data, error } = await queryBuilder;
-      if (error) throw error;
+      if (error) {
+        if (error.code === 'PGRST205') console.warn("Free Resources table not yet created.");
+        throw error;
+      }
       return data || [];
     } catch (err) {
       console.error("Fetch free resources failed:", err);

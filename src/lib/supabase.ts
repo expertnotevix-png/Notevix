@@ -30,72 +30,64 @@ export const supabase = (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUr
   : null;
 
 /**
- * Supabase Table Schema Recommendations (Run this in Supabase SQL Editor):
+ * Supabase Table Schema - FULL MIGRATION (Run this in Supabase SQL Editor):
  * 
- * -- 1. Purchase Requests Table
- * CREATE TABLE purchase_requests (
- *   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
- *   email TEXT NOT NULL,
- *   whatsapp TEXT NOT NULL,
- *   userId TEXT,
- *   transactionId TEXT UNIQUE,
- *   planId TEXT,
- *   planName TEXT,
- *   subject TEXT,
- *   class TEXT,
- *   amount NUMERIC,
- *   status TEXT DEFAULT 'pending',
- *   isGuest BOOLEAN DEFAULT true,
- *   driveLink TEXT,
- *   timestamp TIMESTAMPTZ DEFAULT NOW(),
- *   note TEXT
- * );
+ * -- 0. Helper for timestamps
+ * CREATE OR REPLACE FUNCTION trigger_set_timestamp()
+ * RETURNS TRIGGER AS $$
+ * BEGIN
+ *   NEW.updated_at = NOW();
+ *   RETURN NEW;
+ * END;
+ * $$ LANGUAGE plpgsql;
  * 
- * -- 2. Transaction Registry (for double-spend prevention)
- * CREATE TABLE transaction_registry (
- *   id TEXT PRIMARY KEY,
- *   redeemed_at TIMESTAMPTZ DEFAULT NOW()
- * );
- * 
- * -- 3. Subject Resources (Fall-back for resource viewing)
- * CREATE TABLE subject_resources (
- *   id TEXT PRIMARY KEY,
- *   subject TEXT,
- *   class TEXT,
- *   title TEXT,
- *   description TEXT,
- *   price NUMERIC DEFAULT 0,
- *   drive_link TEXT,
- *   cover_url TEXT,
- *   features TEXT, -- JSON string or JSONB
- *   is_free BOOLEAN DEFAULT false,
+ * -- 1. Profiles Table (Uses TEXT for Firebase UIDs)
+ * CREATE TABLE IF NOT EXISTS public.profiles (
+ *   id TEXT PRIMARY KEY, -- Firebase UID
+ *   full_name TEXT,
+ *   email TEXT,
+ *   avatar_url TEXT,
+ *   class_level TEXT DEFAULT '10',
+ *   xp INTEGER DEFAULT 0,
+ *   streak INTEGER DEFAULT 0,
+ *   is_premium BOOLEAN DEFAULT false,
+ *   plan_type TEXT,
+ *   unlocked_resources TEXT[] DEFAULT '{}',
+ *   unlocked_classes TEXT[] DEFAULT '{}',
+ *   saved_notes TEXT[] DEFAULT '{}',
  *   created_at TIMESTAMPTZ DEFAULT NOW(),
  *   updated_at TIMESTAMPTZ DEFAULT NOW()
  * );
  * 
- * -- 4. User Points (Leaderboard)
- * CREATE TABLE user_points (
- *   user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+ * -- Ensure columns exist if table already exists
+ * ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS class_level TEXT DEFAULT '10';
+ * ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT false;
+ * ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS unlocked_resources TEXT[] DEFAULT '{}';
+ * ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS unlocked_classes TEXT[] DEFAULT '{}';
+ * ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS saved_notes TEXT[] DEFAULT '{}';
+ * 
+ * -- 2. User Points Table
+ * CREATE TABLE IF NOT EXISTS public.user_points (
+ *   user_id TEXT PRIMARY KEY, -- Firebase UID
  *   total_points INTEGER DEFAULT 0,
  *   total_minutes INTEGER DEFAULT 0,
  *   streak_days INTEGER DEFAULT 0,
- *   last_visit_date BIGINT, -- Timestamp in ms
+ *   last_visit_date BIGINT, 
  *   last_updated TIMESTAMPTZ DEFAULT NOW()
  * );
  * 
- * -- 5. Referrals
- * CREATE TABLE referrals (
- *   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
- *   referrer_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
- *   referred_user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+ * -- 3. Referrals Table
+ * CREATE TABLE IF NOT EXISTS public.referrals (
+ *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ *   referrer_id TEXT NOT NULL, 
+ *   referred_user_id TEXT NOT NULL UNIQUE,
  *   is_verified BOOLEAN DEFAULT TRUE,
- *   created_at TIMESTAMPTZ DEFAULT NOW(),
- *   UNIQUE(referred_user_id) -- A user can only be referred once
+ *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
  * 
- * -- 6. Free Resources
- * CREATE TABLE free_resources (
- *   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+ * -- 4. Free Resources
+ * CREATE TABLE IF NOT EXISTS public.free_resources (
+ *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  *   subject TEXT NOT NULL,
  *   class_level TEXT NOT NULL,
  *   description TEXT,
@@ -104,12 +96,74 @@ export const supabase = (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUr
  *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
  * 
- * -- 7. Promo Banners
- * CREATE TABLE promo_banners (
- *   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
- *   image_url TEXT NOT NULL,
- *   link TEXT,
- *   location TEXT DEFAULT 'home', -- 'home' or 'landing'
+ * -- 5. Subject Resources (Premium)
+ * CREATE TABLE IF NOT EXISTS public.subject_resources (
+ *   id TEXT PRIMARY KEY,
+ *   subject TEXT NOT NULL,
+ *   class TEXT NOT NULL,
+ *   title TEXT,
+ *   description TEXT,
+ *   price NUMERIC DEFAULT 0,
+ *   drive_link TEXT,
+ *   cover_url TEXT,
+ *   features JSONB DEFAULT '[]',
+ *   is_free BOOLEAN DEFAULT false,
+ *   created_at TIMESTAMPTZ DEFAULT NOW(),
+ *   updated_at TIMESTAMPTZ DEFAULT NOW()
+ * );
+ * 
+ * -- 6. Verified Payments Table
+ * CREATE TABLE IF NOT EXISTS public.verified_payments (
+ *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ *   transaction_id TEXT UNIQUE NOT NULL,
+ *   phone_number TEXT,
+ *   amount NUMERIC,
+ *   subject TEXT,
  *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
+ * 
+ * -- 7. Purchase Requests
+ * CREATE TABLE IF NOT EXISTS public.purchase_requests (
+ *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ *   user_id TEXT, 
+ *   email TEXT,
+ *   whatsapp TEXT,
+ *   transaction_id TEXT UNIQUE NOT NULL,
+ *   amount NUMERIC,
+ *   plan_id TEXT,
+ *   plan_name TEXT,
+ *   resource_id TEXT,
+ *   status TEXT DEFAULT 'pending',
+ *   created_at TIMESTAMPTZ DEFAULT NOW()
+ * );
+ * 
+ * -- 8. Promo Banners
+ * CREATE TABLE IF NOT EXISTS public.promo_banners (
+ *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ *   image_url TEXT NOT NULL,
+ *   link TEXT,
+ *   location TEXT DEFAULT 'home',
+ *   created_at TIMESTAMPTZ DEFAULT NOW()
+ * );
+ * 
+ * -- 9. RPC Functions
+ * CREATE OR REPLACE FUNCTION increment_xp(user_id text, amount int)
+ * RETURNS void AS $$
+ * BEGIN
+ *   UPDATE public.profiles
+ *   SET xp = COALESCE(xp, 0) + amount,
+ *       updated_at = NOW()
+ *   WHERE id = user_id;
+ * END;
+ * $$ LANGUAGE plpgsql;
+ * 
+ * CREATE OR REPLACE FUNCTION increment_focus_minutes(user_id text, amount int)
+ * RETURNS void AS $$
+ * BEGIN
+ *   UPDATE public.user_points
+ *   SET total_minutes = COALESCE(total_minutes, 0) + amount,
+ *       last_updated = NOW()
+ *   WHERE user_id = user_id;
+ * END;
+ * $$ LANGUAGE plpgsql;
  */

@@ -2813,67 +2813,129 @@ export default function Admin() {
                       <button 
                         onClick={() => {
                           const sql = `
--- 1. Create promo_banners table
-CREATE TABLE IF NOT EXISTS public.promo_banners (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  image_url TEXT NOT NULL,
-  link TEXT,
-  location TEXT DEFAULT 'home',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+-- COMPLETE SUPABASE FIX FOR FIREBASE AUTH
+-- RUN THIS IN YOUR SUPABASE SQL EDITOR
+
+-- 0. Helper for timestamps
+CREATE OR REPLACE FUNCTION trigger_set_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 1. Profiles Table (Fix IDs for Firebase UIDs)
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id TEXT PRIMARY KEY, -- Firebase UID
+  full_name TEXT,
+  email TEXT,
+  avatar_url TEXT,
+  class_level TEXT DEFAULT '10',
+  xp INTEGER DEFAULT 0,
+  streak INTEGER DEFAULT 0,
+  is_premium BOOLEAN DEFAULT false,
+  plan_type TEXT,
+  unlocked_resources TEXT[] DEFAULT '{}',
+  unlocked_classes TEXT[] DEFAULT '{}',
+  saved_notes TEXT[] DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Create valid_payments table (Whitelist)
-CREATE TABLE IF NOT EXISTS public.valid_payments (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  transaction_id TEXT UNIQUE NOT NULL,
-  whatsapp TEXT,
-  amount DECIMAL DEFAULT 0,
-  is_used BOOLEAN DEFAULT false,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+-- Ensure all columns exist
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS class_level TEXT DEFAULT '10';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS xp INTEGER DEFAULT 0;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT false;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS unlocked_resources TEXT[] DEFAULT '{}';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS unlocked_classes TEXT[] DEFAULT '{}';
+
+-- 2. User Points Table (Leaderboard/Study)
+CREATE TABLE IF NOT EXISTS public.user_points (
+  user_id TEXT PRIMARY KEY, -- Firebase UID
+  total_points INTEGER DEFAULT 0,
+  total_minutes INTEGER DEFAULT 0,
+  streak_days INTEGER DEFAULT 0,
+  last_visit_date BIGINT, 
+  last_updated TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. Fix profiles table for Premium & Unlocks
-ALTER TABLE public.profiles 
-ADD COLUMN IF NOT EXISTS unlocked_resources TEXT[] DEFAULT '{}',
-ADD COLUMN IF NOT EXISTS unlocked_classes TEXT[] DEFAULT '{}',
-ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT false;
+-- 3. Referrals Table (Referral Progress)
+CREATE TABLE IF NOT EXISTS public.referrals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  referrer_id TEXT NOT NULL, 
+  referred_user_id TEXT NOT NULL UNIQUE,
+  is_verified BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- 4. Enable Row Level Security (RLS)
-ALTER TABLE public.promo_banners ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.valid_payments ENABLE ROW LEVEL SECURITY;
+-- 4. Free Resources (Home Page Combo Packs)
+CREATE TABLE IF NOT EXISTS public.free_resources (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  subject TEXT NOT NULL,
+  class_level TEXT NOT NULL,
+  description TEXT,
+  drive_link TEXT NOT NULL,
+  cover_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- 5. Allow Public Read for Banners
-CREATE POLICY "Public Read Banners" ON public.promo_banners FOR SELECT USING (true);
-
--- 6. Create Subject Resources Table
+-- 5. Subject Resources (Premium Notes)
 CREATE TABLE IF NOT EXISTS public.subject_resources (
   id TEXT PRIMARY KEY,
   subject TEXT NOT NULL,
   class TEXT NOT NULL,
+  title TEXT,
   description TEXT,
   price NUMERIC DEFAULT 0,
   drive_link TEXT,
   cover_url TEXT,
-  features TEXT,
+  features JSONB DEFAULT '[]',
   is_free BOOLEAN DEFAULT false,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE POLICY "Public Read Resources" ON public.subject_resources FOR SELECT USING (true);
 
--- 7. Create Verified Payments Table (Manual AI Audit)
-CREATE TABLE IF NOT EXISTS public.verified_payments (
+-- 6. Promo Banners
+CREATE TABLE IF NOT EXISTS public.promo_banners (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  transaction_id TEXT UNIQUE NOT NULL,
-  phone_number TEXT,
-  amount NUMERIC,
-  subject TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+  image_url TEXT NOT NULL,
+  link TEXT,
+  location TEXT DEFAULT 'home',
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE POLICY "Public Read Verified" ON public.verified_payments FOR SELECT USING (true);
+
+-- 7. RPC Functions
+CREATE OR REPLACE FUNCTION increment_xp(user_id text, amount int)
+RETURNS void AS $$
+BEGIN
+  UPDATE public.profiles
+  SET xp = COALESCE(xp, 0) + amount,
+      updated_at = NOW()
+  WHERE id = user_id;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION increment_focus_minutes(user_id text, amount int)
+RETURNS void AS $$
+BEGIN
+  UPDATE public.user_points
+  SET total_minutes = COALESCE(total_minutes, 0) + amount,
+      last_updated = NOW()
+  WHERE user_id = user_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 8. Policies (Read-All)
+ALTER TABLE public.promo_banners ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public Read Banners" ON public.promo_banners FOR SELECT USING (true);
+ALTER TABLE public.free_resources ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public Read Free" ON public.free_resources FOR SELECT USING (true);
+ALTER TABLE public.subject_resources ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public Read Resources" ON public.subject_resources FOR SELECT USING (true);
                           `;
                           navigator.clipboard.writeText(sql.trim());
-                          toast.success("SQL Copied! Paste this in Supabase SQL Editor to fix Banner & Premium issues.");
+                          toast.success("SQL Copied! Paste this in Supabase SQL Editor to fix all database errors.");
                         }}
                         className="bg-emerald-500 text-black px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-transform"
                       >
