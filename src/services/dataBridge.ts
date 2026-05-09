@@ -32,7 +32,7 @@ export const dataBridge = {
    * This bridges your Firebase login users into your Supabase database
    */
   async syncProfile(uid: string, profileData: any) {
-    if (!supabase) return;
+    if (!supabase || !uid || uid === 'GUEST') return;
     try {
       await withTimeout(
         supabase
@@ -42,7 +42,7 @@ export const dataBridge = {
             full_name: profileData.displayName || profileData.fullName || 'Student',
             email: profileData.email,
             avatar_url: profileData.photoURL || profileData.avatarUrl || '',
-            class_level: profileData.class || profileData.classLevel || 'N/A',
+            class_level: profileData.class || profileData.classLevel || '10',
             xp: profileData.totalPoints || profileData.xp || 0,
             streak: profileData.streak?.currentCount || profileData.streakCount || 0,
             is_premium: profileData.isPremium || false,
@@ -603,20 +603,24 @@ export const dataBridge = {
   /**
    * Promo Banners - List from Supabase primarily
    */
-  async getPromoBanners(limitCount = 5) {
+  async getPromoBanners(limitCount = 5, location = 'home') {
     if (supabase) {
       try {
-        const { data, error } = await supabase
+        let queryBuilder = supabase
           .from('promo_banners')
           .select('*')
+          .eq('location', location)
           .order('created_at', { ascending: false })
           .limit(limitCount);
+        
+        const { data, error } = await queryBuilder;
         
         if (!error && data) {
            return data.map(b => ({
              id: b.id,
              imageUrl: b.image_url || b.imageUrl,
              link: b.link,
+             location: b.location,
              createdAt: b.created_at || b.createdAt
            }));
         }
@@ -627,7 +631,7 @@ export const dataBridge = {
 
     // Firestore fallback
     try {
-      const q = query(collection(db, 'promo_banners'), orderBy('createdAt', 'desc'), limit(limitCount));
+      let q = query(collection(db, 'promo_banners'), where('location', '==', location), orderBy('createdAt', 'desc'), limit(limitCount));
       const snap = await getDocs(q);
       return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
     } catch (err) {}
@@ -798,7 +802,7 @@ export const dataBridge = {
    * Every 1 minute = +10 points
    */
   async updateUserPoints(uid: string) {
-    if (!supabase) return;
+    if (!supabase || !uid || uid === 'GUEST') return;
 
     try {
       // 1. Get current stats
@@ -1343,6 +1347,108 @@ export const dataBridge = {
     } catch (err: any) {
       console.error("Cleanup failed:", err);
       return { success: false, error: err.message };
+    }
+  },
+
+  /**
+   * Referrals Logic
+   */
+  async trackReferral(referrerId: string, referredUserId: string) {
+    if (!supabase || !referrerId || !referredUserId || referrerId === referredUserId || referrerId === 'GUEST' || referredUserId === 'GUEST') return;
+    
+    try {
+      // Anti-fraud check: Signup timing
+      // If this referrer has already had 2 referrals in the last 5 minutes, flag as not verified
+      const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { count } = await supabase
+        .from('referrals')
+        .select('*', { count: 'exact', head: true })
+        .eq('referrer_id', referrerId)
+        .gt('created_at', fiveMinsAgo);
+
+      const isVerified = (count || 0) < 3; 
+
+      await supabase.from('referrals').insert([{
+        referrer_id: referrerId,
+        referred_user_id: referredUserId,
+        is_verified: isVerified
+      }]);
+    } catch (err) {
+      console.error("Referral tracking failed:", err);
+    }
+  },
+
+  async getReferralStats(uid: string) {
+    if (!supabase) return { count: 0, verifiedCount: 0 };
+    try {
+      const { data, error } = await supabase
+        .from('referrals')
+        .select('is_verified')
+        .eq('referrer_id', uid);
+      
+      if (error) throw error;
+      
+      return {
+        count: data.length,
+        verifiedCount: data.filter(r => r.is_verified).length
+      };
+    } catch (err) {
+      console.error("Fetch referral stats failed:", err);
+      return { count: 0, verifiedCount: 0 };
+    }
+  },
+
+  /**
+   * Free Resources Management
+   */
+  async getFreeResources(classLevel?: string) {
+    if (!supabase) return [];
+    try {
+      let queryBuilder = supabase.from('free_resources').select('*').order('created_at', { ascending: false });
+      if (classLevel) {
+        queryBuilder = queryBuilder.eq('class_level', classLevel);
+      }
+      const { data, error } = await queryBuilder;
+      if (error) throw error;
+      return data || [];
+    } catch (err) {
+      console.error("Fetch free resources failed:", err);
+      return [];
+    }
+  },
+
+  async saveFreeResource(resource: any) {
+    if (!supabase) return { success: false, error: 'No connection' };
+    try {
+      const { data, error } = await supabase
+        .from('free_resources')
+        .upsert([{
+          id: resource.id || undefined,
+          subject: resource.subject,
+          class_level: resource.class_level,
+          description: resource.description,
+          drive_link: resource.drive_link,
+          cover_url: resource.cover_url
+        }])
+        .select();
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (err: any) {
+      console.error("Save free resource failed:", err);
+      return { success: false, error: err.message };
+    }
+  },
+
+  async deleteFreeResource(id: string) {
+    if (!supabase) return false;
+    try {
+      const { error } = await supabase.from('free_resources').delete().eq('id', id);
+      if (error) throw error;
+      return true;
+    } catch (err) {
+      console.error("Delete free resource failed:", err);
+      return false;
     }
   }
 };

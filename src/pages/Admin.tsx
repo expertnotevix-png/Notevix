@@ -22,7 +22,7 @@ import {
 import { supabase } from '../lib/supabase';
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources' | 'valid_payments' | 'verified_payments' | 'settings' | 'banners'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources' | 'valid_payments' | 'verified_payments' | 'settings' | 'banners' | 'free_notes'>('analytics');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -31,6 +31,7 @@ export default function Admin() {
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [registry, setRegistry] = useState<any[]>([]);
   const [subjectResources, setSubjectResources] = useState<any[]>([]);
+  const [freeResources, setFreeResources] = useState<any[]>([]);
   const [validPayments, setValidPayments] = useState<ValidPayment[]>([]);
   const [verifiedPayments, setVerifiedPayments] = useState<VerifiedPayment[]>([]);
   const [transactionLedger, setTransactionLedger] = useState<TransactionLedger[]>([]);
@@ -50,7 +51,7 @@ export default function Admin() {
   const [viewResourceMode, setViewResourceMode] = useState<'premium' | 'free'>('premium');
   const [banners, setBanners] = useState<any[]>([]);
   const [isAddingBanner, setIsAddingBanner] = useState(false);
-  const [bannerFormData, setBannerFormData] = useState({ imageUrl: '', link: '' });
+  const [bannerFormData, setBannerFormData] = useState({ imageUrl: '', link: '', location: 'home' });
   const [bannerImagePreview, setBannerImagePreview] = useState<string | null>(null);
   const lastAdminAiAttemptRef = useRef<number>(0);
   
@@ -109,6 +110,7 @@ export default function Admin() {
     if (activeTab === 'registry') fetchRegistry();
     if (activeTab === 'resources') fetchSubjectResources();
     if (activeTab === 'banners') fetchBanners();
+    if (activeTab === 'free_notes') fetchFreeResources();
     if (activeTab === 'valid_payments') {
       fetchValidPayments();
       fetchTransactionLedger();
@@ -358,6 +360,69 @@ export default function Admin() {
     }
   };
 
+  const fetchFreeResources = async () => {
+    setLoading(true);
+    try {
+      const data = await dataBridge.getFreeResources();
+      setFreeResources(data);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load free notes");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const [freeResourceFormData, setFreeResourceFormData] = useState({
+    subject: '',
+    class_level: '10',
+    description: '',
+    drive_link: '',
+    cover_url: ''
+  });
+
+  const handleFreeResourceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!freeResourceFormData.subject || !freeResourceFormData.drive_link) {
+      toast.error("Subject and Link are required");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await dataBridge.saveFreeResource({
+        ...freeResourceFormData,
+        id: editingResource?.id
+      });
+      if (res.success) {
+        toast.success(editingResource ? "Free Note Updated!" : "Free Note Added!");
+        setIsAddingResource(false);
+        setEditingResource(null);
+        setResourceCoverPreview(null);
+        setFreeResourceFormData({ subject: '', class_level: '10', description: '', drive_link: '', cover_url: '' });
+        fetchFreeResources();
+      } else {
+        toast.error(res.error || "Operation failed");
+      }
+    } catch (err) {
+      toast.error("Error saving free resource");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteFreeResource = async (id: string) => {
+    if (!window.confirm("Delete this free resource?")) return;
+    try {
+      const res = await dataBridge.deleteFreeResource(id);
+      if (res) {
+        toast.success("Deleted successfully");
+        fetchFreeResources();
+      }
+    } catch (err) {
+      toast.error("Delete failed");
+    }
+  };
+
   const fetchBanners = async () => {
     setLoading(true);
     try {
@@ -372,6 +437,7 @@ export default function Admin() {
             id: b.id,
             imageUrl: b.image_url || b.imageUrl,
             link: b.link,
+            location: b.location,
             createdAt: b.created_at || b.createdAt
           })));
           return;
@@ -451,6 +517,7 @@ export default function Admin() {
         const { error } = await supabase.from('promo_banners').insert([{
           image_url: finalImageUrl,
           link: bannerFormData.link,
+          location: bannerFormData.location,
           created_at: new Date().toISOString()
         }]);
         if (error) throw error;
@@ -463,11 +530,12 @@ export default function Admin() {
       }
       
       // Invalidate cache
-      localStorage.removeItem('cached_promo_banners');
+      localStorage.removeItem('cached_promo_banners_home');
+      localStorage.removeItem('cached_promo_banners_landing');
       
       toast.success("Banner added!");
       setIsAddingBanner(false);
-      setBannerFormData({ imageUrl: '', link: '' });
+      setBannerFormData({ imageUrl: '', link: '', location: 'home' });
       setBannerImagePreview(null);
       fetchBanners();
     } catch (e) {
@@ -1312,6 +1380,7 @@ export default function Admin() {
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'banners', label: 'Promotion Banners', icon: LayoutDashboard },
     { id: 'resources', label: 'Digital Library', icon: BookOpen },
+    { id: 'free_notes', label: 'Free Notes', icon: Zap },
     { id: 'valid_payments', label: 'Verify Keys', icon: ShieldCheck },
     { id: 'verified_payments', label: 'AI Verified', icon: CheckCircle2 },
     { id: 'chapters', label: 'Flashcards', icon: Database },
@@ -1400,6 +1469,18 @@ export default function Admin() {
                   )}
 
                   <div className="space-y-2 md:col-span-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2">Display Location</label>
+                    <select 
+                      className="w-full bg-[#0a0a0a] border border-white/10 rounded-2xl p-4 focus:border-indigo-500 transition-colors uppercase font-black text-[10px] tracking-widest"
+                      value={bannerFormData.location}
+                      onChange={e => setBannerFormData({ ...bannerFormData, location: e.target.value })}
+                    >
+                      <option value="home">Home Page (Post-Login)</option>
+                      <option value="landing">Landing Page (Pre-Login)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2">Redirect Link (Optional - Defaults to /premium-notes)</label>
                     <input 
                       type="text" 
@@ -1420,9 +1501,12 @@ export default function Admin() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {banners.map((banner) => (
-                <div key={banner.id} className="glass-card p-4 rounded-[2.5rem] bg-white/5 border border-white/10 flex flex-col gap-4 group">
-                  <div className="aspect-video w-full rounded-[2rem] overflow-hidden border border-white/10">
+                <div key={banner.id} className={`glass-card p-4 rounded-[2.5rem] bg-white/5 border border-white/10 flex flex-col gap-4 group transition-all ${banner.location === 'landing' ? 'hover:border-emerald-500/30' : 'hover:border-indigo-500/30'}`}>
+                  <div className="aspect-video w-full rounded-[2rem] overflow-hidden border border-white/10 relative">
                     <img src={banner.imageUrl} className="w-full h-full object-cover" />
+                    <div className={`absolute top-3 left-3 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border border-white/10 ${banner.location === 'landing' ? 'bg-emerald-500 text-black' : 'bg-indigo-600 text-white'}`}>
+                      {banner.location || 'home'}
+                    </div>
                   </div>
                   <div className="flex justify-between items-center px-2">
                     <div className="min-w-0">
@@ -2092,6 +2176,165 @@ export default function Admin() {
             </div>
           </div>
         );
+      case 'free_notes':
+        return (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="flex justify-between items-center bg-white/5 p-6 rounded-[2rem] border border-white/10">
+              <div>
+                <h3 className="text-xl font-black italic uppercase">Free Resources Management</h3>
+                <p className="text-xs text-gray-400">Add notes that are visible to everyone without payment</p>
+              </div>
+              <button 
+                onClick={() => {
+                  setEditingResource(null);
+                  setFreeResourceFormData({ subject: '', class_level: '10', description: '', drive_link: '', cover_url: '' });
+                  setIsAddingResource(true);
+                }}
+                className="bg-emerald-600 hover:bg-emerald-500 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-emerald-600/20 active:scale-95"
+              >
+                <Plus className="w-4 h-4" /> Add Free Note
+              </button>
+            </div>
+
+            {isAddingResource && (
+              <div className="glass-card p-10 rounded-[3rem] bg-emerald-500/5 border border-emerald-500/20 animate-in slide-in-from-top duration-500">
+                <div className="flex justify-between items-center mb-8">
+                  <h3 className="text-2xl font-black italic uppercase">{editingResource ? 'Edit Free Note' : 'Add New Free Note'}</h3>
+                  <button onClick={() => { setIsAddingResource(false); setEditingResource(null); }} className="p-3 bg-white/5 rounded-2xl hover:bg-white/10">
+                    <X className="w-5 h-5 text-gray-400" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleFreeResourceSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-5">
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">Subject & Class</label>
+                       <div className="grid grid-cols-2 gap-4">
+                          <input 
+                            required
+                            placeholder="e.g. Physics"
+                            value={freeResourceFormData.subject}
+                            onChange={(e) => setFreeResourceFormData({...freeResourceFormData, subject: e.target.value})}
+                            className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-emerald-500 outline-none"
+                          />
+                          <select 
+                            value={freeResourceFormData.class_level}
+                            onChange={(e) => setFreeResourceFormData({...freeResourceFormData, class_level: e.target.value})}
+                            className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-emerald-500 outline-none"
+                          >
+                            {[8, 9, 10, 11, 12].map(c => <option key={c} value={c}>Class {c}</option>)}
+                          </select>
+                       </div>
+                    </div>
+
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">Description</label>
+                       <textarea 
+                         placeholder="What's inside these notes?"
+                         value={freeResourceFormData.description}
+                         onChange={(e) => setFreeResourceFormData({...freeResourceFormData, description: e.target.value})}
+                         className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-emerald-500 outline-none h-24 resize-none"
+                       />
+                    </div>
+
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">PDF Drive Link</label>
+                       <input 
+                         required
+                         placeholder="Google Drive PDF URL"
+                         value={freeResourceFormData.drive_link}
+                         onChange={(e) => setFreeResourceFormData({...freeResourceFormData, drive_link: e.target.value})}
+                         className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-emerald-500 outline-none"
+                       />
+                    </div>
+
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">Cover Image URL</label>
+                       <input 
+                         placeholder="Image URL (e.g. Unsplash)"
+                         value={freeResourceFormData.cover_url}
+                         onChange={(e) => setFreeResourceFormData({...freeResourceFormData, cover_url: e.target.value})}
+                         className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-emerald-500 outline-none"
+                       />
+                    </div>
+
+                    <button 
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-emerald-600 text-white py-5 rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-emerald-600/30 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                    >
+                      {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-5 h-5" />}
+                      {loading ? "Saving..." : "Publish Free Resource"}
+                    </button>
+                  </div>
+
+                  <div className="hidden md:flex flex-col items-center justify-center border-l border-white/5 pl-8">
+                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-6">Live Preview</p>
+                     <div className="glass-card w-full max-w-[240px] aspect-[1/1.2] rounded-[2rem] bg-emerald-500/5 border border-emerald-500/20 overflow-hidden flex flex-col group">
+                        <div className="h-2/3 bg-white/5 relative overflow-hidden">
+                           {freeResourceFormData.cover_url ? (
+                             <img src={freeResourceFormData.cover_url} className="w-full h-full object-cover" />
+                           ) : (
+                             <div className="w-full h-full flex flex-col items-center justify-center text-emerald-500/20">
+                               <BookOpen className="w-12 h-12" />
+                             </div>
+                           )}
+                           <div className="absolute top-3 left-3 px-2 py-1 bg-emerald-500 text-black text-[8px] font-black rounded-md uppercase tracking-widest">FREE</div>
+                        </div>
+                        <div className="p-4 flex-1 flex flex-col justify-between">
+                           <h4 className="font-black text-sm uppercase tracking-tight text-white line-clamp-1 italic">{freeResourceFormData.subject || 'Subject Name'}</h4>
+                           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Class {freeResourceFormData.class_level}</p>
+                        </div>
+                     </div>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {freeResources.map((res) => (
+                <div key={res.id} className="glass-card p-6 rounded-[2.5rem] bg-white/5 border border-white/10 flex flex-col gap-4 group hover:border-emerald-500/30 transition-all">
+                  <div className="aspect-[1/1] w-full bg-white/5 rounded-3xl overflow-hidden border border-white/10 relative">
+                    {res.cover_url ? (
+                      <img src={res.cover_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-emerald-500/10">
+                        <BookOpen className="w-12 h-12 mb-2" />
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">No Cover</span>
+                      </div>
+                    )}
+                    <div className="absolute top-4 left-4 px-3 py-1 bg-emerald-500 text-black text-[8px] font-black rounded uppercase tracking-widest">FREE</div>
+                    <div className="absolute top-4 right-4 px-3 py-1 bg-black/50 backdrop-blur-sm rounded-full text-[8px] font-black uppercase border border-white/10">Class {res.class_level}</div>
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-black text-lg uppercase tracking-tight text-white line-clamp-1 italic">{res.subject}</h4>
+                    <p className="text-[10px] text-gray-500 line-clamp-2 mt-1">{res.description}</p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => {
+                        setEditingResource(res);
+                        setFreeResourceFormData({ ...res });
+                        setIsAddingResource(true);
+                      }}
+                      className="flex-1 bg-white/5 hover:bg-white/10 p-3 rounded-xl text-[10px] font-black uppercase tracking-widest border border-white/5 transition-all"
+                    >
+                      Edit
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteFreeResource(res.id)}
+                      className="p-3 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
       case 'analytics':
         return (
           <div className="space-y-8 animate-in fade-in duration-500">
@@ -2575,6 +2818,7 @@ CREATE TABLE IF NOT EXISTS public.promo_banners (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   image_url TEXT NOT NULL,
   link TEXT,
+  location TEXT DEFAULT 'home',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

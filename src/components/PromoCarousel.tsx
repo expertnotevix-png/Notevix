@@ -6,14 +6,14 @@ import { PromoBanner } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { dataBridge } from '../services/dataBridge';
 
-export function PromoCarousel() {
+export function PromoCarousel({ location = 'home' }: { location?: 'home' | 'landing' }) {
   const [banners, setBanners] = useState<PromoBanner[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchBanners = async () => {
-      const cacheKey = 'promo_banners';
+      const cacheKey = `promo_banners_${location}`;
       const cached = getCachedData<PromoBanner[]>(cacheKey);
       
       if (cached) {
@@ -22,7 +22,7 @@ export function PromoCarousel() {
       }
 
       try {
-        const data = await dataBridge.getPromoBanners(5);
+        const data = await dataBridge.getPromoBanners(5, location);
         
         if (data && data.length > 0) {
           setBanners(data);
@@ -33,19 +33,21 @@ export function PromoCarousel() {
         console.warn("Carousel fetch failed, using fallbacks", error);
       }
       
-      const fallbacks: PromoBanner[] = [
-        {
-          id: 'fallback_1',
-          imageUrl: 'https://images.unsplash.com/photo-1513258496099-48168024aec0?q=80&w=2070&auto=format&fit=crop',
-          link: '/premium-notes',
-          createdAt: new Date().toISOString()
-        }
-      ];
-      setBanners(fallbacks);
+      if (location === 'home') {
+        const fallbacks: PromoBanner[] = [
+          {
+            id: 'fallback_1',
+            imageUrl: 'https://images.unsplash.com/photo-1513258496099-48168024aec0?q=80&w=2070&auto=format&fit=crop',
+            link: '/premium-notes',
+            createdAt: new Date().toISOString()
+          }
+        ];
+        setBanners(fallbacks);
+      }
     };
 
     fetchBanners();
-  }, []);
+  }, [location]);
 
   useEffect(() => {
     if (banners.length <= 1) return;
@@ -68,6 +70,10 @@ export function PromoCarousel() {
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           className="w-full h-full cursor-pointer"
           onClick={() => {
+            if (location === 'landing') {
+              navigate('/login');
+              return;
+            }
             const destination = banners[currentIndex].link || '/premium-notes';
             if (destination.startsWith('http')) {
               window.open(destination, '_blank');

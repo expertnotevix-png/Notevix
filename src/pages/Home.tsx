@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { UserProfile } from '../types';
-import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Trophy, Bell, Calendar, Sparkles, MessageSquare, BrainCircuit, FileText, Users, Instagram } from 'lucide-react';
+import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Trophy, Bell, Calendar, Sparkles, MessageSquare, BrainCircuit, FileText, Users, Instagram, Gift, Award, Zap } from 'lucide-react';
 import { collection, query, where, getDocs, limit, addDoc, updateDoc, doc, setDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../components/firebase';
 
@@ -29,18 +29,37 @@ import { dataBridge } from '../services/dataBridge';
 
 export default function Home({ user }: HomeProps) {
   const navigate = useNavigate();
-  const [selectedClass, setSelectedClass] = useState<string | null>(user.class || null);
+  const [selectedClass, setSelectedClass] = useState<string | null>(user.class_level || user.class || null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [freeResource, setFreeResource] = useState<any>(null);
+  const [referralStats, setReferralStats] = useState({ count: 0, verifiedCount: 0 });
+  const [loadingResource, setLoadingResource] = useState(false);
 
   useEffect(() => {
-    // Show onboarding if not completed and not explicitly dismissed in this session
-    const dismissed = sessionStorage.getItem('onboarding_dismissed');
-    if (!user.onboardingCompleted && !dismissed) {
-      setShowOnboarding(true);
-    } else {
-      setShowOnboarding(false);
+    if (selectedClass) {
+      fetchClassResource(selectedClass);
     }
-  }, [user.onboardingCompleted]);
+    if (user && user.uid !== 'GUEST') {
+      fetchReferralStats();
+    }
+  }, [selectedClass, user]);
+
+  const fetchClassResource = async (cls: string) => {
+    setLoadingResource(true);
+    const resources = await dataBridge.getFreeResources(cls);
+    if (resources && resources.length > 0) {
+      // Find the first one (assuming one combo pack per class as per request)
+      setFreeResource(resources[0]);
+    } else {
+      setFreeResource(null);
+    }
+    setLoadingResource(false);
+  };
+
+  const fetchReferralStats = async () => {
+    const stats = await dataBridge.getReferralStats(user.uid);
+    setReferralStats(stats);
+  };
 
   const handleClassSelect = async (cls: string) => {
     setSelectedClass(cls);
@@ -139,6 +158,38 @@ export default function Home({ user }: HomeProps) {
       </div>
 
       <PromoCarousel />
+
+      {/* Referral & Free Ebook Banner */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={() => navigate('/referrals')}
+        className="bg-emerald-600/10 border border-emerald-500/30 rounded-3xl p-6 relative overflow-hidden group cursor-pointer"
+      >
+        <div className="relative z-10 flex items-center justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Gift className="w-5 h-5 text-emerald-400" />
+              <h3 className="font-black text-lg text-white uppercase italic">Class 10th combo pack</h3>
+            </div>
+            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Invite 3 friends to unlock legally!</p>
+            <div className="flex items-center gap-2 mt-3">
+               <span className="px-3 py-1 bg-emerald-500 text-black text-[9px] font-black rounded uppercase tracking-tighter">Limited Time</span>
+               <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest flex items-center gap-1 ml-2">
+                 Join Program <ChevronRight className="w-3 h-3" />
+               </span>
+            </div>
+          </div>
+          <div className="w-16 h-16 bg-emerald-500/20 rounded-2xl flex items-center justify-center border border-emerald-500/20">
+            <Users className="w-8 h-8 text-emerald-400" />
+          </div>
+        </div>
+        {/* Decorative elements */}
+        <div className="absolute -left-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
+          <Award className="w-24 h-24" />
+        </div>
+      </motion.div>
 
       <MotivationalCarousel />
       
@@ -337,32 +388,118 @@ export default function Home({ user }: HomeProps) {
         </div>
       </div>
 
-      {/* Subjects Grid - Only show if class is selected */}
+      {/* Combo Pack Section - Only show if class is selected */}
       {selectedClass && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-4"
+          className="space-y-6"
         >
-          <h3 className="font-bold text-lg">Select Subject</h3>
-          <div className="grid grid-cols-1 gap-3">
-            {subjects.map((subject) => (
-              <motion.button
-                key={subject.id}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => navigate(`/class/${selectedClass}/${subject.id}`)}
-                className="glass-card p-5 rounded-2xl flex items-center justify-between group hover:border-purple-500/50 transition-colors"
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`${subject.color} p-3 rounded-xl shadow-lg`}>
-                    <subject.icon className="w-6 h-6 text-white" />
-                  </div>
-                  <span className="font-bold text-lg">{subject.name}</span>
-                </div>
-                <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-purple-500 transition-colors" />
-              </motion.button>
-            ))}
+          <div className="flex items-center justify-between">
+            <h3 className="font-black italic uppercase text-lg">Class {selectedClass} <span className="text-indigo-400">Combo Pack</span></h3>
+            <div className="bg-emerald-500/10 text-emerald-500 px-3 py-1 rounded-full text-[10px] font-black tracking-widest border border-emerald-500/20">
+               FREE RESOURCE
+            </div>
           </div>
+
+          {loadingResource ? (
+            <div className="h-64 glass-card rounded-[2.5rem] flex items-center justify-center">
+              <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : freeResource ? (
+            <div className="space-y-4">
+              <motion.div 
+                whileHover={{ y: -5 }}
+                className="bg-[#0f0f0f] border border-white/5 rounded-[3rem] overflow-hidden group shadow-2xl relative"
+              >
+                {/* Free Badge */}
+                <div className="absolute top-6 left-6 z-20">
+                  <div className="bg-emerald-500 text-black px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 flex items-center gap-2">
+                    <Zap className="w-3 h-3 fill-current" /> FREE
+                  </div>
+                </div>
+
+                {/* Cover Image */}
+                <div className="aspect-[1.4/1] relative">
+                  {freeResource.cover_url ? (
+                    <img 
+                      src={freeResource.cover_url} 
+                      alt="Combo Pack" 
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-indigo-500/10 flex items-center justify-center">
+                      <BookOpen className="w-16 h-16 text-indigo-500/20" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0f0f0f] via-transparent to-transparent" />
+                  
+                  {/* Title Overlay */}
+                  <div className="absolute bottom-10 left-10 right-10">
+                    <h4 className="text-3xl font-black uppercase tracking-tighter text-white italic drop-shadow-2xl">
+                      Class {selectedClass} <br/>
+                      <span className="text-indigo-400">All Subjects</span> <br/>
+                      Combo Pack
+                    </h4>
+                  </div>
+                </div>
+
+                <div className="p-10 pt-4 space-y-8">
+                  {user.uid === 'GUEST' ? (
+                    <button 
+                      onClick={() => navigate('/login')}
+                      className="w-full py-5 bg-white text-black rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all"
+                    >
+                      Sign up free to get this ebook
+                    </button>
+                  ) : referralStats.verifiedCount >= 3 ? (
+                    <a 
+                      href={freeResource.drive_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-3 w-full py-6 bg-emerald-500 text-black rounded-[2.5rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-emerald-500/30 hover:bg-emerald-400 transition-all active:scale-95 border-b-4 border-emerald-700"
+                    >
+                      <Gift className="w-5 h-5" /> Download Free PDF
+                    </a>
+                  ) : (
+                    <div className="space-y-6">
+                      <button 
+                        onClick={() => navigate('/referrals')}
+                        className="w-full py-6 bg-indigo-600 text-white rounded-[2.5rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-indigo-600/30 hover:bg-indigo-500 transition-all active:scale-95 border-b-4 border-indigo-800 flex items-center justify-center gap-3"
+                      >
+                        <Gift className="w-5 h-5" /> Get Free — Invite 3 Friends
+                      </button>
+
+                      {/* Progress Mini Tracker */}
+                      <div className="bg-white/5 border border-white/10 rounded-3xl p-6 space-y-4">
+                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
+                          <span className="text-gray-500">Program Progress</span>
+                          <span className="text-indigo-400">{referralStats.verifiedCount}/3 Friends Invited</span>
+                        </div>
+                        <div className="h-3 w-full bg-black/40 rounded-full border border-white/5 p-0.5">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${(referralStats.verifiedCount / 3) * 100}%` }}
+                            className="h-full bg-gradient-to-r from-indigo-500 to-indigo-400 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em] text-center italic">
+                    Includes Previous Year Questions • Notes • Solutions
+                  </p>
+                </div>
+              </motion.div>
+            </div>
+          ) : (
+            <div className="p-10 glass-card rounded-[2.5rem] text-center space-y-3 bg-red-500/5 border-red-500/10">
+              <BookOpen className="w-10 h-10 text-gray-700 mx-auto opacity-20" />
+              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">No combo pack available for Class {selectedClass}</p>
+              <p className="text-[8px] text-gray-600 font-bold uppercase tracking-widest">Check back later or explore other classes</p>
+            </div>
+          )}
         </motion.div>
       )}
 

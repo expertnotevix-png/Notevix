@@ -103,16 +103,36 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       setLoadingError(null);
       try {
         console.log("PremiumNotes: Fetching resources for class:", activeClass);
-        const data = await dataBridge.getResources(activeClass);
+        // 1. Fetch Premium Resources
+        const premiumData = await dataBridge.getResources(activeClass);
+        
+        // 2. Fetch Free Resources from new table
+        const freeData = await dataBridge.getFreeResources(activeClass);
+
         if (!isMounted) return;
         
-        console.log("PremiumNotes: Received data:", data?.length, "items");
-        if (data && data.length > 0) {
-          const premiumOnly = data.filter((res: any) => res.isFree !== true);
-          setResources(premiumOnly);
-        } else {
-          setResources([]);
-        }
+        // Transform free resources to match SubjectResource type
+        const transformedFree = (freeData || []).map((f: any) => ({
+          id: f.id,
+          class: f.class_level,
+          subject: f.subject,
+          description: f.description,
+          driveLink: f.drive_link,
+          coverUrl: f.cover_url,
+          isFree: true,
+          price: 0
+        }));
+
+        const transformedPremium = (premiumData || []).map((p: any) => ({
+          ...p,
+          isFree: false // Ensure we mark them specifically
+        }));
+
+        // Combine both
+        const combined = [...transformedFree, ...transformedPremium];
+
+        console.log("PremiumNotes: Received data:", combined.length, "items (", transformedFree.length, "free,", transformedPremium.length, "premium)");
+        setResources(combined);
       } catch (err) {
         console.error("PremiumNotes: Fetch error:", err);
         if (isMounted) setLoadingError("Failed to synchronize library. Please try again.");
@@ -419,7 +439,12 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                   >
                     {/* Status Badge */}
                     <div className="absolute top-6 left-6 z-10">
-                      {unlocked ? (
+                      {res.isFree ? (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-black rounded-full border border-emerald-500/20 backdrop-blur-md shadow-lg shadow-emerald-500/20">
+                          <Zap className="w-3 h-3 fill-current" />
+                          <span className="text-[10px] font-black uppercase tracking-widest">FREE</span>
+                        </div>
+                      ) : unlocked ? (
                         <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20 backdrop-blur-md">
                           <Check className="w-3 h-3" />
                           <span className="text-[10px] font-black uppercase tracking-widest">Unlocked</span>
@@ -476,7 +501,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                       </div>
 
                       <div className="pt-6 border-t border-white/5 space-y-3">
-                        {unlocked && (
+                        {unlocked && !res.isFree && (
                           <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-3 mb-2">
                             <div className="space-y-1">
                               <span className="text-[8px] font-black text-rose-500 uppercase tracking-widest block">

@@ -258,15 +258,16 @@
     },
     "PromoBanner": {
       "title": "PromoBanner",
-      "description": "Promotional banners displayed on the home page",
+      "description": "Promotional banners displayed on the home page or landing page",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "imageUrl": { "type": "string" },
         "link": { "type": "string" },
+        "location": { "type": "string", "enum": ["home", "landing"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["imageUrl", "createdAt"]
+      "required": ["imageUrl", "location", "createdAt"]
     }
   },
   "firestore": {

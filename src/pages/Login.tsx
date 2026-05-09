@@ -10,7 +10,16 @@ import { Link, useSearchParams } from 'react-router-dom';
 export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [agreed, setAgreed] = useState(() => localStorage.getItem('login_agreed') !== 'false'); // Default to true if not explicitly false
+  const [agreed, setAgreed] = useState(false);
+  useEffect(() => {
+    // Capture referral code if present
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref) {
+      localStorage.setItem('referredBy', ref);
+      console.log("Captured Referrer:", ref);
+    }
+  }, []);
   const [copied, setCopied] = useState(false);
   const [showAgreedError, setShowAgreedError] = useState(false);
   const [searchParams] = useSearchParams();

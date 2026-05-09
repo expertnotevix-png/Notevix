@@ -4,6 +4,7 @@ export interface UserProfile {
   displayName: string;
   photoURL: string;
   class?: string;
+  class_level?: string;
   role: 'student' | 'admin';
   savedNotes: string[];
   notificationsEnabled?: boolean;
@@ -126,6 +127,7 @@ export interface PromoBanner {
   id: string;
   imageUrl: string;
   link?: string;
+  location?: 'home' | 'landing';
   createdAt: string;
 }
 

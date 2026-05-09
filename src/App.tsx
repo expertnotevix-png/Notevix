@@ -108,6 +108,7 @@ const ChapterList = lazyWithRetry(() => import('./pages/ChapterList'));
 const NoteView = lazyWithRetry(() => import('./pages/NoteView'));
 const Admin = lazyWithRetry(() => import('./pages/Admin'));
 const Leaderboard = lazyWithRetry(() => import('./pages/Leaderboard'));
+const Referrals = lazyWithRetry(() => import('./pages/Referrals'));
 const Schedule = lazyWithRetry(() => import('./pages/Schedule'));
 const Notifications = lazyWithRetry(() => import('./pages/Notifications'));
 const PrivacyPolicy = lazyWithRetry(() => import('./pages/PrivacyPolicy'));
@@ -241,6 +242,13 @@ export default function App() {
             setUser(mergedProfile);
             localStorage.setItem(CACHED_USER_KEY, JSON.stringify(mergedProfile));
             localStorage.setItem(CACHED_USER_KEY + '_time', Date.now().toString());
+
+            // Referral Tracking
+            const referredBy = localStorage.getItem('referredBy');
+            if (referredBy && referredBy !== firebaseUser.uid) {
+               dataBridge.trackReferral(referredBy, firebaseUser.uid);
+               localStorage.removeItem('referredBy');
+            }
 
             // SYNC BACK TO SUPABASE (Ensure Supabase has the latest merged data from Firestore fallback)
             dataBridge.syncProfile(firebaseUser.uid, mergedProfile).catch(e => console.warn("Update sync failed:", e));
@@ -462,6 +470,7 @@ export default function App() {
               <Route path="/" element={user ? <Home user={user} /> : <Landing />} />
               <Route path="/explore" element={<Explore />} />
               <Route path="/leaderboard" element={<Leaderboard user={user} />} />
+              <Route path="/referrals" element={<Referrals user={user} />} />
               <Route path="/schedule" element={user ? <Schedule user={user} /> : <Navigate to="/login" />} />
               <Route path="/notifications" element={user ? <Notifications user={user} /> : <Navigate to="/login" />} />
               <Route path="/saved" element={user ? <Saved user={user} /> : <Navigate to="/login" />} />

@@ -82,4 +82,34 @@ export const supabase = (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUr
  *   last_visit_date BIGINT, -- Timestamp in ms
  *   last_updated TIMESTAMPTZ DEFAULT NOW()
  * );
+ * 
+ * -- 5. Referrals
+ * CREATE TABLE referrals (
+ *   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+ *   referrer_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+ *   referred_user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+ *   is_verified BOOLEAN DEFAULT TRUE,
+ *   created_at TIMESTAMPTZ DEFAULT NOW(),
+ *   UNIQUE(referred_user_id) -- A user can only be referred once
+ * );
+ * 
+ * -- 6. Free Resources
+ * CREATE TABLE free_resources (
+ *   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+ *   subject TEXT NOT NULL,
+ *   class_level TEXT NOT NULL,
+ *   description TEXT,
+ *   drive_link TEXT NOT NULL,
+ *   cover_url TEXT,
+ *   created_at TIMESTAMPTZ DEFAULT NOW()
+ * );
+ * 
+ * -- 7. Promo Banners
+ * CREATE TABLE promo_banners (
+ *   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+ *   image_url TEXT NOT NULL,
+ *   link TEXT,
+ *   location TEXT DEFAULT 'home', -- 'home' or 'landing'
+ *   created_at TIMESTAMPTZ DEFAULT NOW()
+ * );
  */

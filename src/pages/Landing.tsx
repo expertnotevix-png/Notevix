@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, FlaskConical, Globe, Languages, Shield, Zap, Trophy, ChevronRight, Crown, Upload, QrCode, ShieldCheck, Copy, AlertCircle, Info } from 'lucide-react';
 import { Logo } from '../components/Logo';
+import { PromoCarousel } from '../components/PromoCarousel';
 import { useState, useEffect, useRef } from 'react';
 import { db } from '../components/firebase';
 import { collection, addDoc, doc, setDoc, getDocs, query, orderBy, onSnapshot, where } from 'firebase/firestore';
@@ -263,6 +264,11 @@ export default function Landing() {
             </button>
           </div>
         </nav>
+
+        {/* Promo Banner Section */}
+        <div className="max-w-6xl mx-auto mb-16">
+          <PromoCarousel location="landing" />
+        </div>
 
         <div className="max-w-5xl mx-auto text-center space-y-10">
           <motion.div

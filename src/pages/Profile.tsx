@@ -2,7 +2,7 @@ import { auth } from '../components/firebase';
 import { signOut } from 'firebase/auth';
 import { dataBridge } from '../services/dataBridge';
 import { UserProfile } from '../types';
-import { LogOut, Settings, Shield, CreditCard, Bell, ChevronRight, Award, Instagram, Send, BookOpen, Moon, Bookmark, Share2, Copy, Check, Download, QrCode, MessageSquare, History } from 'lucide-react';
+import { LogOut, Settings, Shield, CreditCard, Bell, ChevronRight, Award, Instagram, Send, BookOpen, Moon, Bookmark, Share2, Copy, Check, Download, QrCode, MessageSquare, History, Gift } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { useState, useEffect } from 'react';
@@ -211,47 +211,24 @@ export default function Profile({ user, setUser }: { user: UserProfile, setUser:
       </div>
 
       {/* Referral System */}
-      <div className="glass-card p-6 rounded-3xl space-y-4 border-yellow-500/20 bg-yellow-500/5">
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <h3 className="font-bold text-lg flex items-center gap-2">
-              <Share2 className="w-5 h-5 text-yellow-500" />
-              Refer & Earn Pro
-            </h3>
-            <p className="text-xs text-gray-400">Refer 3 friends to unlock Premium Notes!</p>
+      <button 
+        onClick={() => navigate('/referrals')}
+        className="w-full glass-card p-6 rounded-[2.5rem] border-indigo-500/20 bg-indigo-500/5 hover:bg-indigo-500/10 transition-all group flex items-center justify-between"
+      >
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 bg-indigo-500/20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <Gift className="w-8 h-8 text-indigo-400" />
           </div>
-          <div className="text-right">
-            <span className="text-2xl font-bold text-yellow-500">{user.referralCount}</span>
-            <span className="text-gray-500 text-xs">/3</span>
+          <div className="text-left">
+            <h3 className="font-black uppercase tracking-tight text-lg italic">Earn Free <span className="text-indigo-400">Ebooks</span></h3>
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Refer 3 friends & unlock Premium Access</p>
           </div>
         </div>
-
-        {/* Progress Bar */}
-        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-          <motion.div 
-            initial={{ width: 0 }}
-            animate={{ width: `${Math.min((user.referralCount / 3) * 100, 100)}%` }}
-            className="h-full bg-yellow-500"
-          />
+        <div className="flex flex-col items-center gap-1">
+          <div className="bg-indigo-500 text-white px-3 py-1 rounded-full text-[10px] font-black tracking-widest">JOIN</div>
+          <ChevronRight className="w-5 h-5 text-indigo-400 group-hover:translate-x-1 transition-transform" />
         </div>
-
-        <div className="flex gap-2 pt-2">
-          <button 
-            onClick={copyReferral}
-            className="flex-1 glass-card py-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold active:scale-95 transition-transform"
-          >
-            {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-            {copied ? 'Copied!' : 'Copy Link'}
-          </button>
-          <button 
-            onClick={shareReferral}
-            className="flex-1 bg-yellow-500 text-black py-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold active:scale-95 transition-transform"
-          >
-            <Share2 className="w-4 h-4" />
-            Share Now
-          </button>
-        </div>
-      </div>
+      </button>
 
       {/* Class Selection */}
       <div className="space-y-4">
