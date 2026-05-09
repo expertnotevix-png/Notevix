@@ -53,10 +53,12 @@ export default function Admin() {
   const [isAddingBanner, setIsAddingBanner] = useState(false);
   const [bannerFormData, setBannerFormData] = useState({ imageUrl: '', link: '', location: 'home' });
   const [bannerImagePreview, setBannerImagePreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const lastAdminAiAttemptRef = useRef<number>(0);
   
   const coverInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
+  const freeNoteInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   // One-time Storage Cleanup Logic
@@ -237,7 +239,7 @@ export default function Admin() {
     }
   };
 
-  const handleResourceCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleResourceCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
@@ -245,44 +247,62 @@ export default function Admin() {
         return;
       }
 
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const img = new Image();
-        img.onload = () => {
-          // Compress image to manageable size for Firestore (HD Quality)
-          const canvas = document.createElement('canvas');
-          const MAX_SIZE = 2048; // ULTRA HD
-          let width = img.width;
-          let height = img.height;
+      setIsUploading(true);
+      const loadingToast = toast.loading("Uploading image to Supabase...");
 
-          if (width > height) {
-            if (width > MAX_SIZE) {
-              height *= MAX_SIZE / width;
-              width = MAX_SIZE;
-            }
-          } else {
-            if (height > MAX_SIZE) {
-              width *= MAX_SIZE / height;
-              height = MAX_SIZE;
-            }
-          }
+      try {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const img = new Image();
+          img.onload = async () => {
+            // Compress image to manageable size for Storage (HD Quality)
+            const canvas = document.createElement('canvas');
+            const MAX_SIZE = 1280; // Reduced resolution as per request
+            let width = img.width;
+            let height = img.height;
 
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          
-          if (ctx) {
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(img, 0, 0, width, height);
-          }
-          
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.95);
-          setResourceCoverPreview(compressedDataUrl);
+            if (width > height) {
+              if (width > MAX_SIZE) {
+                height *= MAX_SIZE / width;
+                width = MAX_SIZE;
+              }
+            } else {
+              if (height > MAX_SIZE) {
+                width *= MAX_SIZE / height;
+                height = MAX_SIZE;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            
+            if (ctx) {
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(img, 0, 0, width, height);
+            }
+            
+            const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+            if (blob) {
+              const uploadRes = await dataBridge.uploadImage(new File([blob], file.name, { type: 'image/jpeg' }), 'resource-covers');
+              if (uploadRes.success && uploadRes.url) {
+                setResourceCoverPreview(uploadRes.url);
+                toast.success("Image uploaded successfully!", { id: loadingToast });
+              } else {
+                toast.error("Upload failed: " + uploadRes.error, { id: loadingToast });
+              }
+            }
+            setIsUploading(false);
+          };
+          img.src = reader.result as string;
         };
-        img.src = reader.result as string;
-      };
-      reader.readAsDataURL(file);
+        reader.readAsDataURL(file);
+      } catch (err) {
+        console.error("Upload process error:", err);
+        toast.error("Process failed", { id: loadingToast });
+        setIsUploading(false);
+      }
     }
   };
 
@@ -455,7 +475,7 @@ export default function Admin() {
     }
   };
 
-  const handleBannerImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBannerImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
@@ -463,43 +483,61 @@ export default function Admin() {
         return;
       }
 
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_SIZE = 1920; 
-          let width = img.width;
-          let height = img.height;
+      setIsUploading(true);
+      const loadingToast = toast.loading("Uploading banner to Supabase...");
 
-          if (width > height) {
-            if (width > MAX_SIZE) {
-              height *= MAX_SIZE / width;
-              width = MAX_SIZE;
-            }
-          } else {
-            if (height > MAX_SIZE) {
-              width *= MAX_SIZE / height;
-              height = MAX_SIZE;
-            }
-          }
+      try {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const img = new Image();
+          img.onload = async () => {
+            const canvas = document.createElement('canvas');
+            const MAX_SIZE = 1280; // Reduced resolution
+            let width = img.width;
+            let height = img.height;
 
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          
-          if (ctx) {
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(img, 0, 0, width, height);
-          }
-          
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
-          setBannerImagePreview(compressedDataUrl);
+            if (width > height) {
+              if (width > MAX_SIZE) {
+                height *= MAX_SIZE / width;
+                width = MAX_SIZE;
+              }
+            } else {
+              if (height > MAX_SIZE) {
+                width *= MAX_SIZE / height;
+                height = MAX_SIZE;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            
+            if (ctx) {
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(img, 0, 0, width, height);
+            }
+            
+            const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+            if (blob) {
+              const uploadRes = await dataBridge.uploadImage(new File([blob], file.name, { type: 'image/jpeg' }), 'banners');
+              if (uploadRes.success && uploadRes.url) {
+                setBannerImagePreview(uploadRes.url);
+                toast.success("Banner uploaded!", { id: loadingToast });
+              } else {
+                toast.error("Upload failed: " + uploadRes.error, { id: loadingToast });
+              }
+            }
+            setIsUploading(false);
+          };
+          img.src = reader.result as string;
         };
-        img.src = reader.result as string;
-      };
-      reader.readAsDataURL(file);
+        reader.readAsDataURL(file);
+      } catch (err) {
+        console.error("Banner upload error:", err);
+        toast.error("Upload failed", { id: loadingToast });
+        setIsUploading(false);
+      }
     }
   };
 
@@ -1994,6 +2032,14 @@ export default function Admin() {
                       className="aspect-square w-full rounded-[2.5rem] bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-4 hover:border-indigo-500 group cursor-pointer overflow-hidden relative shadow-inner"
                     >
                       <input type="file" ref={coverInputRef} onChange={handleResourceCoverChange} accept="image/*" className="hidden" />
+                      {isUploading && (
+                        <div className="absolute inset-0 z-50 bg-black/60 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-300">
+                          <div className="flex flex-col items-center gap-3">
+                            <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin" />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Processing...</span>
+                          </div>
+                        </div>
+                      )}
                       {resourceCoverPreview ? (
                         <>
                           <img src={resourceCoverPreview} className="w-full h-full object-cover" />
@@ -2249,13 +2295,95 @@ export default function Admin() {
                     </div>
 
                     <div className="space-y-2">
-                       <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">Cover Image URL</label>
-                       <input 
-                         placeholder="Image URL (e.g. Unsplash)"
-                         value={freeResourceFormData.cover_url}
-                         onChange={(e) => setFreeResourceFormData({...freeResourceFormData, cover_url: e.target.value})}
-                         className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-emerald-500 outline-none"
-                       />
+                       <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">Cover Image</label>
+                       <div 
+                         onClick={() => freeNoteInputRef.current?.click()}
+                         className="w-full aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-emerald-500 transition-all group relative overflow-hidden"
+                       >
+                         <input 
+                           type="file" 
+                           ref={freeNoteInputRef} 
+                           onChange={async (e) => {
+                             const file = e.target.files?.[0];
+                             if (file) {
+                               setIsUploading(true);
+                               const loadingToast = toast.loading("Compressing & Uploading...");
+                               
+                               try {
+                                 const reader = new FileReader();
+                                 reader.onloadend = async () => {
+                                   const img = new Image();
+                                   img.onload = async () => {
+                                     const canvas = document.createElement('canvas');
+                                     const MAX_SIZE = 1024; // Standard resolution for thumbnails
+                                     let width = img.width;
+                                     let height = img.height;
+
+                                     if (width > height) {
+                                       if (width > MAX_SIZE) {
+                                         height *= MAX_SIZE / width;
+                                         width = MAX_SIZE;
+                                       }
+                                     } else {
+                                       if (height > MAX_SIZE) {
+                                         width *= MAX_SIZE / height;
+                                         height = MAX_SIZE;
+                                       }
+                                     }
+
+                                     canvas.width = width;
+                                     canvas.height = height;
+                                     const ctx = canvas.getContext('2d');
+                                     if (ctx) {
+                                       ctx.imageSmoothingEnabled = true;
+                                       ctx.imageSmoothingQuality = 'high';
+                                       ctx.drawImage(img, 0, 0, width, height);
+                                     }
+
+                                     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+                                     if (blob) {
+                                       const uploadRes = await dataBridge.uploadImage(new File([blob], file.name, { type: 'image/jpeg' }), 'free-resources');
+                                       if (uploadRes.success && uploadRes.url) {
+                                         setFreeResourceFormData({...freeResourceFormData, cover_url: uploadRes.url});
+                                         toast.success("Image uploaded!", { id: loadingToast });
+                                       } else {
+                                         toast.error("Upload failed", { id: loadingToast });
+                                       }
+                                     }
+                                     setIsUploading(false);
+                                   };
+                                   img.src = reader.result as string;
+                                 };
+                                 reader.readAsDataURL(file);
+                               } catch (err) {
+                                 console.error("Upload error:", err);
+                                 toast.error("Process failed", { id: loadingToast });
+                                 setIsUploading(false);
+                               }
+                             }
+                           }} 
+                           accept="image/*" 
+                           className="hidden" 
+                         />
+                         {isUploading && (
+                            <div className="absolute inset-0 z-50 bg-black/60 flex items-center justify-center backdrop-blur-sm">
+                              <RefreshCw className="w-8 h-8 text-emerald-400 animate-spin" />
+                            </div>
+                         )}
+                         {freeResourceFormData.cover_url ? (
+                           <>
+                             <img src={freeResourceFormData.cover_url} className="w-full h-full object-cover" />
+                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
+                               <RefreshCw className="w-6 h-6 text-white" />
+                             </div>
+                           </>
+                         ) : (
+                           <div className="flex flex-col items-center gap-2">
+                             <Plus className="w-6 h-6 text-gray-500 group-hover:text-emerald-500 transition-colors" />
+                             <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Upload Cover</span>
+                           </div>
+                         )}
+                       </div>
                     </div>
 
                     <button 

@@ -1456,5 +1456,39 @@ export const dataBridge = {
       console.error("Delete free resource failed:", err);
       return false;
     }
+  },
+
+  /**
+   * Supabase Storage Upload
+   */
+  async uploadImage(file: File, bucket: string = 'assets') {
+    if (!supabase) return { success: false, error: 'Supabase not initialized' };
+    
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) {
+        // If bucket doesn't exist, this might fail. We should ideally check or ensure it.
+        throw error;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(filePath);
+
+      return { success: true, url: publicUrl };
+    } catch (err: any) {
+      console.error("Upload failed:", err);
+      return { success: false, error: err.message };
+    }
   }
 };
