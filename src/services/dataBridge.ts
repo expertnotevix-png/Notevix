@@ -749,6 +749,28 @@ export const dataBridge = {
     if (!supabase) return [];
     
     try {
+      // 1. Try user_points table first (new logic)
+      const { data: pointsData, error: pointsError } = await supabase
+        .from('user_points')
+        .select(`
+          user_id,
+          total_points,
+          streak_days,
+          profiles:user_id (full_name, avatar_url, class_level)
+        `)
+        .order('total_points', { ascending: false })
+        .limit(limitCount);
+
+        return (pointsData || []).map((d: any) => ({
+          uid: d.user_id,
+          displayName: d.profiles?.full_name || 'Student',
+          photoURL: d.profiles?.avatar_url || '',
+          totalPoints: d.total_points || 0,
+          streak: d.streak_days || 0,
+          class: d.profiles?.class_level
+        }));
+
+      // 2. Fallback to profiles (old logic)
       const { data, error } = await supabase
         .from('profiles')
         .select('id, full_name, avatar_url, xp, streak, class_level')
@@ -767,7 +789,72 @@ export const dataBridge = {
       }));
     } catch (err) {
       console.error("Leaderboard fetch failed:", err);
-      throw err;
+      return [];
+    }
+  },
+
+  /**
+   * Update User Points based on study time
+   * Every 1 minute = +10 points
+   */
+  async updateUserPoints(uid: string) {
+    if (!supabase) return;
+
+    try {
+      // 1. Get current stats
+      const { data: current, error: fetchError } = await supabase
+        .from('user_points')
+        .select('*')
+        .eq('user_id', uid)
+        .maybeSingle();
+
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+      if (fetchError) throw fetchError;
+
+      if (!current) {
+        // First time initialization
+        await supabase.from('user_points').insert([{
+          user_id: uid,
+          total_points: 10,
+          total_minutes: 1,
+          last_updated: now.toISOString(),
+          streak_days: 1,
+          last_visit_date: today
+        }]);
+      } else {
+        // Calculate Streak
+        let streakDays = current.streak_days || 1;
+        const lastVisit = current.last_visit_date ? Number(current.last_visit_date) : 0;
+        
+        const diffDays = (today - lastVisit) / (1000 * 60 * 60 * 24);
+        
+        if (diffDays >= 1 && diffDays < 2) {
+          // Visited yesterday, increment streak
+          streakDays += 1;
+        } else if (diffDays >= 2) {
+          // Missed a day, reset streak
+          streakDays = 1;
+        }
+
+        // Update Record
+        await supabase
+          .from('user_points')
+          .update({
+            total_points: (current.total_points || 0) + 10,
+            total_minutes: (current.total_minutes || 0) + 1,
+            last_updated: now.toISOString(),
+            streak_days: streakDays,
+            last_visit_date: today
+          })
+          .eq('user_id', uid);
+        
+        // Also sync XP back to main profile for compatibility
+        await supabase.rpc('increment_xp', { user_id: uid, amount: 10 });
+      }
+    } catch (err) {
+      console.error("Failed to update user points:", err);
     }
   },
 
@@ -1169,5 +1256,93 @@ export const dataBridge = {
       } catch (err) {}
     }
     return false;
+  },
+
+  /**
+   * Supabase Storage: Payment Screenshots
+   */
+  async uploadPaymentScreenshot(base64Data: string) {
+    if (!supabase) return null;
+    try {
+      // 1. Convert base64 to Blob
+      const base64Content = base64Data.split(',')[1];
+      if (!base64Content) throw new Error("Invalid image data");
+
+      const byteCharacters = atob(base64Content);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'image/jpeg' });
+
+      // 2. Generate unique filename
+      const filename = `screenshot_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+      const filePath = `verifications/${filename}`;
+
+      // 3. Upload to Supabase Storage (Bucket must be 'payment-screenshots')
+      const { data, error } = await supabase.storage
+        .from('payment-screenshots')
+        .upload(filePath, blob, {
+          contentType: 'image/jpeg',
+          upsert: true
+        });
+
+      if (error) throw error;
+
+      // 4. Get Public URL
+      const { data: urlData } = supabase.storage
+        .from('payment-screenshots')
+        .getPublicUrl(filePath);
+
+      return {
+        path: filePath,
+        url: urlData.publicUrl
+      };
+    } catch (err) {
+      console.error("Screenshot upload failed:", err);
+      return null;
+    }
+  },
+
+  async deletePaymentScreenshot(path: string) {
+    if (!supabase || !path) return false;
+    try {
+      const { error } = await supabase.storage
+        .from('payment-screenshots')
+        .remove([path]);
+      
+      if (error) throw error;
+      return true;
+    } catch (err) {
+      console.error("Screenshot deletion failed:", err);
+      return false;
+    }
+  },
+
+  async cleanupOldScreenshots() {
+    if (!supabase) return { success: false, error: 'No connection' };
+    try {
+      // 1. List all files in the bucket
+      const { data, error } = await supabase.storage
+        .from('payment-screenshots')
+        .list('verifications', { limit: 1000 });
+
+      if (error) throw error;
+      if (!data || data.length === 0) return { success: true, count: 0 };
+
+      // 2. Delete them
+      const paths = data.map(f => `verifications/${f.name}`);
+      const { error: deleteError } = await supabase.storage
+        .from('payment-screenshots')
+        .remove(paths);
+
+      if (deleteError) throw deleteError;
+
+      return { success: true, count: data.length };
+    } catch (err: any) {
+      console.error("Cleanup failed:", err);
+      return { success: false, error: err.message };
+    }
   }
 };

@@ -72,4 +72,14 @@ export const supabase = (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUr
  *   created_at TIMESTAMPTZ DEFAULT NOW(),
  *   updated_at TIMESTAMPTZ DEFAULT NOW()
  * );
+ * 
+ * -- 4. User Points (Leaderboard)
+ * CREATE TABLE user_points (
+ *   user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+ *   total_points INTEGER DEFAULT 0,
+ *   total_minutes INTEGER DEFAULT 0,
+ *   streak_days INTEGER DEFAULT 0,
+ *   last_visit_date BIGINT, -- Timestamp in ms
+ *   last_updated TIMESTAMPTZ DEFAULT NOW()
+ * );
  */

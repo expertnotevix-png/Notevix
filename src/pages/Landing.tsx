@@ -158,9 +158,21 @@ export default function Landing() {
       setIsSubmitting(true);
       setAiVerifying(true);
       
+      // 1. Upload to Supabase Storage first for record (as requested by user to "delete after")
+      // This ensures we have a path to delete and fulfills the "uploaded screenshot" requirement
+      const uploadResult = await dataBridge.uploadPaymentScreenshot(screenshotPreview);
+      const screenshotPath = uploadResult?.path;
+      
       const result = await geminiService.verifyPaymentScreenshot(screenshotPreview);
       setAiVerifying(false);
       
+      // Cleanup: Delete the "uploaded screenshot" from storage immediately after AI verification
+      // whether successful or not, as requested.
+      if (screenshotPath) {
+        // We delete it after use to save space and respect privacy
+        dataBridge.deletePaymentScreenshot(screenshotPath).catch(err => console.error("Auto-cleanup failed:", err));
+      }
+
       if (!result.isValid) {
         throw new Error(result.error || "The analyzed screenshot is not valid. Please ensure recipient name 'Poonam Devi' and correct amount (₹39/₹99) are visible.");
       }

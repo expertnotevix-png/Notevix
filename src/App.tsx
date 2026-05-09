@@ -124,6 +124,7 @@ const PostDetail = lazyWithRetry(() => import('./pages/PostDetail'));
 // Components
 import BottomNav from './components/BottomNav';
 import { FloatingChatbot } from './components/FloatingChatbot';
+import PointsTracker from './components/PointsTracker';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
 
@@ -489,6 +490,7 @@ export default function App() {
           </Suspense>
           
           <BottomNav user={user} />
+          <PointsTracker user={user} />
           <FloatingChatbot />
           <Toaster position="top-center" expand={true} richColors theme="dark" />
         </div>

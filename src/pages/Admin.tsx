@@ -58,6 +58,28 @@ export default function Admin() {
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
+  // One-time Storage Cleanup Logic
+  useEffect(() => {
+    const hasCleanedUp = localStorage.getItem('notevix_storage_cleanup_v1');
+    if (!hasCleanedUp) {
+      const performCleanup = async () => {
+        try {
+          const result = await dataBridge.cleanupOldScreenshots();
+          if (result.success) {
+            console.log(`Initial Storage Cleanup: Removed ${result.count} orphaned screenshots.`);
+            localStorage.setItem('notevix_storage_cleanup_v1', 'true');
+            if (result.count && result.count > 0) {
+              toast.info(`Storage Cleanup: Removed ${result.count} old screenshots.`);
+            }
+          }
+        } catch (err) {
+          console.error("Storage cleanup error:", err);
+        }
+      };
+      performCleanup();
+    }
+  }, []);
+
   // Analytics State
   const [analyticsData, setAnalyticsData] = useState({
     totalRevenue: 0,

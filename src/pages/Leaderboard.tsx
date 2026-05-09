@@ -100,6 +100,9 @@ export default function Leaderboard({ user }: LeaderboardProps) {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
           fetchLeaderboard();
         })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'user_points' }, () => {
+          fetchLeaderboard();
+        })
         .subscribe((status: string) => {
           if (status === 'SUBSCRIBED') {
             console.log('Leaderboard realtime subscribed');
