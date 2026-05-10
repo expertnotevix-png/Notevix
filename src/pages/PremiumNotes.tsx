@@ -128,11 +128,9 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           isFree: false // Ensure we mark them specifically
         }));
 
-        // Combine both
-        const combined = [...transformedFree, ...transformedPremium];
-
-        console.log("PremiumNotes: Received data:", combined.length, "items (", transformedFree.length, "free,", transformedPremium.length, "premium)");
-        setResources(combined);
+        // Combine both - actually user wants to remove free resources from here
+        // Change: only use transformedPremium
+        setResources(transformedPremium);
       } catch (err) {
         console.error("PremiumNotes: Fetch error:", err);
         if (isMounted) setLoadingError("Failed to synchronize library. Please try again.");
@@ -371,9 +369,6 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16 border-b border-white/5 pb-12"
       >
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-indigo-500/10 text-indigo-400 text-[10px] font-black uppercase tracking-[0.2em] rounded-full border border-indigo-500/20">Premium Section</span>
-          </div>
           <h1 className="text-5xl font-black tracking-tighter text-white uppercase flex flex-col">
             Digital 
             <span className="text-indigo-500">Library</span>

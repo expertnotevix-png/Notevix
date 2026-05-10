@@ -220,12 +220,12 @@ export default function Home({ user }: HomeProps) {
                   </div>
 
                   {/* Cover Image */}
-                  <div className="aspect-[1.4/1] relative">
+                  <div className="aspect-[4/5] relative">
                     {resource.cover_url ? (
                       <img 
                         src={resource.cover_url} 
                         alt={resource.subject} 
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
                       />
                     ) : (
                       <div className="w-full h-full bg-indigo-500/10 flex items-center justify-center">
@@ -233,18 +233,9 @@ export default function Home({ user }: HomeProps) {
                       </div>
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0f0f0f] via-transparent to-transparent" />
-                    
-                    {/* Title Overlay */}
-                    <div className="absolute bottom-10 left-10 right-10">
-                      <h4 className="text-3xl font-black uppercase tracking-tighter text-white italic drop-shadow-2xl">
-                        Class {selectedClass} <br/>
-                        <span className="text-indigo-400">{resource.subject}</span> <br/>
-                        Combo Pack
-                      </h4>
-                    </div>
                   </div>
 
-                  <div className="p-10 pt-4 space-y-8">
+                  <div className="p-10 pt-8 space-y-8">
                     {user.uid === 'GUEST' ? (
                       <button 
                         onClick={() => navigate('/login')}
