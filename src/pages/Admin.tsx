@@ -330,9 +330,8 @@ export default function Admin() {
 
       // STRICT Supabase for Resources (Primary)
       if (supabase) {
-        // Construct clean DB record without camelCase fields that trigger schema errors
-        const dbRecord = {
-          id: resourceData.id,
+        // Construct clean DB record
+        const dbRecord: any = {
           subject: resourceData.subject,
           class: resourceData.class,
           price: resourceData.price,
@@ -344,10 +343,17 @@ export default function Admin() {
           created_at: resourceData.createdAt
         };
 
-        const { error } = await supabase.from('subject_resources').insert([dbRecord]);
+        // Only include ID if updating
+        if (resourceData.id) {
+          dbRecord.id = resourceData.id;
+          const { error } = await supabase.from('subject_resources').upsert([dbRecord]);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from('subject_resources').insert([dbRecord]);
+          if (error) throw error;
+        }
         
-        if (error) throw error;
-        toast.success("Resource Created Successfully!");
+        toast.success(resourceData.id ? "Resource Updated!" : "Resource Created Successfully!");
       } else {
         // Fallback to Firestore
         try {
@@ -3007,6 +3013,10 @@ CREATE TABLE IF NOT EXISTS public.free_resources (
   cover_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- FIX: Ensure ID auto-generates if table already exists
+ALTER TABLE public.free_resources ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE public.subject_resources ALTER COLUMN id SET DEFAULT gen_random_uuid();
 
 -- 5. Subject Resources (Premium Notes)
 CREATE TABLE IF NOT EXISTS public.subject_resources (

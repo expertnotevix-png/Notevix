@@ -1426,16 +1426,23 @@ export const dataBridge = {
   async saveFreeResource(resource: any) {
     if (!supabase) return { success: false, error: 'No connection' };
     try {
+      // Build clean payload without id for new resources to allow DB to auto-generate UUID
+      const payload: any = {
+        subject: resource.subject,
+        class_level: resource.class_level,
+        description: resource.description,
+        drive_link: resource.drive_link,
+        cover_url: resource.cover_url
+      };
+      
+      // Only include ID if we are UPDATING an existing record
+      if (resource.id && resource.id !== 'undefined' && resource.id !== 'null') {
+        payload.id = resource.id;
+      }
+
       const { data, error } = await supabase
         .from('free_resources')
-        .upsert([{
-          id: resource.id || undefined,
-          subject: resource.subject,
-          class_level: resource.class_level,
-          description: resource.description,
-          drive_link: resource.drive_link,
-          cover_url: resource.cover_url
-        }])
+        .upsert([payload])
         .select();
 
       if (error) throw error;
