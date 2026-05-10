@@ -290,7 +290,7 @@ export default function Admin() {
                 setResourceCoverPreview(uploadRes.url);
                 toast.success("Image uploaded successfully!", { id: loadingToast });
               } else {
-                toast.error("Upload failed: " + uploadRes.error, { id: loadingToast });
+                toast.error(`Upload failed: ${uploadRes.error || 'Check Supabase bucket'}`, { id: loadingToast });
               }
             }
             setIsUploading(false);
@@ -525,7 +525,7 @@ export default function Admin() {
                 setBannerImagePreview(uploadRes.url);
                 toast.success("Banner uploaded!", { id: loadingToast });
               } else {
-                toast.error("Upload failed: " + uploadRes.error, { id: loadingToast });
+                toast.error(`Upload failed: ${uploadRes.error || 'Check Supabase bucket'}`, { id: loadingToast });
               }
             }
             setIsUploading(false);
@@ -535,7 +535,7 @@ export default function Admin() {
         reader.readAsDataURL(file);
       } catch (err) {
         console.error("Banner upload error:", err);
-        toast.error("Upload failed", { id: loadingToast });
+        toast.error("Process failed", { id: loadingToast });
         setIsUploading(false);
       }
     }
@@ -2347,7 +2347,7 @@ export default function Admin() {
                                          setFreeResourceFormData({...freeResourceFormData, cover_url: uploadRes.url});
                                          toast.success("Image uploaded!", { id: loadingToast });
                                        } else {
-                                         toast.error("Upload failed", { id: loadingToast });
+                                         toast.error(`Upload failed: ${uploadRes.error || 'Check Supabase bucket'}`, { id: loadingToast });
                                        }
                                      }
                                      setIsUploading(false);
@@ -3061,6 +3061,19 @@ ALTER TABLE public.free_resources ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public Read Free" ON public.free_resources FOR SELECT USING (true);
 ALTER TABLE public.subject_resources ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public Read Resources" ON public.subject_resources FOR SELECT USING (true);
+
+-- 9. Storage Buckets (Optional: Run if you get "Bucket not found")
+-- NOTE: If these fail in SQL Editor, go to Supabase Dashboard -> Storage and create them manually.
+-- Set them to PUBLIC.
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('banners', 'banners', true),
+       ('resource-covers', 'resource-covers', true),
+       ('free-resources', 'free-resources', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Allow Public Access to these buckets
+CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING ( bucket_id IN ('banners', 'resource-covers', 'free-resources') );
+CREATE POLICY "Public Upload" ON storage.objects FOR INSERT WITH CHECK ( bucket_id IN ('banners', 'resource-covers', 'free-resources') );
                           `;
                           navigator.clipboard.writeText(sql.trim());
                           toast.success("SQL Copied! Paste this in Supabase SQL Editor to fix all database errors.");
