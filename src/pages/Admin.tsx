@@ -3003,7 +3003,16 @@ CREATE TABLE IF NOT EXISTS public.referrals (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. Free Resources (Home Page Combo Packs)
+-- 1. Promo Banners
+CREATE TABLE IF NOT EXISTS public.promo_banners (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  image_url TEXT NOT NULL,
+  link TEXT,
+  location TEXT DEFAULT 'home',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. Free Resources (Home Page Combo Packs)
 CREATE TABLE IF NOT EXISTS public.free_resources (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   subject TEXT NOT NULL,
@@ -3014,13 +3023,9 @@ CREATE TABLE IF NOT EXISTS public.free_resources (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- FIX: Ensure ID auto-generates if table already exists
-ALTER TABLE public.free_resources ALTER COLUMN id SET DEFAULT gen_random_uuid();
-ALTER TABLE public.subject_resources ALTER COLUMN id SET DEFAULT gen_random_uuid();
-
--- 5. Subject Resources (Premium Notes)
+-- 3. Subject Resources (Premium Notes)
 CREATE TABLE IF NOT EXISTS public.subject_resources (
-  id TEXT PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   subject TEXT NOT NULL,
   class TEXT NOT NULL,
   title TEXT,
@@ -3034,14 +3039,10 @@ CREATE TABLE IF NOT EXISTS public.subject_resources (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. Promo Banners
-CREATE TABLE IF NOT EXISTS public.promo_banners (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  image_url TEXT NOT NULL,
-  link TEXT,
-  location TEXT DEFAULT 'home',
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- 4. Ensure ID Defaults (Fix for existing tables)
+ALTER TABLE public.free_resources ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE public.subject_resources ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE public.promo_banners ALTER COLUMN id SET DEFAULT gen_random_uuid();
 
 -- 7. RPC Functions
 CREATE OR REPLACE FUNCTION increment_xp(user_id text, amount int)
@@ -3064,17 +3065,26 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 8. Policies (Read-All)
+-- 8. Policies (Idempotent)
 ALTER TABLE public.promo_banners ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Read Banners" ON public.promo_banners;
 CREATE POLICY "Public Read Banners" ON public.promo_banners FOR SELECT USING (true);
-ALTER TABLE public.free_resources ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public Read Free" ON public.free_resources FOR SELECT USING (true);
-ALTER TABLE public.subject_resources ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public Read Resources" ON public.subject_resources FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admin All Banners" ON public.promo_banners;
+CREATE POLICY "Admin All Banners" ON public.promo_banners FOR ALL USING (true);
 
--- 9. Storage Buckets (Optional: Run if you get "Bucket not found")
--- NOTE: If these fail in SQL Editor, go to Supabase Dashboard -> Storage and create them manually.
--- Set them to PUBLIC.
+ALTER TABLE public.free_resources ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Read Free" ON public.free_resources;
+CREATE POLICY "Public Read Free" ON public.free_resources FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admin All Free" ON public.free_resources;
+CREATE POLICY "Admin All Free" ON public.free_resources FOR ALL USING (true);
+
+ALTER TABLE public.subject_resources ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Read Resources" ON public.subject_resources;
+CREATE POLICY "Public Read Resources" ON public.subject_resources FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admin All Resources" ON public.subject_resources;
+CREATE POLICY "Admin All Resources" ON public.subject_resources FOR ALL USING (true);
+
+-- 9. Storage Buckets
 INSERT INTO storage.buckets (id, name, public) 
 VALUES ('banners', 'banners', true),
        ('resource-covers', 'resource-covers', true),
@@ -3082,7 +3092,9 @@ VALUES ('banners', 'banners', true),
 ON CONFLICT (id) DO NOTHING;
 
 -- Allow Public Access to these buckets
+DROP POLICY IF EXISTS "Public Access" ON storage.objects;
 CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING ( bucket_id IN ('banners', 'resource-covers', 'free-resources') );
+DROP POLICY IF EXISTS "Public Upload" ON storage.objects;
 CREATE POLICY "Public Upload" ON storage.objects FOR INSERT WITH CHECK ( bucket_id IN ('banners', 'resource-covers', 'free-resources') );
                           `;
                           navigator.clipboard.writeText(sql.trim());
