@@ -32,7 +32,7 @@ export const dataBridge = {
    * This bridges your Firebase login users into your Supabase database
    */
   async syncProfile(uid: string, profileData: any) {
-    if (!supabase || !uid || uid === 'GUEST') return;
+    if (!supabase || !uid || uid === 'GUEST' || uid === 'undefined' || uid === 'null') return;
     try {
       await withTimeout(
         supabase
@@ -50,11 +50,11 @@ export const dataBridge = {
             unlocked_classes: profileData.unlockedClasses || [],
             updated_at: new Date().toISOString()
           }, { onConflict: 'id' }),
-        5000,
+        15000,
         'Profile Sync'
       );
     } catch (err) {
-      console.error("Profile sync failed:", err);
+      console.warn("Profile sync was slow but continuing:", err);
     }
   },
 
@@ -73,7 +73,7 @@ export const dataBridge = {
             .select('*')
             .eq('id', uid)
             .maybeSingle(),
-          6000,
+          15000,
           'Profile Fetch'
         );
         
@@ -97,32 +97,39 @@ export const dataBridge = {
 
            // MERGE: Search for any approved individual purchases linked by email
            if (result.email) {
-             const { data: emailPurchases } = await supabase
-               .from('purchase_requests')
-               .select('resource_id, plan_id')
-               .eq('email', result.email)
-               .eq('status', 'approved');
+             const purchaseRes: any = await withTimeout(
+               supabase.from('purchase_requests').select('resource_id, plan_id').eq('email', result.email).eq('status', 'approved'),
+               5000,
+               'Purchase Sync'
+             ).catch(() => ({ data: [] }));
+             
+             const emailPurchases = purchaseRes?.data || [];
              
              if (emailPurchases && emailPurchases.length > 0) {
-               const emailRes = emailPurchases.filter(p => !!p.resource_id).map(p => p.resource_id);
+               const emailRes = emailPurchases.filter((p: any) => !!p.resource_id).map((p: any) => p.resource_id);
                result.unlockedResources = Array.from(new Set([...result.unlockedResources, ...emailRes]));
                
                // If any purchase is for a master pack or premium sub
-               if (emailPurchases.some(p => p.plan_id === 'plus_sub' || p.plan_id === 'monthly_sub')) {
+               if (emailPurchases.some((p: any) => p.plan_id === 'plus_sub' || p.plan_id === 'monthly_sub')) {
                  result.isPremium = true;
                }
              }
            }
         }
       } catch (err) {
-        console.warn("Supabase profile fetch failed:", err);
+        console.warn("Supabase profile fetch failed or timed out:", err);
       }
     }
 
-    // 2. Try Firestore and MERGE
+    // 2. Try Firestore and MERGE with strict timeout and quiet failure
     try {
-      const userDoc = await getDoc(doc(db, 'users', uid));
-      if (userDoc.exists()) {
+      const userDoc = await withTimeout(
+        getDoc(doc(db, 'users', uid)),
+        4000,
+        'Firestore Profile Fetch'
+      ) as any;
+
+      if (userDoc && userDoc.exists()) {
         const userData = userDoc.data();
         if (!result) {
           result = {
@@ -147,7 +154,8 @@ export const dataBridge = {
         }
       }
     } catch (err) {
-      console.warn("Firestore profile fetch failed:", err);
+      // Quietly log Firestore failure so it doesn't break the app flow
+      console.warn("Firestore profile sync skipped (offline or slow):", err);
     }
 
     return result;
@@ -400,11 +408,15 @@ export const dataBridge = {
     // 1. Try Supabase First (Truth source, no limits)
     if (supabase) {
       try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('is_premium')
-          .eq('id', uid)
-          .maybeSingle();
+        const { data } = await withTimeout(
+          supabase
+            .from('profiles')
+            .select('is_premium')
+            .eq('id', uid)
+            .maybeSingle(),
+          5000,
+          'Supabase Premium Check'
+        ) as any;
         
         if (data?.is_premium) return true;
 
@@ -422,18 +434,22 @@ export const dataBridge = {
       }
     }
 
-    // 2. Fallback to Firestore only if Supabase didn't confirm
+    // 2. Fallback to Firestore with shorter timeout
     try {
-      const userDoc = await getDoc(doc(db, 'users', uid));
-      if (userDoc.exists() && userDoc.data()?.isPremium) return true;
+      const userDoc = await withTimeout(
+        getDoc(doc(db, 'users', uid)),
+        3000,
+        'Firestore Premium Check'
+      ) as any;
+      if (userDoc?.exists() && userDoc.data()?.isPremium) return true;
       
       if (email) {
         const q = query(collection(db, 'purchase_requests'), where('email', '==', email), where('status', '==', 'approved'), limit(1));
-        const snap = await getDocs(q);
-        if (!snap.empty) return true;
+        const snap = await withTimeout(getDocs(q), 3000, 'Firestore Purchase Check') as any;
+        if (snap && !snap.empty) return true;
       }
     } catch (err) {
-      console.warn("Firestore premium check failed:", err);
+      console.warn("Firestore premium check skipped:", err);
     }
 
     return false;
@@ -1499,7 +1515,7 @@ export const dataBridge = {
   },
 
   async recordStoryUnlock(uid: string, resourceId: string, templateId: string, aiMetadata: any) {
-    if (!supabase || !uid || uid === 'GUEST') return { success: false };
+    if (!supabase || !uid || uid === 'GUEST' || uid === 'undefined') return { success: false };
     try {
       // 1. Record the unlock
       const { error: unlockError } = await supabase

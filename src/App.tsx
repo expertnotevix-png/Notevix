@@ -11,12 +11,16 @@ import { Zap } from 'lucide-react';
 
 const CACHED_USER_KEY = 'notevix_user_profile_v1';
 
-const lazyWithRetry = (componentImport: () => Promise<any>) => 
+const lazyWithRetry = (componentImport: () => Promise<any>, retriesLeft = 2) => 
   lazy(async () => {
     try {
       return await componentImport();
     } catch (error: any) {
-      console.error("Lazy load failed:", error);
+      if (retriesLeft > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        return (lazyWithRetry(componentImport, retriesLeft - 1) as any)._result;
+      }
+      console.error("Lazy load failed after retries:", error);
       throw error;
     }
   });
