@@ -30,7 +30,7 @@ import { StoryUnlockModal } from '../components/StoryUnlockModal';
 
 export default function Home({ user }: HomeProps) {
   const navigate = useNavigate();
-  const [selectedClass, setSelectedClass] = useState<string | null>(user.class_level || user.class || null);
+  const [selectedClass, setSelectedClass] = useState<string>(user.class_level || user.class || '10');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [freeResources, setFreeResources] = useState<any[]>([]);
   const [unlockedIds, setUnlockedIds] = useState<string[]>([]);
@@ -199,13 +199,19 @@ export default function Home({ user }: HomeProps) {
           {classes.map((cls) => (
             <button
               key={cls}
+              id={cls === '10' ? 'class-10-tab' : undefined}
               onClick={() => handleClassSelect(cls)}
-              className={`py-4 rounded-2xl font-bold transition-all ${
+              className={`py-4 rounded-2xl font-bold transition-all relative ${
                 selectedClass === cls
                   ? 'purple-gradient text-white shadow-lg shadow-purple-500/30 font-black'
                   : 'glass-card text-gray-400 font-bold'
               }`}
             >
+              {cls === '10' && (
+                <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-yellow-400 text-[7px] text-black px-2 py-0.5 rounded-full font-black tracking-tighter shadow-xl whitespace-nowrap">
+                  MOST POPULAR
+                </div>
+              )}
               Class {cls}
             </button>
           ))}

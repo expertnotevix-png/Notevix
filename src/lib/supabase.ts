@@ -59,14 +59,7 @@ export const supabase = (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUr
  *   updated_at TIMESTAMPTZ DEFAULT NOW()
  * );
  * 
- * -- Ensure columns exist if table already exists
- * ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS class_level TEXT DEFAULT '10';
- * ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT false;
- * ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS unlocked_resources TEXT[] DEFAULT '{}';
- * ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS unlocked_classes TEXT[] DEFAULT '{}';
- * ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS saved_notes TEXT[] DEFAULT '{}';
- * 
- * -- 2. User Points Table
+ * -- 2. User Points Table (user_id is TEXT)
  * CREATE TABLE IF NOT EXISTS public.user_points (
  *   user_id TEXT PRIMARY KEY, -- Firebase UID
  *   total_points INTEGER DEFAULT 0,
@@ -76,69 +69,60 @@ export const supabase = (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUr
  *   last_updated TIMESTAMPTZ DEFAULT NOW()
  * );
  * 
- * -- 3. Free Resources
- * CREATE TABLE IF NOT EXISTS public.free_resources (
+ * -- 3. Posts (author_id is TEXT)
+ * CREATE TABLE IF NOT EXISTS public.posts (
  *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
- *   subject TEXT NOT NULL,
- *   class_level TEXT NOT NULL,
- *   description TEXT,
- *   drive_link TEXT NOT NULL,
- *   cover_url TEXT,
- *   created_at TIMESTAMPTZ DEFAULT NOW()
- * );
- * 
- * -- 4. Subject Resources (Premium)
- * CREATE TABLE IF NOT EXISTS public.subject_resources (
- *   id TEXT PRIMARY KEY,
- *   subject TEXT NOT NULL,
- *   class TEXT NOT NULL,
+ *   author_id TEXT NOT NULL,
  *   title TEXT,
- *   description TEXT,
- *   price NUMERIC DEFAULT 0,
- *   drive_link TEXT,
- *   cover_url TEXT,
- *   features JSONB DEFAULT '[]',
- *   is_free BOOLEAN DEFAULT false,
- *   created_at TIMESTAMPTZ DEFAULT NOW(),
- *   updated_at TIMESTAMPTZ DEFAULT NOW()
- * );
- * 
- * -- 6. Verified Payments Table
- * CREATE TABLE IF NOT EXISTS public.verified_payments (
- *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
- *   transaction_id TEXT UNIQUE NOT NULL,
- *   phone_number TEXT,
- *   amount NUMERIC,
+ *   content TEXT,
  *   subject TEXT,
+ *   upvotes INTEGER DEFAULT 0,
+ *   downvotes INTEGER DEFAULT 0,
  *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
  * 
- * -- 7. Purchase Requests
- * CREATE TABLE IF NOT EXISTS public.purchase_requests (
+ * -- 4. Replies (author_id is TEXT)
+ * CREATE TABLE IF NOT EXISTS public.replies (
  *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
- *   user_id TEXT, 
- *   email TEXT,
- *   whatsapp TEXT,
- *   transaction_id TEXT UNIQUE NOT NULL,
- *   amount NUMERIC,
- *   plan_id TEXT,
- *   plan_name TEXT,
+ *   post_id UUID REFERENCES public.posts(id),
+ *   author_id TEXT NOT NULL,
+ *   content TEXT,
+ *   created_at TIMESTAMPTZ DEFAULT NOW()
+ * );
+ * 
+ * -- 5. Community Chat (user_id is TEXT)
+ * CREATE TABLE IF NOT EXISTS public.community_chat (
+ *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ *   user_id TEXT NOT NULL,
+ *   user_name TEXT,
+ *   message TEXT NOT NULL,
+ *   created_at TIMESTAMPTZ DEFAULT NOW()
+ * );
+ * 
+ * -- 6. Story Unlocks (user_id is TEXT)
+ * CREATE TABLE IF NOT EXISTS public.story_unlocks (
+ *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ *   user_id TEXT NOT NULL,
  *   resource_id TEXT,
+ *   template_id UUID,
  *   status TEXT DEFAULT 'pending',
  *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
  * 
- * -- 8. Promo Banners
- * CREATE TABLE IF NOT EXISTS public.promo_banners (
+ * -- 7. Schedules (user_id is TEXT)
+ * CREATE TABLE IF NOT EXISTS public.schedules (
  *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
- *   image_url TEXT NOT NULL,
- *   link TEXT,
- *   location TEXT DEFAULT 'home',
+ *   user_id TEXT NOT NULL,
+ *   title TEXT,
+ *   subject TEXT,
+ *   date TEXT,
+ *   time TEXT,
+ *   completed BOOLEAN DEFAULT false,
  *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
  * 
- * -- 9. RPC Functions
- * CREATE OR REPLACE FUNCTION increment_xp(user_id text, amount int)
+ * -- 8. RPC Functions (Updated for TEXT uids)
+ * CREATE OR REPLACE FUNCTION increment_xp(user_id TEXT, amount INT)
  * RETURNS void AS $$
  * BEGIN
  *   UPDATE public.profiles
@@ -148,7 +132,7 @@ export const supabase = (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUr
  * END;
  * $$ LANGUAGE plpgsql;
  * 
- * CREATE OR REPLACE FUNCTION increment_focus_minutes(user_id text, amount int)
+ * CREATE OR REPLACE FUNCTION increment_focus_minutes(user_id TEXT, amount INT)
  * RETURNS void AS $$
  * BEGIN
  *   UPDATE public.user_points
