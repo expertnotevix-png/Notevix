@@ -92,6 +92,9 @@ export const dataBridge = {
              planType: data.plan_type,
              unlockedResources: data.unlocked_resources || [],
              unlockedClasses: data.unlocked_classes || [],
+             referralCode: data.referral_code,
+             referredBy: data.referred_by,
+             referralCount: data.referral_count || 0,
              streak: { currentCount: data.streak || 0 }
            };
 
@@ -1353,6 +1356,64 @@ export const dataBridge = {
   /**
    * Referrals Logic
    */
+  async validateReferralCode(code: string) {
+    if (!supabase || !code) return null;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, referral_code')
+        .eq('referral_code', code.toUpperCase())
+        .single();
+      
+      if (error) return null;
+      return data;
+    } catch (err) {
+      console.error("Referral code validation failed:", err);
+      return null;
+    }
+  },
+
+  async applyReferralCode(userId: string, code: string) {
+    if (!supabase || !userId || !code) return { success: false, message: 'Invalid request' };
+    
+    try {
+      const recruiter = await this.validateReferralCode(code);
+      if (!recruiter) return { success: false, message: 'Invalid referral code' };
+      if (recruiter.id === userId) return { success: false, message: 'You cannot refer yourself' };
+
+      // Check if user already reached their referral limit or already has a recruiter
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('referred_by')
+        .eq('id', userId)
+        .single();
+      
+      if (profile?.referred_by) return { success: false, message: 'Referral already applied' };
+
+      // Update current user
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ referred_by: recruiter.id })
+        .eq('id', userId);
+      
+      if (profileError) throw profileError;
+
+      // Update recruiter and insert history
+      await supabase.rpc('increment_referral_count', { recruiter_id: recruiter.id });
+      
+      await supabase.from('referrals').insert([{
+        referrer_id: recruiter.id,
+        referred_user_id: userId,
+        is_verified: true
+      }]);
+
+      return { success: true, recruiterName: recruiter.full_name };
+    } catch (err: any) {
+      console.error("Apply referral failed:", err);
+      return { success: false, message: 'Failed to apply referral' };
+    }
+  },
+
   async trackReferral(referrerId: string, referredUserId: string) {
     if (!supabase || !referrerId || !referredUserId || referrerId === referredUserId || referrerId === 'GUEST' || referredUserId === 'GUEST') return;
     

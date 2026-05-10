@@ -243,12 +243,23 @@ export default function App() {
             localStorage.setItem(CACHED_USER_KEY, JSON.stringify(mergedProfile));
             localStorage.setItem(CACHED_USER_KEY + '_time', Date.now().toString());
 
-            // Referral Tracking
-            const referredBy = localStorage.getItem('referredBy');
-            if (referredBy && referredBy !== firebaseUser.uid) {
-               dataBridge.trackReferral(referredBy, firebaseUser.uid);
-               localStorage.removeItem('referredBy');
+            // New Referral Code Logic
+            const pendingCode = localStorage.getItem('pendingReferralCode');
+            // Only try to apply if user doesn't already have a recruiter recorded in DB
+            if (pendingCode && !mergedProfile.referredBy && pendingCode !== mergedProfile.referralCode) {
+               console.log("Applying pending referral code:", pendingCode);
+               const result = await dataBridge.applyReferralCode(firebaseUser.uid, pendingCode);
+               if (result.success) {
+                 console.log("Referral applied successfully!");
+                 // Refresh profile after apply
+                 const updatedProfile = await dataBridge.getProfile(firebaseUser.uid);
+                 if (updatedProfile) setUser({ ...mergedProfile, ...updatedProfile });
+               }
+               localStorage.removeItem('pendingReferralCode');
             }
+            
+            // Cleanup legacy referral tracking
+            localStorage.removeItem('referredBy');
 
             // SYNC BACK TO SUPABASE (Ensure Supabase has the latest merged data from Firestore fallback)
             dataBridge.syncProfile(firebaseUser.uid, mergedProfile).catch(e => console.warn("Update sync failed:", e));

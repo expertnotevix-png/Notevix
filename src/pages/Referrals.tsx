@@ -29,8 +29,10 @@ export default function Referrals({ user }: ReferralsProps) {
   const [stats, setStats] = useState({ count: 0, verifiedCount: 0 });
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [codeCopied, setCodeCopied] = useState(false);
 
-  const referralLink = `${window.location.origin}?ref=${user?.uid || 'guest'}`;
+  const referralLink = `${window.location.origin}/login?code=${user?.referralCode || ''}`;
+  const referralCode = user?.referralCode || 'NOTLOADED';
 
   useEffect(() => {
     if (user && user.uid !== 'GUEST') {
@@ -41,6 +43,7 @@ export default function Referrals({ user }: ReferralsProps) {
   const fetchStats = async () => {
     if (!user) return;
     setLoading(true);
+    // Prefer profiles data for accurate count
     const s = await dataBridge.getReferralStats(user.uid);
     setStats(s);
     setLoading(false);
@@ -53,14 +56,37 @@ export default function Referrals({ user }: ReferralsProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const copyCode = () => {
+    navigator.clipboard.writeText(referralCode);
+    setCodeCopied(true);
+    toast.success("Referral code copied!");
+    setTimeout(() => setCodeCopied(false), 2000);
+  };
+
   const shareViaWhatsApp = () => {
-    const text = `Hey! Check out NoteVix for premium study resources. Sign up using my link and we both get benefits: ${referralLink}`;
+    const text = `Hey! Check out NoteVix for premium study resources. Sign up using my referral code ${referralCode} or via my link: ${referralLink}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const shareViaTwitter = () => {
-    const text = `Get the best premium notes and study resources on NoteVix! Use my link to sign up: ${referralLink} #Education #NoteVix`;
+    const text = `Get the best premium notes and study resources on NoteVix! Use my code ${referralCode} to sign up: ${referralLink} #Education #NoteVix`;
     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const [enteredCode, setEnteredCode] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleRedeemCode = async () => {
+    if (!user || user.uid === 'GUEST' || !enteredCode) return;
+    setSubmitting(true);
+    const result = await dataBridge.applyReferralCode(user.uid, enteredCode);
+    setSubmitting(false);
+    if (result.success) {
+      toast.success(`Success! Referred by ${result.recruiterName}`);
+      window.location.reload(); 
+    } else {
+      toast.error(result.message);
+    }
   };
 
   const shareViaInstagram = () => {
@@ -106,27 +132,45 @@ export default function Referrals({ user }: ReferralsProps) {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-[#0f0f0f] border border-white/5 rounded-[2.5rem] p-8 space-y-8 relative overflow-hidden group"
+        className="bg-[#0f0f0f] border border-white/5 rounded-[2.5rem] p-8 space-y-8 relative overflow-hidden group shadow-2xl shadow-indigo-500/5 transition-all hover:border-white/10"
       >
         <div className="absolute top-0 right-0 p-8 opacity-5 -scale-x-100">
             <Award className="w-32 h-32" />
         </div>
 
-        <div className="space-y-4 relative z-10">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.3em]">Your Referral Link</p>
-            <TrendingUp className="w-4 h-4 text-emerald-400 opacity-50" />
-          </div>
-          <div className="flex gap-2">
-            <div className="flex-1 bg-black/40 border border-white/10 rounded-2xl p-4 text-xs font-mono text-gray-400 overflow-hidden text-ellipsis whitespace-nowrap">
-              {referralLink}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.3em]">Your Invite Code</p>
             </div>
-            <button 
-              onClick={copyLink}
-              className="bg-white text-black p-4 rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-xl"
-            >
-              {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
-            </button>
+            <div className="flex gap-2">
+              <div className="flex-1 bg-black/40 border border-white/10 rounded-2xl p-4 text-xl font-black text-indigo-400 tracking-[0.3em] flex items-center justify-center">
+                {referralCode}
+              </div>
+              <button 
+                onClick={copyCode}
+                className="bg-indigo-600 text-white p-4 rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-xl shadow-indigo-600/20"
+              >
+                {codeCopied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.3em]">Quick Share Link</p>
+            </div>
+            <div className="flex gap-2">
+              <div className="flex-1 bg-black/40 border border-white/10 rounded-2xl p-4 text-[10px] font-mono text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap flex items-center">
+                {referralLink}
+              </div>
+              <button 
+                onClick={copyLink}
+                className="bg-white/5 border border-white/10 text-white p-4 rounded-2xl hover:bg-white/10 active:scale-95 transition-all"
+              >
+                {copied ? <Check className="w-5 h-5 text-emerald-400" /> : <Share2 className="w-5 h-5" />}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -225,6 +269,34 @@ export default function Referrals({ user }: ReferralsProps) {
           </div>
         )}
       </div>
+
+      {/* Rules Notice */}
+      {!user.referredBy && (
+        <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-8 space-y-4">
+           <div className="flex items-center gap-2">
+             <Gift className="w-4 h-4 text-indigo-400" />
+             <h4 className="text-xs font-black uppercase tracking-widest text-gray-300">Got a referral code?</h4>
+           </div>
+           <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">If a friend invited you, enter their code below to support them!</p>
+           <div className="flex gap-2">
+             <input 
+               type="text" 
+               placeholder="ENTER CODE" 
+               value={enteredCode}
+               onChange={e => setEnteredCode(e.target.value.toUpperCase())}
+               disabled={submitting}
+               className="flex-1 bg-black/40 border border-white/10 rounded-2xl p-4 text-xs font-black tracking-widest text-white placeholder:text-gray-700 focus:border-indigo-500/50 outline-none transition-all"
+             />
+             <button 
+               onClick={handleRedeemCode}
+               disabled={submitting || !enteredCode}
+               className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-6 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+             >
+               {submitting ? '...' : 'CLAIM'}
+             </button>
+           </div>
+        </div>
+      )}
 
       {/* Rules Notice */}
       <div className="p-6 rounded-[2rem] bg-amber-500/5 border border-amber-500/10 flex gap-4">

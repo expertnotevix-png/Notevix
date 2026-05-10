@@ -22,7 +22,16 @@ export default function Login() {
   }, []);
   const [copied, setCopied] = useState(false);
   const [showAgreedError, setShowAgreedError] = useState(false);
+  const [referralCode, setReferralCode] = useState('');
   const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const ref = searchParams.get('ref') || searchParams.get('code');
+    if (ref) {
+      setReferralCode(ref.toUpperCase());
+      localStorage.setItem('pendingReferralCode', ref.toUpperCase());
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     localStorage.setItem('login_agreed', agreed.toString());
@@ -196,6 +205,24 @@ export default function Login() {
               )}
 
               <div className="flex flex-col gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Referral Code (Optional)</label>
+                    {referralCode && <span className="text-[9px] text-indigo-400 font-bold items-center flex gap-1 animate-pulse"><Check size={8}/> Applied</span>}
+                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="E.G. RAJ7821" 
+                    value={referralCode}
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase();
+                      setReferralCode(val);
+                      localStorage.setItem('pendingReferralCode', val);
+                    }}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-sm font-bold placeholder:text-gray-700 focus:border-indigo-500/50 transition-all text-center tracking-widest"
+                  />
+                </div>
+
                 <div 
                   onClick={() => setAgreed(!agreed)}
                   className="flex items-start gap-3 cursor-pointer group p-2 rounded-xl hover:bg-white/5 transition-colors"

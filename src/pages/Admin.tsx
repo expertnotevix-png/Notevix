@@ -2973,6 +2973,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   unlocked_resources TEXT[] DEFAULT '{}',
   unlocked_classes TEXT[] DEFAULT '{}',
   saved_notes TEXT[] DEFAULT '{}',
+  referral_code TEXT UNIQUE,
+  referred_by TEXT,
+  referral_count INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -2983,6 +2986,41 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS xp INTEGER DEFAULT 0;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT false;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS unlocked_resources TEXT[] DEFAULT '{}';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS unlocked_classes TEXT[] DEFAULT '{}';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS referral_code TEXT UNIQUE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS referred_by TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS referral_count INTEGER DEFAULT 0;
+
+-- Function for referral codes
+CREATE OR REPLACE FUNCTION generate_unique_referral_code()
+RETURNS TEXT AS $$
+DECLARE
+  new_code TEXT;
+  done BOOLEAN DEFAULT FALSE;
+BEGIN
+  WHILE NOT done LOOP
+    new_code := upper(substring(md5(random()::text) from 1 for 7));
+    IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE referral_code = new_code) THEN
+      done := TRUE;
+    END IF;
+  END LOOP;
+  RETURN new_code;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION set_referral_code()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.referral_code IS NULL THEN
+    NEW.referral_code := generate_unique_referral_code();
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_set_referral_code ON public.profiles;
+CREATE TRIGGER trigger_set_referral_code
+BEFORE INSERT ON public.profiles
+FOR EACH ROW EXECUTE FUNCTION set_referral_code();
 
 -- 2. User Points Table (Leaderboard/Study)
 CREATE TABLE IF NOT EXISTS public.user_points (
@@ -3062,6 +3100,16 @@ BEGIN
   SET total_minutes = COALESCE(total_minutes, 0) + amount,
       last_updated = NOW()
   WHERE user_id = user_id;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION increment_referral_count(recruiter_id text)
+RETURNS void AS $$
+BEGIN
+  UPDATE public.profiles
+  SET referral_count = COALESCE(referral_count, 0) + 1,
+      updated_at = NOW()
+  WHERE id = recruiter_id;
 END;
 $$ LANGUAGE plpgsql;
 
