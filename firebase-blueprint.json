@@ -14,9 +14,6 @@
         "savedNotes": { "type": "array", "items": { "type": "string" } },
         "totalFocusMinutes": { "type": "number" },
         "totalPoints": { "type": "number" },
-        "referralCode": { "type": "string" },
-        "referredBy": { "type": "string" },
-        "referralCount": { "type": "number" },
         "isPremium": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" }
       },

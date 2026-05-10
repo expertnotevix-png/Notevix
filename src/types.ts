@@ -17,9 +17,6 @@ export interface UserProfile {
   totalPoints: number;
   streakCount?: number;
   lastActive?: string;
-  referralCode: string;
-  referredBy?: string;
-  referralCount: number;
   isPremium: boolean;
   planType?: string;
   unlockedClasses?: string[];

@@ -77,24 +77,8 @@ export default function Profile({ user, setUser }: { user: UserProfile, setUser:
     { icon: Send, label: 'Telegram', handle: 'NoteVix Official', url: 'https://t.me/NoteVix', color: 'text-blue-400' },
   ];
 
-  const referralLink = `${window.location.origin}/login?ref=${user.referralCode}`;
-
-  const copyReferral = () => {
-    navigator.clipboard.writeText(referralLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const shareReferral = () => {
-    if (navigator.share) {
-      navigator.share({
-        title: 'Join NoteVix',
-        text: 'Unlock premium CBSE notes by joining NoteVix using my link!',
-        url: referralLink,
-      });
-    } else {
-      copyReferral();
-    }
+  const handleClassSelection = (cls: string) => {
+    updateClass(cls);
   };
 
   const downloadQR = () => {
@@ -209,26 +193,6 @@ export default function Profile({ user, setUser }: { user: UserProfile, setUser:
           </div>
         </div>
       </div>
-
-      {/* Referral System */}
-      <button 
-        onClick={() => navigate('/referrals')}
-        className="w-full glass-card p-6 rounded-[2.5rem] border-indigo-500/20 bg-indigo-500/5 hover:bg-indigo-500/10 transition-all group flex items-center justify-between"
-      >
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 bg-indigo-500/20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-            <Gift className="w-8 h-8 text-indigo-400" />
-          </div>
-          <div className="text-left">
-            <h3 className="font-black uppercase tracking-tight text-lg italic">Earn Free <span className="text-indigo-400">Ebooks</span></h3>
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Refer 3 friends & unlock Premium Access</p>
-          </div>
-        </div>
-        <div className="flex flex-col items-center gap-1">
-          <div className="bg-indigo-500 text-white px-3 py-1 rounded-full text-[10px] font-black tracking-widest">JOIN</div>
-          <ChevronRight className="w-5 h-5 text-indigo-400 group-hover:translate-x-1 transition-transform" />
-        </div>
-      </button>
 
       {/* Class Selection */}
       <div className="space-y-4">

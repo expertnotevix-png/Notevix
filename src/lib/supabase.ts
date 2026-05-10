@@ -76,16 +76,7 @@ export const supabase = (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUr
  *   last_updated TIMESTAMPTZ DEFAULT NOW()
  * );
  * 
- * -- 3. Referrals Table
- * CREATE TABLE IF NOT EXISTS public.referrals (
- *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
- *   referrer_id TEXT NOT NULL, 
- *   referred_user_id TEXT NOT NULL UNIQUE,
- *   is_verified BOOLEAN DEFAULT TRUE,
- *   created_at TIMESTAMPTZ DEFAULT NOW()
- * );
- * 
- * -- 4. Free Resources
+ * -- 3. Free Resources
  * CREATE TABLE IF NOT EXISTS public.free_resources (
  *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  *   subject TEXT NOT NULL,
@@ -96,7 +87,7 @@ export const supabase = (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUr
  *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
  * 
- * -- 5. Subject Resources (Premium)
+ * -- 4. Subject Resources (Premium)
  * CREATE TABLE IF NOT EXISTS public.subject_resources (
  *   id TEXT PRIMARY KEY,
  *   subject TEXT NOT NULL,

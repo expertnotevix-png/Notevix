@@ -108,7 +108,6 @@ const ChapterList = lazyWithRetry(() => import('./pages/ChapterList'));
 const NoteView = lazyWithRetry(() => import('./pages/NoteView'));
 const Admin = lazyWithRetry(() => import('./pages/Admin'));
 const Leaderboard = lazyWithRetry(() => import('./pages/Leaderboard'));
-const Referrals = lazyWithRetry(() => import('./pages/Referrals'));
 const Schedule = lazyWithRetry(() => import('./pages/Schedule'));
 const Notifications = lazyWithRetry(() => import('./pages/Notifications'));
 const PrivacyPolicy = lazyWithRetry(() => import('./pages/PrivacyPolicy'));
@@ -201,8 +200,6 @@ export default function App() {
           notificationsEnabled: true,
           totalFocusMinutes: 0,
           totalPoints: 0,
-          referralCode: 'SYNCING',
-          referralCount: 0,
           isPremium: isAdmin, // Admin is always premium
           unlockedResources: [],
           unlockedClasses: [],
@@ -243,23 +240,9 @@ export default function App() {
             localStorage.setItem(CACHED_USER_KEY, JSON.stringify(mergedProfile));
             localStorage.setItem(CACHED_USER_KEY + '_time', Date.now().toString());
 
-            // New Referral Code Logic
-            const pendingCode = localStorage.getItem('pendingReferralCode');
-            // Only try to apply if user doesn't already have a recruiter recorded in DB
-            if (pendingCode && !mergedProfile.referredBy && pendingCode !== mergedProfile.referralCode) {
-               console.log("Applying pending referral code:", pendingCode);
-               const result = await dataBridge.applyReferralCode(firebaseUser.uid, pendingCode);
-               if (result.success) {
-                 console.log("Referral applied successfully!");
-                 // Refresh profile after apply
-                 const updatedProfile = await dataBridge.getProfile(firebaseUser.uid);
-                 if (updatedProfile) setUser({ ...mergedProfile, ...updatedProfile });
-               }
-               localStorage.removeItem('pendingReferralCode');
-            }
-            
             // Cleanup legacy referral tracking
             localStorage.removeItem('referredBy');
+            localStorage.removeItem('pendingReferralCode');
 
             // SYNC BACK TO SUPABASE (Ensure Supabase has the latest merged data from Firestore fallback)
             dataBridge.syncProfile(firebaseUser.uid, mergedProfile).catch(e => console.warn("Update sync failed:", e));
@@ -481,7 +464,6 @@ export default function App() {
               <Route path="/" element={user ? <Home user={user} /> : <Landing />} />
               <Route path="/explore" element={<Explore />} />
               <Route path="/leaderboard" element={<Leaderboard user={user} />} />
-              <Route path="/referrals" element={<Referrals user={user} />} />
               <Route path="/schedule" element={user ? <Schedule user={user} /> : <Navigate to="/login" />} />
               <Route path="/notifications" element={user ? <Notifications user={user} /> : <Navigate to="/login" />} />
               <Route path="/saved" element={user ? <Saved user={user} /> : <Navigate to="/login" />} />

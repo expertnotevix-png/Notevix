@@ -32,15 +32,11 @@ export default function Home({ user }: HomeProps) {
   const [selectedClass, setSelectedClass] = useState<string | null>(user.class_level || user.class || null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [freeResources, setFreeResources] = useState<any[]>([]);
-  const [referralStats, setReferralStats] = useState({ count: 0, verifiedCount: 0 });
   const [loadingResources, setLoadingResources] = useState(false);
 
   useEffect(() => {
     if (selectedClass) {
       fetchClassResources(selectedClass);
-    }
-    if (user && user.uid !== 'GUEST') {
-      fetchReferralStats();
     }
   }, [selectedClass, user]);
 
@@ -49,11 +45,6 @@ export default function Home({ user }: HomeProps) {
     const resources = await dataBridge.getFreeResources(cls);
     setFreeResources(resources || []);
     setLoadingResources(false);
-  };
-
-  const fetchReferralStats = async () => {
-    const stats = await dataBridge.getReferralStats(user.uid);
-    setReferralStats(stats);
   };
 
   const handleClassSelect = async (cls: string) => {
@@ -243,7 +234,7 @@ export default function Home({ user }: HomeProps) {
                       >
                         Sign up free to get this ebook
                       </button>
-                    ) : referralStats.verifiedCount >= 3 ? (
+                    ) : (
                       <a 
                         href={resource.drive_link}
                         target="_blank"
@@ -252,30 +243,6 @@ export default function Home({ user }: HomeProps) {
                       >
                         <Gift className="w-5 h-5" /> Download Free PDF
                       </a>
-                    ) : (
-                      <div className="space-y-6">
-                        <button 
-                          onClick={() => navigate('/referrals')}
-                          className="w-full py-6 bg-indigo-600 text-white rounded-[2.5rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-indigo-600/30 hover:bg-indigo-500 transition-all active:scale-95 border-b-4 border-indigo-800 flex items-center justify-center gap-3"
-                        >
-                          <Gift className="w-5 h-5" /> Get Free — Invite 3 Friends
-                        </button>
-
-                        {/* Progress Mini Tracker */}
-                        <div className="bg-white/5 border border-white/10 rounded-3xl p-6 space-y-4">
-                          <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
-                            <span className="text-gray-500">Program Progress</span>
-                            <span className="text-indigo-400">{referralStats.verifiedCount}/3 Friends Invited</span>
-                          </div>
-                          <div className="h-3 w-full bg-black/40 rounded-full border border-white/5 p-0.5">
-                            <motion.div 
-                              initial={{ width: 0 }}
-                              animate={{ width: `${(referralStats.verifiedCount / 3) * 100}%` }}
-                              className="h-full bg-gradient-to-r from-indigo-500 to-indigo-400 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)]"
-                            />
-                          </div>
-                        </div>
-                      </div>
                     )}
 
                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em] text-center italic">
@@ -294,38 +261,6 @@ export default function Home({ user }: HomeProps) {
           )}
         </motion.div>
       )}
-
-      {/* Referral & Free Ebook Banner */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={() => navigate('/referrals')}
-        className="bg-emerald-600/10 border border-emerald-500/30 rounded-3xl p-6 relative overflow-hidden group cursor-pointer"
-      >
-        <div className="relative z-10 flex items-center justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Gift className="w-5 h-5 text-emerald-400" />
-              <h3 className="font-black text-lg text-white uppercase italic">Class 10th combo pack</h3>
-            </div>
-            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Invite 3 friends to unlock legally!</p>
-            <div className="flex items-center gap-2 mt-3">
-               <span className="px-3 py-1 bg-emerald-500 text-black text-[9px] font-black rounded uppercase tracking-tighter">Limited Time</span>
-               <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest flex items-center gap-1 ml-2">
-                 Join Program <ChevronRight className="w-3 h-3" />
-               </span>
-            </div>
-          </div>
-          <div className="w-16 h-16 bg-emerald-500/20 rounded-2xl flex items-center justify-center border border-emerald-500/20">
-            <Users className="w-8 h-8 text-emerald-400" />
-          </div>
-        </div>
-        {/* Decorative elements */}
-        <div className="absolute -left-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
-          <Award className="w-24 h-24" />
-        </div>
-      </motion.div>
 
       <MotivationalCarousel />
       
