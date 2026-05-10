@@ -516,5 +516,50 @@ export const geminiService = {
       if (error.name === 'AbortError') throw new Error("NVIDIA Direct timed out. Engine is overloaded.");
       throw error;
     }
+  },
+
+  async verifyStoryScreenshot(imageData: string, template: { title: string, link: string }): Promise<{ isValid: boolean, confidence: number, raw: any }> {
+    const system = `You are a social media story verification AI. 
+    Analyze the uploaded screenshot to verify if the user has posted the required NoteVix story.
+    
+    CRITERIA:
+    1. Platform: Must be Instagram or Snapchat UI visible (icons, buttons, layout).
+    2. Logo/Branding: The NoteVix template provided (title: "${template.title}") must be visible in the story.
+    3. Link: A website link to "${template.link}" must be visible as a link sticker or bio mention if applicable.
+    4. Authenticity: Ensure it's a real screenshot, not a blank image, and the story UI elements are genuine.
+    
+    Return ONLY JSON: { "isValid": boolean, "confidence": number, "explanation": "string", "brandingFound": boolean, "linkFound": boolean }`;
+    
+    const prompt = "Verify if this screenshot shows an active Instagram/Snapchat story with NoteVix content and the correct link.";
+
+    try {
+      const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
+      if (!apiKey) throw new Error("Verification engine offline. Missing API Key.");
+
+      const ai = new GoogleGenAI({ apiKey });
+      const base64Data = imageData.includes(',') ? imageData.split(',')[1] : imageData;
+      
+      const response = await ai.models.generateContent({
+        model: GEMINI_MODEL,
+        config: { 
+          systemInstruction: system,
+          responseMimeType: "application/json"
+        },
+        contents: [
+          { text: prompt },
+          { inlineData: { data: base64Data, mimeType: "image/jpeg" } }
+        ]
+      });
+
+      const result = JSON.parse(response.text || "{}");
+      return {
+        isValid: Boolean(result.isValid && result.confidence >= 0.7),
+        confidence: Number(result.confidence || 0),
+        raw: result
+      };
+    } catch (error: any) {
+      console.error("Story Verification AI Failure:", error);
+      throw error;
+    }
   }
 };

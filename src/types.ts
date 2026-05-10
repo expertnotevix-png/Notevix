@@ -27,6 +27,34 @@ export interface UserProfile {
   onboardingCompleted?: boolean;
 }
 
+export interface StoryTemplate {
+  id: string;
+  title: string;
+  description?: string;
+  imageUrl: string;
+  link: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface StoryUnlock {
+  id: string;
+  userId: string;
+  resourceId: string;
+  templateId: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+}
+
+export interface VerificationLog {
+  id: string;
+  userId: string;
+  resourceId: string;
+  confidenceScore: number;
+  rawAiResponse: string;
+  createdAt: string;
+}
+
 export interface Message {
   id: string;
   userId: string;

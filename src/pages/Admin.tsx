@@ -22,7 +22,7 @@ import {
 import { supabase } from '../lib/supabase';
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources' | 'valid_payments' | 'verified_payments' | 'settings' | 'banners' | 'free_notes'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources' | 'valid_payments' | 'verified_payments' | 'settings' | 'banners' | 'free_notes' | 'story_unlocks'>('analytics');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -53,12 +53,18 @@ export default function Admin() {
   const [isAddingBanner, setIsAddingBanner] = useState(false);
   const [bannerFormData, setBannerFormData] = useState({ imageUrl: '', link: '', location: 'home' });
   const [bannerImagePreview, setBannerImagePreview] = useState<string | null>(null);
+  const [storyTemplates, setStoryTemplates] = useState<any[]>([]);
+  const [isAddingStoryTemplate, setIsAddingStoryTemplate] = useState(false);
+  const [storyTemplateForm, setStoryTemplateForm] = useState({ title: '', description: '', link: '', imageUrl: '' });
+  const [storyTemplateImagePreview, setStoryTemplateImagePreview] = useState<string | null>(null);
+  const [storyStats, setStoryStats] = useState({ totalUnlocks: 0 });
   const [isUploading, setIsUploading] = useState(false);
   const lastAdminAiAttemptRef = useRef<number>(0);
   
   const coverInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const freeNoteInputRef = useRef<HTMLInputElement>(null);
+  const templateInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   // One-time Storage Cleanup Logic
@@ -120,7 +126,131 @@ export default function Admin() {
     if (activeTab === 'verified_payments') {
       fetchVerifiedPayments();
     }
+    if (activeTab === 'story_unlocks') {
+      fetchStoryTemplates();
+      fetchStoryStats();
+    }
   }, [activeTab]);
+
+  const fetchStoryTemplates = async () => {
+    setLoading(true);
+    try {
+      const data = await dataBridge.getStoryTemplates(false);
+      setStoryTemplates(data);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load story templates");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchStoryStats = async () => {
+    try {
+      const count = await dataBridge.getStoryUnlocksCount();
+      setStoryStats({ totalUnlocks: count });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleStoryTemplateImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('Image too large (Max 2MB)');
+        return;
+      }
+
+      setIsUploading(true);
+      const loadingToast = toast.loading("Uploading template to Supabase...");
+
+      try {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const img = new Image();
+          img.onload = async () => {
+            const canvas = document.createElement('canvas');
+            const MAX_SIZE = 1280;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+              if (width > MAX_SIZE) {
+                height *= MAX_SIZE / width;
+                width = MAX_SIZE;
+              }
+            } else {
+              if (height > MAX_SIZE) {
+                width *= MAX_SIZE / height;
+                height = MAX_SIZE;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            
+            if (ctx) {
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(img, 0, 0, width, height);
+            }
+            
+            const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+            if (blob) {
+              const uploadRes = await dataBridge.uploadImage(new File([blob], file.name, { type: 'image/jpeg' }), 'story-templates');
+              if (uploadRes.success && uploadRes.url) {
+                setStoryTemplateImagePreview(uploadRes.url);
+                toast.success("Template uploaded!", { id: loadingToast });
+              } else {
+                toast.error(`Upload failed: ${uploadRes.error}`, { id: loadingToast });
+              }
+            }
+            setIsUploading(false);
+          };
+          img.src = reader.result as string;
+        };
+        reader.readAsDataURL(file);
+      } catch (err) {
+        console.error("Template upload error:", err);
+        toast.error("Process failed", { id: loadingToast });
+        setIsUploading(false);
+      }
+    }
+  };
+
+  const handleAddStoryTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!storyTemplateForm.title || !storyTemplateImagePreview || !storyTemplateForm.link) {
+      toast.error("Title, Image and Link are required");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await dataBridge.addStoryTemplate({
+        title: storyTemplateForm.title,
+        description: storyTemplateForm.description,
+        link: storyTemplateForm.link,
+        imageUrl: storyTemplateImagePreview,
+        isActive: true
+      });
+      if (res.success) {
+        toast.success("Story Template Added!");
+        setIsAddingStoryTemplate(false);
+        setStoryTemplateForm({ title: '', description: '', link: '', imageUrl: '' });
+        setStoryTemplateImagePreview(null);
+        fetchStoryTemplates();
+      } else {
+        toast.error(res.error || "Failed to add template");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error saving story template");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchVerifiedPayments = async () => {
     setLoading(true);
@@ -1423,6 +1553,7 @@ export default function Admin() {
   const menuItems = [
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'banners', label: 'Promotion Banners', icon: LayoutDashboard },
+    { id: 'story_unlocks', label: 'Story Unlocks', icon: Instagram },
     { id: 'resources', label: 'Digital Library', icon: BookOpen },
     { id: 'free_notes', label: 'Free Notes', icon: Zap },
     { id: 'valid_payments', label: 'Verify Keys', icon: ShieldCheck },
@@ -1437,8 +1568,204 @@ export default function Admin() {
     { id: 'moderation', label: 'Moderation', icon: Shield },
   ];
 
+  const handleToggleStoryTemplate = async (id: string, current: boolean) => {
+    try {
+      const res = await dataBridge.updateStoryTemplate(id, { isActive: !current });
+      if (res) {
+        toast.success("Template status updated");
+        fetchStoryTemplates();
+      }
+    } catch (err) {
+      toast.error("Failed to update status");
+    }
+  };
+
+  const handleDeleteStoryTemplate = async (id: string) => {
+    if (!window.confirm("Delete this template?")) return;
+    try {
+      const res = await dataBridge.deleteStoryTemplate(id);
+      if (res) {
+        toast.success("Deleted successfully");
+        fetchStoryTemplates();
+      }
+    } catch (err) {
+      toast.error("Delete failed");
+    }
+  };
+
   const renderTabContent = () => {
     switch (activeTab) {
+      case 'story_unlocks':
+        return (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            {/* Stats Header */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="glass-card p-6 rounded-[2rem] bg-white/5 flex flex-col gap-2">
+                <div className="bg-indigo-500/10 w-10 h-10 rounded-2xl flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-indigo-500" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Total Unlocks</p>
+                  <p className="text-2xl font-black tabular-nums">{storyStats.totalUnlocks}</p>
+                </div>
+              </div>
+              <div className="glass-card p-6 rounded-[2rem] bg-white/5 flex flex-col gap-2">
+                <div className="bg-emerald-500/10 w-10 h-10 rounded-2xl flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Active Templates</p>
+                  <p className="text-2xl font-black tabular-nums">{storyTemplates.filter(t => t.is_active).length}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center bg-white/5 p-6 rounded-[2rem] border border-white/10">
+              <div>
+                <h3 className="text-xl font-black">Story Templates</h3>
+                <p className="text-xs text-gray-400">Manage promotional templates for social media sharing</p>
+              </div>
+              <button 
+                onClick={() => setIsAddingStoryTemplate(true)}
+                className="bg-indigo-600 hover:bg-indigo-500 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-indigo-600/20 active:scale-95"
+              >
+                <Plus className="w-4 h-4" /> Add Template
+              </button>
+            </div>
+
+            {isAddingStoryTemplate && (
+              <div className="glass-card p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6 animate-in slide-in-from-top duration-500">
+                <div className="flex justify-between items-center">
+                  <h4 className="font-black text-xs uppercase tracking-[0.3em] text-indigo-400">New Story Template</h4>
+                  <button onClick={() => setIsAddingStoryTemplate(false)} className="p-2 hover:bg-white/5 rounded-full"><X className="w-4 h-4" /></button>
+                </div>
+                <form onSubmit={handleAddStoryTemplate} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-white/10 rounded-[2.5rem] bg-white/5 hover:bg-white/10 transition-all cursor-pointer group"
+                    onClick={() => templateInputRef.current?.click()}>
+                    {storyTemplateImagePreview ? (
+                      <div className="relative aspect-video w-full rounded-2xl overflow-hidden border border-white/10">
+                        <img src={storyTemplateImagePreview} className="w-full h-full object-cover" />
+                        <button 
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setStoryTemplateImagePreview(null);
+                          }}
+                          className="absolute top-2 right-2 p-2 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-red-500 transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-3">
+                        <Instagram className="w-10 h-10 text-indigo-500 group-hover:scale-110 transition-transform duration-500" />
+                        <div className="text-center">
+                          <p className="text-xs font-black uppercase tracking-widest text-indigo-400">Upload Template Image</p>
+                          <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold">Max 2MB (Portrait/Story Ratio)</p>
+                        </div>
+                      </div>
+                    )}
+                    <input 
+                      type="file"
+                      ref={templateInputRef}
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleStoryTemplateImageChange}
+                    />
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2 mb-2 block">Template Title</label>
+                      <input 
+                        required
+                        value={storyTemplateForm.title}
+                        onChange={(e) => setStoryTemplateForm({...storyTemplateForm, title: e.target.value})}
+                        placeholder="e.g., Free Class 10 Notes Challenge"
+                        className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-indigo-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2 mb-2 block">Website Link to Include</label>
+                      <input 
+                        required
+                        value={storyTemplateForm.link}
+                        onChange={(e) => setStoryTemplateForm({...storyTemplateForm, link: e.target.value})}
+                        placeholder="e.g., bit.ly/notevix-free"
+                        className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-indigo-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2 mb-2 block">Short Description</label>
+                      <textarea 
+                        value={storyTemplateForm.description}
+                        onChange={(e) => setStoryTemplateForm({...storyTemplateForm, description: e.target.value})}
+                        placeholder="Instructions for the user..."
+                        className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-sm h-24 outline-none focus:border-indigo-500 resize-none"
+                      />
+                    </div>
+                    <button 
+                      type="submit"
+                      disabled={loading || isUploading}
+                      className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-indigo-600/30 hover:bg-indigo-500 transition-all flex items-center justify-center gap-2"
+                    >
+                      {loading ? 'Creating...' : <><Save className="w-5 h-5" /> Deploy Template</>}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {storyTemplates.map((template) => (
+                <div key={template.id} className="glass-card overflow-hidden rounded-[2.5rem] bg-white/5 border border-white/10 flex flex-col group">
+                  <div className="aspect-[9/16] relative">
+                    <img src={template.imageUrl} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={template.title} />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60" />
+                    <div className="absolute top-4 right-4 flex gap-2">
+                      <button 
+                        onClick={() => handleToggleStoryTemplate(template.id, template.isActive)}
+                        className={`p-3 rounded-2xl backdrop-blur-md transition-all shadow-xl ${
+                          template.isActive ? 'bg-emerald-500/80 text-white shadow-emerald-500/20' : 'bg-gray-500/80 text-white'
+                        }`}
+                      >
+                        <Zap className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteStoryTemplate(template.id)}
+                        className="p-3 bg-red-500/80 backdrop-blur-md text-white rounded-2xl shadow-xl shadow-red-500/20 hover:bg-red-500"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="absolute bottom-6 left-6 right-6">
+                      <h4 className="font-bold text-white text-lg line-clamp-1">{template.title}</h4>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">{template.link}</p>
+                    </div>
+                  </div>
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${
+                        template.isActive ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/5' : 'border-gray-500/30 text-gray-500 bg-gray-500/5'
+                      }`}>
+                        {template.isActive ? 'ACTIVE' : 'INACTIVE'}
+                      </span>
+                      <span className="text-[10px] text-gray-500 font-bold">{new Date(template.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 line-clamp-2 italic">"{template.description}"</p>
+                  </div>
+                </div>
+              ))}
+              {storyTemplates.length === 0 && !loading && (
+                <div className="md:col-span-2 lg:col-span-3 py-20 text-center glass-card rounded-[2.5rem] bg-white/5 border border-dashed border-white/10">
+                   <Instagram className="w-12 h-12 text-gray-700 mx-auto opacity-20 mb-4" />
+                   <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest italic">No templates deployed yet.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
       case 'banners':
         return (
           <div className="space-y-6 animate-in fade-in duration-500">
@@ -3028,7 +3355,37 @@ CREATE TABLE IF NOT EXISTS public.subject_resources (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. Ensure ID Defaults (Fix for existing tables)
+-- 4. Story Unlock System
+CREATE TABLE IF NOT EXISTS public.story_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  description TEXT,
+  image_url TEXT NOT NULL,
+  link TEXT NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.story_unlocks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL,
+  resource_id TEXT NOT NULL,
+  template_id UUID REFERENCES public.story_templates(id),
+  status TEXT DEFAULT 'approved',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, resource_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.verification_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL,
+  resource_id TEXT NOT NULL,
+  confidence_score NUMERIC,
+  raw_ai_response TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. Ensure ID Defaults (Fix for existing tables)
 ALTER TABLE public.free_resources ALTER COLUMN id SET DEFAULT gen_random_uuid();
 ALTER TABLE public.subject_resources ALTER COLUMN id SET DEFAULT gen_random_uuid();
 ALTER TABLE public.promo_banners ALTER COLUMN id SET DEFAULT gen_random_uuid();
@@ -3073,18 +3430,31 @@ CREATE POLICY "Public Read Resources" ON public.subject_resources FOR SELECT USI
 DROP POLICY IF EXISTS "Admin All Resources" ON public.subject_resources;
 CREATE POLICY "Admin All Resources" ON public.subject_resources FOR ALL USING (true);
 
+ALTER TABLE public.story_templates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Read Templates" ON public.story_templates;
+CREATE POLICY "Public Read Templates" ON public.story_templates FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admin All Templates" ON public.story_templates;
+CREATE POLICY "Admin All Templates" ON public.story_templates FOR ALL USING (true);
+
+ALTER TABLE public.story_unlocks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Owner Read Unlocks" ON public.story_unlocks;
+CREATE POLICY "Owner Read Unlocks" ON public.story_unlocks FOR SELECT USING (auth.uid()::text = user_id);
+DROP POLICY IF EXISTS "Admin All Unlocks" ON public.story_unlocks;
+CREATE POLICY "Admin All Unlocks" ON public.story_unlocks FOR ALL USING (true);
+
 -- 9. Storage Buckets
 INSERT INTO storage.buckets (id, name, public) 
 VALUES ('banners', 'banners', true),
        ('resource-covers', 'resource-covers', true),
-       ('free-resources', 'free-resources', true)
+       ('free-resources', 'free-resources', true),
+       ('story-templates', 'story-templates', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- Allow Public Access to these buckets
 DROP POLICY IF EXISTS "Public Access" ON storage.objects;
-CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING ( bucket_id IN ('banners', 'resource-covers', 'free-resources') );
+CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING ( bucket_id IN ('banners', 'resource-covers', 'free-resources', 'story-templates') );
 DROP POLICY IF EXISTS "Public Upload" ON storage.objects;
-CREATE POLICY "Public Upload" ON storage.objects FOR INSERT WITH CHECK ( bucket_id IN ('banners', 'resource-covers', 'free-resources') );
+CREATE POLICY "Public Upload" ON storage.objects FOR INSERT WITH CHECK ( bucket_id IN ('banners', 'resource-covers', 'free-resources', 'story-templates') );
                           `;
                           navigator.clipboard.writeText(sql.trim());
                           toast.success("SQL Copied! Paste this in Supabase SQL Editor to fix all database errors.");

@@ -26,13 +26,17 @@ import { PromoCarousel } from '../components/PromoCarousel';
 const classes = ['8', '9', '10'];
 
 import { dataBridge } from '../services/dataBridge';
+import { StoryUnlockModal } from '../components/StoryUnlockModal';
 
 export default function Home({ user }: HomeProps) {
   const navigate = useNavigate();
   const [selectedClass, setSelectedClass] = useState<string | null>(user.class_level || user.class || null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [freeResources, setFreeResources] = useState<any[]>([]);
+  const [unlockedIds, setUnlockedIds] = useState<string[]>([]);
   const [loadingResources, setLoadingResources] = useState(false);
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [activeUnlockResource, setActiveUnlockResource] = useState<{ id: string, subject: string, title: string } | null>(null);
 
   useEffect(() => {
     if (selectedClass) {
@@ -44,7 +48,38 @@ export default function Home({ user }: HomeProps) {
     setLoadingResources(true);
     const resources = await dataBridge.getFreeResources(cls);
     setFreeResources(resources || []);
+    
+    if (user.uid !== 'GUEST') {
+      // Actually check against provided profile unlockedResources first for speed
+      setUnlockedIds(user.unlockedResources || []);
+    }
     setLoadingResources(false);
+  };
+
+  const handleDownloadClick = async (resource: any) => {
+    if (user.uid === 'GUEST') {
+      navigate('/login');
+      return;
+    }
+
+    const isUnlocked = unlockedIds.includes(resource.id);
+    
+    if (isUnlocked) {
+      window.open(resource.drive_link, '_blank');
+    } else {
+      setActiveUnlockResource({
+        id: resource.id,
+        subject: resource.subject,
+        title: `${resource.subject} Combo Pack`
+      });
+      setShowUnlockModal(true);
+    }
+  };
+
+  const handleUnlockSuccess = () => {
+    if (activeUnlockResource) {
+      setUnlockedIds(prev => [...prev, activeUnlockResource.id]);
+    }
   };
 
   const handleClassSelect = async (cls: string) => {
@@ -227,23 +262,20 @@ export default function Home({ user }: HomeProps) {
                   </div>
 
                   <div className="p-10 pt-8 space-y-8">
-                    {user.uid === 'GUEST' ? (
-                      <button 
-                        onClick={() => navigate('/login')}
-                        className="w-full py-5 bg-white text-black rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all"
-                      >
-                        Sign up free to get this ebook
-                      </button>
-                    ) : (
-                      <a 
-                        href={resource.drive_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-3 w-full py-6 bg-emerald-500 text-black rounded-[2.5rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-emerald-500/30 hover:bg-emerald-400 transition-all active:scale-95 border-b-4 border-emerald-700"
-                      >
-                        <Gift className="w-5 h-5" /> Download Free PDF
-                      </a>
-                    )}
+                    <button 
+                      onClick={() => handleDownloadClick(resource)}
+                      className={`flex items-center justify-center gap-3 w-full py-6 rounded-[2.5rem] font-black text-sm uppercase tracking-widest shadow-2xl transition-all active:scale-95 border-b-4 ${
+                        unlockedIds.includes(resource.id) 
+                          ? 'bg-emerald-500 text-black shadow-emerald-500/30 hover:bg-emerald-400 border-emerald-700' 
+                          : 'bg-indigo-600 text-white shadow-indigo-600/30 hover:bg-indigo-500 border-indigo-800'
+                      }`}
+                    >
+                      {unlockedIds.includes(resource.id) ? (
+                        <><Gift className="w-5 h-5" /> Download Free PDF</>
+                      ) : (
+                        <><Zap className="w-5 h-5" /> Unlock with Story</>
+                      )}
+                    </button>
 
                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em] text-center italic">
                       Includes Previous Year Questions • Notes • Solutions
@@ -476,6 +508,16 @@ export default function Home({ user }: HomeProps) {
             })}
           </div>
         </div>
+      )}
+
+      {activeUnlockResource && (
+        <StoryUnlockModal
+          isOpen={showUnlockModal}
+          onClose={() => setShowUnlockModal(false)}
+          user={user}
+          resource={activeUnlockResource}
+          onSuccess={handleUnlockSuccess}
+        />
       )}
     </div>
   );

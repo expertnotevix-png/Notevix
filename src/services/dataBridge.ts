@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import { db, checkQuotaLock } from '../components/firebase';
 import { supabase } from '../lib/supabase';
-import { SubjectResource } from '../types';
+import { SubjectResource, StoryTemplate, StoryUnlock, VerificationLog, UserProfile } from '../types';
 
 const withTimeout = async <T>(promiseOrThenable: any, timeoutMs: number = 8000, context: string = 'Operation'): Promise<T> => {
   return Promise.race([
@@ -1445,6 +1445,163 @@ export const dataBridge = {
     } catch (err: any) {
       console.error("Upload failed:", err);
       return { success: false, error: err.message };
+    }
+  },
+
+  /**
+   * Story Unlock System
+   */
+  async getStoryTemplates(onlyActive: boolean = true) {
+    if (!supabase) return [];
+    try {
+      let query = supabase
+        .from('story_templates')
+        .select('*');
+      
+      if (onlyActive) {
+        query = query.eq('is_active', true);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return (data || []).map(t => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        imageUrl: t.image_url,
+        link: t.link,
+        isActive: t.is_active,
+        createdAt: t.created_at
+      } as StoryTemplate));
+    } catch (err) {
+      console.error("Fetch templates failed:", err);
+      return [];
+    }
+  },
+
+  async isResourceUnlocked(uid: string, resourceId: string) {
+    if (!supabase || !uid || uid === 'GUEST') return false;
+    try {
+      const { data, error } = await supabase
+        .from('story_unlocks')
+        .select('id')
+        .eq('user_id', uid)
+        .eq('resource_id', resourceId)
+        .maybeSingle();
+      
+      if (error) throw error;
+      return !!data;
+    } catch (err) {
+      console.error("Check unlock failed:", err);
+      return false;
+    }
+  },
+
+  async recordStoryUnlock(uid: string, resourceId: string, templateId: string, aiMetadata: any) {
+    if (!supabase || !uid || uid === 'GUEST') return { success: false };
+    try {
+      // 1. Record the unlock
+      const { error: unlockError } = await supabase
+        .from('story_unlocks')
+        .insert([{
+          user_id: uid,
+          resource_id: resourceId,
+          template_id: templateId,
+          status: 'approved'
+        }]);
+
+      if (unlockError) throw unlockError;
+
+      // 2. Record verification log
+      await supabase.from('verification_logs').insert([{
+        user_id: uid,
+        resource_id: resourceId,
+        confidence_score: aiMetadata.confidence,
+        raw_ai_response: JSON.stringify(aiMetadata.raw)
+      }]);
+
+      // 3. Update profile to include this resource in unlockedResources
+      const { data: profile } = await supabase.from('profiles').select('unlocked_resources').eq('id', uid).single();
+      const currentUnlocked = profile?.unlocked_resources || [];
+      if (!currentUnlocked.includes(resourceId)) {
+        await supabase.from('profiles').update({
+          unlocked_resources: [...currentUnlocked, resourceId]
+        }).eq('id', uid);
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      console.error("Record unlock failed:", err);
+      return { success: false, error: err.message };
+    }
+  },
+
+  // Admin Methods for Templates
+  async addStoryTemplate(template: Partial<StoryTemplate>) {
+    if (!supabase) return { success: false };
+    try {
+      const { data, error } = await supabase
+        .from('story_templates')
+        .insert([{
+          title: template.title,
+          description: template.description,
+          image_url: template.imageUrl,
+          link: template.link,
+          is_active: true
+        }])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return { success: true, data };
+    } catch (err: any) {
+      console.error("Add template failed:", err);
+      return { success: false, error: err.message };
+    }
+  },
+
+  async updateStoryTemplate(id: string, updates: Partial<StoryTemplate>) {
+    if (!supabase) return { success: false };
+    try {
+      const { error } = await supabase
+        .from('story_templates')
+        .update({
+          title: updates.title,
+          description: updates.description,
+          image_url: updates.imageUrl,
+          link: updates.link,
+          is_active: updates.isActive
+        })
+        .eq('id', id);
+      
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      console.error("Update template failed:", err);
+      return { success: false, error: err.message };
+    }
+  },
+
+  async deleteStoryTemplate(id: string) {
+    if (!supabase) return false;
+    try {
+      const { error } = await supabase.from('story_templates').delete().eq('id', id);
+      if (error) throw error;
+      return true;
+    } catch (err) {
+      console.error("Delete template failed:", err);
+      return false;
+    }
+  },
+
+  async getStoryUnlocksCount() {
+    if (!supabase) return 0;
+    try {
+      const { count } = await supabase.from('story_unlocks').select('*', { count: 'exact', head: true });
+      return count || 0;
+    } catch (err) {
+       return 0;
     }
   }
 };
