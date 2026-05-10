@@ -55,6 +55,17 @@ export default function NoteView({ user, setUser }: { user: UserProfile | null, 
     }
   };
 
+  const getDirectDownloadLink = (link: string) => {
+    if (!link) return '';
+    if (link.includes('drive.google.com')) {
+      const match = link.match(/[-\w]{25,}/);
+      if (match) {
+        return `https://drive.google.com/uc?export=download&id=${match[0]}`;
+      }
+    }
+    return link;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex flex-col p-6 space-y-6">
@@ -259,10 +270,11 @@ export default function NoteView({ user, setUser }: { user: UserProfile | null, 
             initial={{ y: 100 }}
             animate={{ y: 0 }}
             whileTap={{ scale: 0.95 }}
+            onClick={() => window.open(getDirectDownloadLink((chapter as any).driveLink || (chapter as any).fullNotesUrl || ''), '_blank')}
             className="flex-1 bg-black text-white font-black py-5 rounded-[2rem] shadow-2xl flex items-center justify-center gap-3 text-sm tracking-widest active:bg-gray-900 uppercase"
           >
             <Download className="w-5 h-5 text-purple-400" />
-            Download Guide
+            Save to Gallery (PDF)
           </motion.button>
         </div>
       )}

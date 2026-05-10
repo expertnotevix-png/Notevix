@@ -30,7 +30,7 @@ import { StoryUnlockModal } from '../components/StoryUnlockModal';
 
 export default function Home({ user }: HomeProps) {
   const navigate = useNavigate();
-  const [selectedClass, setSelectedClass] = useState<string>(user.class_level || user.class || '10');
+  const [selectedClass, setSelectedClass] = useState<string>('10');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [freeResources, setFreeResources] = useState<any[]>([]);
   const [unlockedIds, setUnlockedIds] = useState<string[]>([]);
@@ -56,6 +56,17 @@ export default function Home({ user }: HomeProps) {
     setLoadingResources(false);
   };
 
+  const getDirectDownloadLink = (link: string) => {
+    if (!link) return '';
+    if (link.includes('drive.google.com')) {
+      const match = link.match(/[-\w]{25,}/);
+      if (match) {
+        return `https://drive.google.com/uc?export=download&id=${match[0]}`;
+      }
+    }
+    return link;
+  };
+
   const handleDownloadClick = async (resource: any) => {
     if (user.uid === 'GUEST') {
       navigate('/login');
@@ -65,7 +76,8 @@ export default function Home({ user }: HomeProps) {
     const isUnlocked = unlockedIds.includes(resource.id);
     
     if (isUnlocked) {
-      window.open(resource.drive_link, '_blank');
+      const downloadLink = getDirectDownloadLink(resource.drive_link);
+      window.open(downloadLink, '_blank');
     } else {
       setActiveUnlockResource({
         id: resource.id,
@@ -277,7 +289,7 @@ export default function Home({ user }: HomeProps) {
                       }`}
                     >
                       {unlockedIds.includes(resource.id) ? (
-                        <><Gift className="w-5 h-5" /> Download Free PDF</>
+                        <><Gift className="w-5 h-5" /> Save to Gallery (PDF)</>
                       ) : (
                         <><Zap className="w-5 h-5" /> Unlock with Story</>
                       )}

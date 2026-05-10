@@ -71,7 +71,7 @@ const PREMIUM_PLANS = [
 ];
 
 export default function PremiumNotes({ user }: PremiumNotesProps) {
-  const [activeClass, setActiveClass] = useState<'8' | '9' | '10'>(user?.class as any || '10');
+  const [activeClass, setActiveClass] = useState<'8' | '9' | '10'>('10');
   const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
   const [resources, setResources] = useState<SubjectResource[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,6 +152,17 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       clearTimeout(startFetch);
     };
   }, [activeClass]);
+
+  const getDirectDownloadLink = (link: string) => {
+    if (!link) return '';
+    if (link.includes('drive.google.com')) {
+      const match = link.match(/[-\w]{25,}/);
+      if (match) {
+        return `https://drive.google.com/uc?export=download&id=${match[0]}`;
+      }
+    }
+    return link;
+  };
 
   const isUnlocked = (res: SubjectResource) => {
     // 0. Free resources are always unlocked
@@ -527,7 +538,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                           </div>
                         )}
                         <a 
-                          href={res.driveLink || res.fullNotesUrl} 
+                          href={getDirectDownloadLink(res.driveLink || res.fullNotesUrl || '')} 
                           target="_blank" 
                           rel="noopener noreferrer"
                           className={`w-full h-16 rounded-3xl flex items-center justify-center gap-4 font-black text-xs uppercase tracking-[0.3em] active:scale-95 transition-all shadow-2xl ${
@@ -537,7 +548,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                           }`}
                         >
                           <ExternalLink className="w-5 h-5" />
-                          {unlocked ? 'Open Library' : 'Open PDF (Locked)'}
+                          {unlocked ? 'Direct Download to Gallery' : 'Open PDF (Locked)'}
                         </a>
 
                         {!unlocked && (
