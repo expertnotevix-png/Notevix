@@ -360,7 +360,7 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
                           </div>
                         </div>
                         <div className="space-y-1">
-                          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] animate-pulse">Running Gemini Vision AI</p>
+                          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] animate-pulse">Running NVIDIA Vision AI</p>
                           <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Scanning NoteVix Branding...</p>
                         </div>
                       </div>
@@ -393,7 +393,17 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
                       className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl flex gap-3"
                     >
                       <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-                      <p className="text-[11px] font-bold text-red-500 leading-relaxed uppercase tracking-tight">{verificationResult.error}</p>
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-bold text-red-500 leading-relaxed uppercase tracking-tight">
+                          {verificationResult.error && verificationResult.error.includes("failed") 
+                            ? "Story verification failed. Please upload a valid story screenshot."
+                            : (verificationResult.error || "Story verification failed. Please upload a valid story screenshot.")
+                          }
+                        </p>
+                        {verificationResult.error && !verificationResult.error.includes("failed") && (
+                          <p className="text-[9px] text-red-400/60 font-medium uppercase tracking-widest">{verificationResult.error}</p>
+                        )}
+                      </div>
                     </motion.div>
                   )}
 

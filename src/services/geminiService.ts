@@ -533,25 +533,18 @@ export const geminiService = {
     const prompt = "Verify if this screenshot shows an active Instagram/Snapchat story with NoteVix content and the correct link.";
 
     try {
-      const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
-      if (!apiKey) throw new Error("Verification engine offline. Missing API Key.");
-
-      const ai = new GoogleGenAI({ apiKey });
-      const base64Data = imageData.includes(',') ? imageData.split(',')[1] : imageData;
+      // Use NVIDIA Vision for story verification (better rate limits and precision for vision tasks)
+      const res = await this.callNvidiaAPI(prompt, system, true, "meta/llama-3.2-11b-vision-instruct", 35000, imageData);
       
-      const response = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        config: { 
-          systemInstruction: system,
-          responseMimeType: "application/json"
-        },
-        contents: [
-          { text: prompt },
-          { inlineData: { data: base64Data, mimeType: "image/jpeg" } }
-        ]
-      });
+      let result;
+      try {
+        const cleaned = res.replace(/```json|```/g, '').trim();
+        result = JSON.parse(cleaned);
+      } catch (parseErr) {
+        console.error("Failed to parse NVIDIA response:", res);
+        throw new Error("Invalid response format from verification engine.");
+      }
 
-      const result = JSON.parse(response.text || "{}");
       return {
         isValid: Boolean(result.isValid && result.confidence >= 0.7),
         confidence: Number(result.confidence || 0),
@@ -559,6 +552,9 @@ export const geminiService = {
       };
     } catch (error: any) {
       console.error("Story Verification AI Failure:", error);
+      if (error.message?.includes("timed out")) {
+        throw new Error("Verification taking too long. Please ensure your net is stable or try a smaller screenshot.");
+      }
       throw error;
     }
   }
