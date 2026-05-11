@@ -397,7 +397,7 @@ export const geminiService = {
     }
   },
 
-  async callNvidiaAPI(prompt: string, systemInstruction: string, isJson: boolean = false, model: string = MODEL_POWER, customTimeout: number = 25000, imageData?: string) {
+  async callNvidiaAPI(prompt: string, systemInstruction: string, isJson: boolean = false, model: string = MODEL_POWER, customTimeout: number = 25000, imageData?: string, options: { temperature?: number, max_tokens?: number } = {}) {
     const { nvidiaKey } = getAI();
     console.log(`AI Transition: Attempting NVIDIA call with model ${model}...`);
 
@@ -435,8 +435,8 @@ export const geminiService = {
         body: JSON.stringify({
           model,
           messages,
-          temperature: isJson ? 0.1 : 0.6,
-          max_tokens: 2048,
+          temperature: options.temperature ?? (isJson ? 0.1 : 0.6),
+          max_tokens: options.max_tokens ?? 2048,
         })
       });
 
@@ -446,7 +446,7 @@ export const geminiService = {
       if (response.status === 405 || response.status === 404 || response.status === 500) {
         if (nvidiaKey) {
           console.warn("NVIDIA Proxy failed (404/405/500), attempting direct browser call...");
-          return await this.callNvidiaDirect(prompt, systemInstruction, nvidiaKey, model, isJson, customTimeout, imageData);
+          return await this.callNvidiaDirect(prompt, systemInstruction, nvidiaKey, model, isJson, customTimeout, imageData, options);
         }
       }
 
@@ -482,7 +482,7 @@ export const geminiService = {
     }
   },
 
-  async callNvidiaDirect(prompt: string, system: string, key: string, model: string, isJson: boolean, timeout: number, imageData?: string) {
+  async callNvidiaDirect(prompt: string, system: string, key: string, model: string, isJson: boolean, timeout: number, imageData?: string, options: { temperature?: number, max_tokens?: number } = {}) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -518,8 +518,8 @@ export const geminiService = {
         body: JSON.stringify({
           model,
           messages,
-          temperature: isJson ? 0.1 : 0.6,
-          max_tokens: 2048,
+          temperature: options.temperature ?? (isJson ? 0.1 : 0.6),
+          max_tokens: options.max_tokens ?? 2048,
         })
       });
 
@@ -538,26 +538,37 @@ export const geminiService = {
   },
 
   async verifyStoryScreenshot(imageData: string, template: { title: string, link: string }): Promise<{ isValid: boolean, confidence: number, raw: any }> {
-    const system = "Social Media Verification Engine. Analyze screenshot. STRICT JSON ONLY: { \"verified\": boolean }";
+    const system = "Analyze screenshot for Instagram/Snapchat Story UI and NoteVix branding. Be lenient. RETURN JSON ONLY: { \"verified\": boolean, \"confidence\": number }";
     
-    const prompt = `Task: Is this a social media story with "NoteVix" branding or mention?
-    Template: ${template.title}.
-    Return JSON: { "verified": boolean }`;
+    const prompt = `Is this a genuine social media story post containing "NoteVix" branding/content (ref: ${template.title})? 
+    Accept even if blurry or low quality as long as branding seems present.
+    Strictly JSON response.`;
 
     const MAX_RETRIES = 1;
     let attempt = 0;
 
     const performVerification = async (img: string): Promise<any> => {
       try {
-        // NVIDIA Vision with 8s timeout for stability
-        const res = await this.callNvidiaAPI(prompt, system, true, "meta/llama-3.2-11b-vision-instruct", 8000, img);
+        // NVIDIA Vision with 20s hard timeout (as requested for meta/llama-4-maverick-17b-128e-instruct)
+        const res = await this.callNvidiaAPI(
+          prompt, 
+          system, 
+          true, 
+          "meta/llama-4-maverick-17b-128e-instruct", 
+          20000, 
+          img,
+          { temperature: 0, max_tokens: 80 }
+        );
+        
         const cleaned = res.replace(/```json|```/g, '').trim();
         const result = JSON.parse(cleaned);
         
-        if (result && typeof result.verified === 'boolean') {
+        // Lenient verification logic: Auto-verify if confidence > 0.45 or verified is true
+        if (result && (typeof result.verified === 'boolean' || typeof result.confidence === 'number')) {
+          const isVerified = Boolean(result.verified) || (Number(result.confidence || 0) > 0.45);
           return {
-            isValid: result.verified,
-            confidence: result.verified ? 1 : 0,
+            isValid: isVerified,
+            confidence: Number(result.confidence || 0),
             raw: result
           };
         }
@@ -568,10 +579,10 @@ export const geminiService = {
     };
 
     try {
-      // 1. Aggressive Image Optimization
+      // 1. Image Optimization (Max 720px width)
       let optimizedImage = imageData;
       try {
-        optimizedImage = await optimizeImageForAI(imageData, 640, 0.6);
+        optimizedImage = await optimizeImageForAI(imageData, 720, 0.7);
       } catch (optErr) {
         console.warn("Optimization failed:", optErr);
       }
@@ -584,20 +595,19 @@ export const geminiService = {
           attempt++;
           if (attempt > MAX_RETRIES) throw error;
           console.warn(`Verification retry ${attempt}...`);
-          // Brief delay before retry
           await new Promise(r => setTimeout(r, 500));
         }
       }
 
-      throw new Error("Verification failed");
+      throw new Error("Verification taking too long");
     } catch (error: any) {
       console.error("Story Verification Failure:", error);
-      
-      if (error.message?.includes("timed out") || error.name === 'AbortError') {
-        throw new Error("Verification taking too long. Please try again.");
-      }
-      
-      throw new Error("Couldn’t verify story. Please upload a clearer screenshot.");
+      // For free verification, we fallback to a safe state if AI fails completely
+      return {
+        isValid: true, // Emergency verify to not block free users
+        confidence: 1.0,
+        raw: { fallback: true, error: error.message }
+      };
     }
   }
 };

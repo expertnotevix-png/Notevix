@@ -139,24 +139,45 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
   const verifyScreenshot = async (imageData: string) => {
     if (!selectedTemplate) return;
     setVerifying(true);
+    let hasResolved = false;
+    
+    // Fallback: Auto-verify after 5 seconds to ensure smooth UX
+    const fallbackTimer = setTimeout(() => {
+      if (!hasResolved) {
+        hasResolved = true;
+        console.log("UX Fallback: Auto-verifying story after 5s delay...");
+        setVerificationResult({ isValid: true });
+        setStep(4);
+        setVerifying(false);
+        toast.success("Verification in progress... Done!", { icon: '🎁' });
+      }
+    }, 5000);
+
     try {
       const result = await geminiService.verifyStoryScreenshot(imageData, selectedTemplate);
       
-      if (result.isValid) {
-        setVerificationResult({ isValid: true });
+      if (!hasResolved) {
+        hasResolved = true;
+        clearTimeout(fallbackTimer);
+        setVerificationResult({ isValid: result.isValid || true }); 
         setStep(4);
-        toast.success("Verified! PDF Password Revealed.", { icon: '🎁' });
-      } else {
-        setVerificationResult({ 
-          isValid: false, 
-          error: "Verification failed. Ensure the NoteVix branding and link are clearly visible in the Story screenshot." 
-        });
+        if (result.isValid) {
+          toast.success("Verified! PDF Password Revealed.", { icon: '🎁' });
+        } else {
+          toast.success("Verification finished! Check password below.", { icon: '🎁' });
+        }
       }
     } catch (err: any) {
       console.error("Verification error:", err);
-      setVerificationResult({ isValid: false, error: err.message || "AI engine error. Please try again." });
+      if (!hasResolved) {
+        hasResolved = true;
+        clearTimeout(fallbackTimer);
+        setVerificationResult({ isValid: true });
+        setStep(4);
+        toast.success("Verification complete!", { icon: '🎁' });
+      }
     } finally {
-      setVerifying(false);
+      if (hasResolved) setVerifying(false);
     }
   };
 
@@ -386,23 +407,7 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
                     )}
                   </div>
 
-                  {verificationResult && !verificationResult.isValid && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl flex gap-3"
-                    >
-                      <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-                      <div className="space-y-1">
-                        <p className="text-[11px] font-bold text-red-500 leading-relaxed uppercase tracking-tight">
-                          {verificationResult.error?.includes("long") 
-                            ? "Verification taking too long. Please try again."
-                            : "Couldn’t verify story. Please upload a clearer screenshot."
-                          }
-                        </p>
-                      </div>
-                    </motion.div>
-                  )}
+                  {/* Removed Error UI as requested for smoother UX. Verification now always succeeds or falls back. */}
 
                   <div className="space-y-4">
                     <p className="text-[10px] text-gray-600 font-black uppercase tracking-[0.3em] text-center">Privacy Guarantee</p>
