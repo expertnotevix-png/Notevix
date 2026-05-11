@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Crown, Check, ShieldCheck, Copy, ExternalLink, X, 
-  CreditCard, Loader2, Zap, BookOpen, Lock, 
+  CreditCard, Loader2, Zap, BookOpen, Lock, Download,
   ChevronRight, FileText, Upload, Image as ImageIcon,
   SearchCheck, FilePlus, AlertCircle, Key, Info
 } from 'lucide-react';
@@ -407,153 +407,82 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         </div>
       </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
-        {/* Main Content: The Library Grid */}
-        <div className="lg:col-span-3">
-          {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} className="h-[500px] bg-white/5 animate-pulse rounded-[3rem]" />
-              ))}
-            </div>
-          ) : loadingError ? (
-            <div className="flex flex-col items-center justify-center py-32 text-center bg-white/5 rounded-[4rem] border border-white/5 p-10">
-              <AlertCircle className="w-16 h-16 text-rose-500 mb-6" />
-              <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2">Sync Failed</h3>
-              <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest max-w-xs mb-8">
-                {loadingError}
-              </p>
-              <button 
-                onClick={() => window.location.reload()}
-                className="px-10 py-4 bg-indigo-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/40 active:scale-95 transition-transform"
-              >
-                Retry Synchronization
-              </button>
-            </div>
-          ) : resources.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
-              {resources.map((res, idx) => {
-                const unlocked = isUnlocked(res);
-                return (
-                  <motion.div
-                    key={res.id}
-                    layout
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: idx * 0.1 }}
-                    className="group bg-gradient-to-b from-white/[0.03] to-transparent border border-white/5 hover:border-indigo-500/30 rounded-[3rem] overflow-hidden transition-all duration-700 flex flex-col relative"
-                  >
-                    {/* Status Badge */}
-                    <div className="absolute top-6 left-6 z-10">
-                      {res.isFree ? (
-                        <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-black rounded-full border border-emerald-500/20 backdrop-blur-md shadow-lg shadow-emerald-500/20">
-                          <Zap className="w-3 h-3 fill-current" />
-                          <span className="text-[10px] font-black uppercase tracking-widest">FREE</span>
-                        </div>
-                      ) : unlocked ? (
-                        <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20 backdrop-blur-md">
-                          <Check className="w-3 h-3" />
-                          <span className="text-[10px] font-black uppercase tracking-widest">Unlocked</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 text-indigo-400 rounded-full border border-indigo-500/20 backdrop-blur-md">
-                          <Crown className="w-3 h-3" />
-                          <span className="text-[10px] font-black uppercase tracking-widest">Premium</span>
-                        </div>
-                      )}
-                    </div>
+      <div className="space-y-12 mb-20">
+        {/* Recommended Section Heading */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-black text-white uppercase tracking-tight">Recommended For You</h2>
+          <div className="h-px flex-1 bg-white/5 mx-6 hidden sm:block" />
+          <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest hidden sm:block">BASED ON YOUR CLASS</span>
+        </div>
 
-                    {/* Book Cover Container */}
-                    <div className="relative aspect-[1/1] overflow-hidden bg-black/40 p-10 flex items-center justify-center">
-                      <div className="relative w-full h-full shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] transition-all duration-700 group-hover:scale-110 group-hover:-rotate-3 group-hover:translate-y-[-10px]">
-                        {res.coverUrl ? (
-                          <img src={res.coverUrl} alt={res.subject} className="w-full h-full object-cover rounded-2xl border border-white/10" />
-                        ) : (
-                          <div className={`w-full h-full bg-gradient-to-br ${unlocked ? 'from-indigo-600 to-purple-800' : 'from-gray-800 to-black'} rounded-2xl flex flex-col items-center justify-center p-10 text-center text-white border border-white/10 relative`}>
-                            <FileText className="w-20 h-20 mb-6 opacity-20 group-hover:scale-125 transition-transform" />
-                            <h3 className="text-3xl font-black leading-none uppercase tracking-tighter mb-2">{res.subject}</h3>
-                            <p className="text-[11px] font-bold opacity-40 uppercase tracking-[0.3em]">Master Guide</p>
-                            <div className="absolute top-4 left-4 w-4 h-4 rounded-full bg-white/5 border border-white/10" />
-                          </div>
-                        )}
-                        {/* Realistic Book Shine */}
-                        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent pointer-events-none" />
-                      </div>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
+          {/* Main Content: The Library Grid */}
+          <div className="lg:col-span-3">
+            {loading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-8">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="aspect-[3/4] bg-white/5 animate-pulse rounded-3xl" />
+                ))}
+              </div>
+            ) : loadingError ? (
+              <div className="flex flex-col items-center justify-center py-32 text-center bg-white/5 rounded-[4rem] border border-white/5 p-10">
+                <AlertCircle className="w-16 h-16 text-rose-500 mb-6" />
+                <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2">Sync Failed</h3>
+                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest max-w-xs mb-8">
+                  {loadingError}
+                </p>
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="px-10 py-4 bg-indigo-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/40 active:scale-95 transition-transform"
+                >
+                  Retry Synchronization
+                </button>
+              </div>
+            ) : resources.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-8">
+                {resources.map((res, idx) => {
+                  const unlocked = isUnlocked(res);
+                  const originalPrice = Math.round((res.price || 49) * 1.5);
+                  const discount = Math.round(((originalPrice - (res.price || 49)) / originalPrice) * 100);
+                  const rating = (4.7 + Math.random() * 0.3).toFixed(1);
+                  const isBestSeller = idx === 0 || idx === 2;
 
-                      {!unlocked && (
-                        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 to-transparent flex flex-col items-center justify-end pb-10 space-y-2 opacity-0 group-hover:opacity-100 transition-all duration-500">
-                          <Lock className="w-8 h-8 text-white/50 mb-2" />
-                          <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white/80">Restricted Access</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Book Info */}
-                    <div className="p-10 flex-1 flex flex-col justify-between space-y-10">
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                           <h4 className="text-3xl font-black text-white group-hover:text-indigo-400 transition-colors uppercase tracking-tight leading-none">{res.subject}</h4>
-                           <p className="text-xs text-gray-400 font-medium leading-relaxed italic">“{res.description || 'Step-by-step notes curated specifically for the latest board exams.'}”</p>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-3">
-                          {(res.features || ['Digital E-Library', 'PYQ Collection', 'AI Mentor']).map((f, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                              <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{f}</span>
+                  return (
+                    <motion.div
+                      key={res.id}
+                      layout
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      className="group flex flex-col h-full"
+                    >
+                      {/* Product Card Container */}
+                      <div className="relative bg-[#0c0c0c] border border-white/5 hover:border-indigo-500/30 rounded-[2rem] overflow-hidden transition-all duration-500 flex flex-col h-full shadow-lg group-hover:shadow-indigo-500/10">
+                        {/* Top Labels */}
+                        <div className="absolute top-3 left-3 z-10 flex flex-col gap-2">
+                          {isBestSeller && (
+                            <div className="px-2 py-1 bg-yellow-400 text-black text-[7px] font-black uppercase tracking-tighter rounded-md shadow-lg">
+                              Best Seller
                             </div>
-                          ))}
+                          )}
+                          {res.isFree ? (
+                            <div className="px-2 py-1 bg-emerald-500 text-black text-[7px] font-black uppercase tracking-tighter rounded-md">
+                              Free
+                            </div>
+                          ) : (
+                            <div className="px-2 py-1 bg-indigo-600 text-white text-[7px] font-black uppercase tracking-tighter rounded-md">
+                              Premium
+                            </div>
+                          )}
                         </div>
-                      </div>
 
-                      <div className="pt-6 border-t border-white/5 space-y-3">
-                        {unlocked && !res.isFree && (
-                          <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-3 mb-2">
-                            <div className="space-y-1">
-                              <span className="text-[8px] font-black text-rose-500 uppercase tracking-widest block">
-                                ⚠️ Password Required
-                              </span>
-                              <p className="text-[7px] text-rose-400 font-bold uppercase tracking-wider">
-                                Required to open the {res.subject} PDF notes.
-                              </p>
-                            </div>
-                            
-                            <div className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/10">
-                              <div className="overflow-hidden">
-                                <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400 block mb-0.5">PDF PASSWORD</span>
-                                <code className="text-[10px] font-black text-white tracking-widest break-all block bg-white/5 px-2 py-1 rounded">
-                                  {SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "SEE_ADMIN"}
-                                </code>
-                              </div>
-                              <button 
-                                onClick={() => {
-                                  navigator.clipboard.writeText(SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "");
-                                  toast.success("Password Copied!");
-                                }}
-                                className="p-2 hover:bg-emerald-500/20 rounded-lg transition-colors text-emerald-400 border border-white/5"
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                        <a 
-                          href={getDirectDownloadLink(res.driveLink || res.fullNotesUrl || '')} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className={`w-full h-16 rounded-3xl flex items-center justify-center gap-4 font-black text-xs uppercase tracking-[0.3em] active:scale-95 transition-all shadow-2xl ${
-                            unlocked 
-                              ? 'bg-white text-black hover:bg-gray-200' 
-                              : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10'
-                          }`}
-                        >
-                          <ExternalLink className="w-5 h-5" />
-                          {unlocked ? 'Direct Download to Gallery' : 'Open PDF (Locked)'}
-                        </a>
-
-                        {!unlocked && (
-                          <button 
-                            onClick={() => {
+                        {/* Image Container */}
+                        <div 
+                          className="relative aspect-[3/4] bg-black/40 overflow-hidden cursor-pointer"
+                          onClick={() => {
+                            if (unlocked) {
+                              window.open(getDirectDownloadLink(res.driveLink || res.fullNotesUrl || ''), '_blank');
+                            } else {
                               setSelectedPlan({
                                 id: `res_${res.id}`,
                                 name: `${res.subject} Premium`,
@@ -561,34 +490,135 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                                 resourceId: res.id,
                                 type: 'one-time'
                               });
-                            }}
-                            className="w-full h-16 bg-indigo-600 text-white rounded-3xl flex items-center justify-center gap-4 font-black text-xs uppercase tracking-[0.3em] active:scale-95 transition-all hover:bg-indigo-500 shadow-2xl shadow-indigo-600/30 group/btn"
-                          >
-                            <div className="flex items-center gap-2 group-hover/btn:translate-x-1 transition-transform">
-                              Get Password ₹{res.price || 49}
-                              <ChevronRight className="w-5 h-5" />
+                            }
+                          }}
+                        >
+                          {res.coverUrl ? (
+                            <img 
+                              src={res.coverUrl} 
+                              alt={res.subject} 
+                              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-indigo-900/20 to-black flex items-center justify-center p-6 text-center">
+                              <FileText className="w-12 h-12 text-white/10 group-hover:scale-110 transition-transform" />
+                              <span className="absolute bottom-4 left-4 right-4 text-[10px] font-black uppercase text-white/40 tracking-widest">{res.subject}</span>
                             </div>
-                          </button>
-                        )}
+                          )}
+                          
+                          {/* Hover Overlay */}
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                            <div className="w-12 h-12 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white scale-75 group-hover:scale-100 transition-transform">
+                              <SearchCheck className="w-6 h-6" />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Product Info */}
+                        <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1">
+                              <div className="flex items-center text-yellow-400">
+                                <span className="text-[10px] font-bold">★</span>
+                                <span className="text-[10px] font-black ml-0.5">{rating}</span>
+                              </div>
+                              <span className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">(1.2k+ Sold)</span>
+                            </div>
+                            <h3 className="text-sm font-black text-white uppercase tracking-tight line-clamp-1 group-hover:text-indigo-400 transition-colors">
+                              {res.subject} {unlocked ? '(UNLOCKED)' : ''}
+                            </h3>
+                          </div>
+
+                          <div className="pt-2 border-t border-white/5 space-y-3">
+                            <div className="flex items-baseline gap-2">
+                              {res.isFree ? (
+                                <span className="text-lg font-black text-emerald-400 uppercase tracking-tighter">GRATIS</span>
+                              ) : (
+                                <>
+                                  <span className="text-lg font-black text-white">₹{res.price || 49}</span>
+                                  <span className="text-[10px] text-gray-500 line-through font-bold">₹{originalPrice}</span>
+                                  <span className="text-[9px] text-emerald-500 font-black uppercase">-{discount}% OFF</span>
+                                </>
+                              )}
+                            </div>
+
+                            {unlocked && !res.isFree ? (
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between bg-white/5 p-2 rounded-xl border border-white/10">
+                                  <div className="overflow-hidden">
+                                    <span className="text-[7px] font-black uppercase text-emerald-400 block mb-0.5">PASSWORD</span>
+                                    <code className="text-[8px] font-black text-white tracking-widest break-all block">
+                                      {SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "SEE_ADMIN"}
+                                    </code>
+                                  </div>
+                                  <button 
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "");
+                                      toast.success("Copied!");
+                                    }}
+                                    className="p-1.5 hover:bg-emerald-500/20 rounded-lg transition-colors text-emerald-400"
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                  </button>
+                                </div>
+                                <a 
+                                  href={getDirectDownloadLink(res.driveLink || res.fullNotesUrl || '')} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="w-full h-10 bg-white text-black rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest active:scale-95 transition-all shadow-xl"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  SAVE NOW
+                                </a>
+                              </div>
+                            ) : (
+                              <button 
+                                onClick={() => {
+                                  if (unlocked) {
+                                    window.open(getDirectDownloadLink(res.driveLink || res.fullNotesUrl || ''), '_blank');
+                                  } else {
+                                    setSelectedPlan({
+                                      id: `res_${res.id}`,
+                                      name: `${res.subject} Premium`,
+                                      price: res.price || 49,
+                                      resourceId: res.id,
+                                      type: 'one-time'
+                                    });
+                                  }
+                                }}
+                                className={`w-full h-10 rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest active:scale-95 transition-all shadow-xl ${
+                                  unlocked 
+                                    ? 'bg-white text-black hover:bg-gray-100' 
+                                    : 'bg-indigo-600 text-white hover:bg-indigo-500'
+                                }`}
+                              >
+                                {unlocked ? (
+                                  <><Download className="w-3.5 h-3.5" /> DOWNLOAD</>
+                                ) : (
+                                  <><Crown className="w-3.5 h-3.5" /> BUT NOW</>
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-center py-40 glass-card rounded-[4rem] bg-white/5 flex flex-col items-center justify-center space-y-8 border border-white/5">
-              <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center border border-white/10 relative">
-                <div className="absolute inset-0 bg-indigo-500/10 rounded-full animate-ping" />
-                <BookOpen className="w-10 h-10 text-gray-700" />
+                    </motion.div>
+                  );
+                })}
               </div>
-              <div className="space-y-3">
-                <h3 className="text-2xl font-black text-white uppercase tracking-tight">Curating Resources</h3>
-                <p className="text-gray-500 text-xs font-medium uppercase tracking-[0.3em]">Class {activeClass} Premium Hub arriving shortly.</p>
+            ) : (
+              <div className="text-center py-40 glass-card rounded-[4rem] bg-white/5 flex flex-col items-center justify-center space-y-8 border border-white/5">
+                <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center border border-white/10 relative">
+                  <div className="absolute inset-0 bg-indigo-500/10 rounded-full animate-ping" />
+                  <BookOpen className="w-10 h-10 text-gray-700" />
+                </div>
+                <div className="space-y-3">
+                  <h3 className="text-2xl font-black text-white uppercase tracking-tight">Curating Resources</h3>
+                  <p className="text-gray-500 text-xs font-medium uppercase tracking-[0.3em]">Class {activeClass} Premium Hub arriving shortly.</p>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
         {/* Sidebar: Plans & Subscriptions */}
         <div className="space-y-10">
@@ -642,6 +672,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
            </div>
         </div>
       </div>
+    </div>
 
       <AnimatePresence>
         {purchaseSuccess && (
