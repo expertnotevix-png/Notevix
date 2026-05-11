@@ -170,6 +170,7 @@ export interface SubjectResource {
   description?: string;
   features?: string[];
   isFree?: boolean;
+  password?: string;
   createdAt?: string;
 }
 

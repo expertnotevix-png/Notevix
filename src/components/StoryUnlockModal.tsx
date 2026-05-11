@@ -25,7 +25,7 @@ interface StoryUnlockModalProps {
   isOpen: boolean;
   onClose: () => void;
   user: UserProfile;
-  resource: { id: string; subject: string; title: string };
+  resource: { id: string; subject: string; title: string, password?: string };
   onSuccess: () => void;
 }
 
@@ -143,28 +143,9 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
       const result = await geminiService.verifyStoryScreenshot(imageData, selectedTemplate);
       
       if (result.isValid) {
-        // Record the unlock in DB
-        const dbResult = await dataBridge.recordStoryUnlock(
-          user.uid, 
-          resource.id, 
-          selectedTemplate.id, 
-          { confidence: result.confidence, raw: result.raw }
-        );
-        
-        if (dbResult.success) {
-          setVerificationResult({ isValid: true });
-          setStep(4);
-          toast.success("Verified! PDF Unlocked.", { icon: '🎁' });
-          setTimeout(() => {
-            onSuccess();
-            onClose();
-          }, 3000);
-        } else {
-          setVerificationResult({ 
-            isValid: false, 
-            error: dbResult.error || "Database error recording unlock. Please try again or contact support." 
-          });
-        }
+        setVerificationResult({ isValid: true });
+        setStep(4);
+        toast.success("Verified! PDF Password Revealed.", { icon: '🎁' });
       } else {
         setVerificationResult({ 
           isValid: false, 
@@ -424,31 +405,53 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
                 animate={{ opacity: 1, scale: 1 }}
                 className="py-10 text-center space-y-6"
               >
-                <div className="relative w-32 h-32 mx-auto">
+                <div className="relative w-24 h-24 mx-auto">
                   <motion.div 
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ type: 'spring', damping: 10 }}
                     className="w-full h-full bg-emerald-500/20 rounded-full flex items-center justify-center border border-emerald-500/30"
                   >
-                    <CheckCircle2 className="w-16 h-16 text-emerald-500" />
+                    <CheckCircle2 className="w-12 h-12 text-emerald-500" />
                   </motion.div>
-                  <motion.div 
-                    animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
-                    transition={{ repeat: Infinity, duration: 2 }}
-                    className="absolute inset-0 bg-emerald-500/20 rounded-full"
-                  />
                 </div>
 
                 <div className="space-y-2">
-                  <h4 className="text-3xl font-black text-white italic uppercase tracking-tighter">PDF Unlocked!</h4>
-                  <p className="text-gray-400 text-sm font-bold uppercase tracking-[0.2em]">Resource added to your library</p>
+                  <h4 className="text-2xl font-black text-white italic uppercase tracking-tighter">Verification Successful!</h4>
+                  <p className="text-gray-400 text-xs font-bold uppercase tracking-[0.2em]">The password for {resource.subject} is revealed below:</p>
                 </div>
 
-                <div className="inline-flex items-center gap-2 px-6 py-3 bg-white/5 rounded-full border border-white/10">
-                  <Gift className="w-4 h-4 text-indigo-400" />
-                  <span className="text-[10px] font-black text-gray-300 uppercase tracking-[0.3em]">Enjoy your notes</span>
+                <div className="p-6 rounded-[2rem] bg-white/5 border border-white/10 space-y-4">
+                  <div className="flex flex-col items-center gap-3">
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">YOUR PDF PASSWORD</p>
+                    <code className="text-xl font-black text-white tracking-[0.15em] bg-white/5 py-4 px-6 rounded-2xl border border-white/10 select-all w-full">
+                      {resource.password || "notesvixfreenotes"}
+                    </code>
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(resource.password || "notesvixfreenotes");
+                        toast.success("Password Copied!");
+                      }}
+                      className="flex items-center gap-2 px-6 py-3 bg-indigo-500/10 rounded-2xl hover:bg-indigo-500/20 transition-all border border-indigo-500/20 text-indigo-400"
+                    >
+                      <Copy className="w-4 h-4" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Copy Password</span>
+                    </button>
+                  </div>
                 </div>
+
+                <div className="bg-emerald-500/5 p-4 rounded-2xl border border-emerald-500/20">
+                  <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest leading-relaxed text-left">
+                    Note: Enter this password exactly as shown (small letters) to open the PDF file you download.
+                  </p>
+                </div>
+
+                <button 
+                  onClick={onClose}
+                  className="w-full py-5 bg-white text-black rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] hover:bg-gray-200 transition-all"
+                >
+                  Close & Done
+                </button>
               </motion.div>
             )}
           </div>

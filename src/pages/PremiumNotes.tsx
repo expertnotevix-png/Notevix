@@ -118,6 +118,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           subject: f.subject,
           description: f.description,
           driveLink: f.drive_link,
+          password: f.password,
           coverUrl: f.cover_url,
           isFree: true,
           price: 0
@@ -548,12 +549,12 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                                   <div className="overflow-hidden">
                                     <span className="text-[7px] font-black uppercase text-emerald-400 block mb-0.5">PASSWORD</span>
                                     <code className="text-[8px] font-black text-white tracking-widest break-all block">
-                                      {SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "SEE_ADMIN"}
+                                      {res.password || SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "SEE_ADMIN"}
                                     </code>
                                   </div>
                                   <button 
                                     onClick={() => {
-                                      navigator.clipboard.writeText(SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "");
+                                      navigator.clipboard.writeText(res.password || SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "");
                                       toast.success("Copied!");
                                     }}
                                     className="p-1.5 hover:bg-emerald-500/20 rounded-lg transition-colors text-emerald-400"
@@ -572,32 +573,45 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                                 </a>
                               </div>
                             ) : (
-                              <button 
-                                onClick={() => {
-                                  if (unlocked) {
-                                    window.open(getDirectDownloadLink(res.driveLink || res.fullNotesUrl || ''), '_blank');
-                                  } else {
-                                    setSelectedPlan({
-                                      id: `res_${res.id}`,
-                                      name: `${res.subject} Premium`,
-                                      price: res.price || 49,
-                                      resourceId: res.id,
-                                      type: 'one-time'
-                                    });
-                                  }
-                                }}
-                                className={`w-full h-10 rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest active:scale-95 transition-all shadow-xl ${
-                                  unlocked 
-                                    ? 'bg-white text-black hover:bg-gray-100' 
-                                    : 'bg-indigo-600 text-white hover:bg-indigo-500'
-                                }`}
-                              >
-                                {unlocked ? (
-                                  <><Download className="w-3.5 h-3.5" /> DOWNLOAD</>
-                                ) : (
-                                  <><Crown className="w-3.5 h-3.5" /> BUY NOW</>
-                                )}
-                              </button>
+                              <div className="space-y-3">
+                                {/* Drive Link Button (Always available for preview/direct access) */}
+                                <a 
+                                  href={getDirectDownloadLink(res.driveLink || res.fullNotesUrl || '')} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="w-full h-10 bg-white/5 text-gray-400 border border-white/10 rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest hover:bg-white/10 transition-all shadow-xl"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                  DRIVE LINK
+                                </a>
+
+                                <button 
+                                  onClick={() => {
+                                    if (unlocked) {
+                                      window.open(getDirectDownloadLink(res.driveLink || res.fullNotesUrl || ''), '_blank');
+                                    } else {
+                                      setSelectedPlan({
+                                        id: `res_${res.id}`,
+                                        name: `${res.subject} Premium`,
+                                        price: res.price || 49,
+                                        resourceId: res.id,
+                                        type: 'one-time'
+                                      });
+                                    }
+                                  }}
+                                  className={`w-full h-10 rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest active:scale-95 transition-all shadow-xl ${
+                                    unlocked 
+                                      ? 'bg-white text-black hover:bg-gray-100' 
+                                      : 'bg-indigo-600 text-white hover:bg-indigo-500'
+                                  }`}
+                                >
+                                  {unlocked ? (
+                                    <><Download className="w-3.5 h-3.5" /> DOWNLOAD</>
+                                  ) : (
+                                    <><Crown className="w-3.5 h-3.5" /> BUY NOW</>
+                                  )}
+                                </button>
+                              </div>
                             )}
                           </div>
                         </div>

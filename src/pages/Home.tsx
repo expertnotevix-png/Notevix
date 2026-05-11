@@ -82,7 +82,8 @@ export default function Home({ user }: HomeProps) {
       setActiveUnlockResource({
         id: resource.id,
         subject: resource.subject,
-        title: `${resource.subject} Combo Pack`
+        title: `${resource.subject} Combo Pack`,
+        password: resource.password
       });
       setShowUnlockModal(true);
     }

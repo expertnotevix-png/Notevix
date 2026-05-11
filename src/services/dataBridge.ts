@@ -715,6 +715,7 @@ export const dataBridge = {
       description: d.description,
       coverUrl: d.cover_url,
       driveLink: d.drive_link,
+      password: d.password,
       onePageNotesUrl: d.one_page_notes_url,
       fullNotesUrl: d.full_notes_url,
       importantQuestionsUrl: d.important_questions_url,
@@ -1397,6 +1398,7 @@ export const dataBridge = {
         class_level: resource.class_level,
         description: resource.description,
         drive_link: resource.drive_link,
+        password: resource.password,
         cover_url: resource.cover_url
       };
       

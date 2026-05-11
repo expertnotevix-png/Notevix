@@ -534,6 +534,7 @@ export default function Admin() {
     class_level: '10',
     description: '',
     drive_link: '',
+    password: 'notesvixfreenotes',
     cover_url: ''
   });
 
@@ -2623,6 +2624,17 @@ export default function Admin() {
                          placeholder="Google Drive PDF URL"
                          value={freeResourceFormData.drive_link}
                          onChange={(e) => setFreeResourceFormData({...freeResourceFormData, drive_link: e.target.value})}
+                         className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-emerald-500 outline-none"
+                       />
+                    </div>
+
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">PDF Password</label>
+                       <input 
+                         required
+                         placeholder="e.g. notesvixfreenotes"
+                         value={freeResourceFormData.password}
+                         onChange={(e) => setFreeResourceFormData({...freeResourceFormData, password: e.target.value})}
                          className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-emerald-500 outline-none"
                        />
                     </div>
