@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { optimizeImageForAI } from "../lib/imageOptimizer";
 
 let aiInstance: any = null;
 
@@ -46,10 +47,10 @@ function handleAIError(error: any): never {
   }
 
   if (errorString.includes('timeout') || errorString.includes('abort')) {
-    throw new Error("AI Timeout: The engine was slow. Retrying...");
+    throw new Error("Verification taking too long. Please try again.");
   }
 
-  throw new Error(`AI Issue: ${rawMessage.substring(0, 100)}`);
+  throw new Error("Verification failed. Please upload a clearer screenshot.");
 }
 
 export const geminiService = {
@@ -519,43 +520,77 @@ export const geminiService = {
   },
 
   async verifyStoryScreenshot(imageData: string, template: { title: string, link: string }): Promise<{ isValid: boolean, confidence: number, raw: any }> {
-    const system = `You are a social media story verification AI. 
-    Analyze the uploaded screenshot to verify if the user has posted the required NoteVix story.
+    const system = `Social Media Verification Engine.
+    Analyze screenshot.
+    STRICT JSON ONLY: { "verified": boolean }`;
     
-    CRITERIA:
-    1. Platform: Must be Instagram or Snapchat UI visible (icons, buttons, layout).
-    2. Logo/Branding: The NoteVix template provided (title: "${template.title}") must be visible in the story.
-    3. Link: A website link to "${template.link}" must be visible as a link sticker or bio mention if applicable.
-    4. Authenticity: Ensure it's a real screenshot, not a blank image, and the story UI elements are genuine.
-    
-    Return ONLY JSON: { "isValid": boolean, "confidence": number, "explanation": "string", "brandingFound": boolean, "linkFound": boolean }`;
-    
-    const prompt = "Verify if this screenshot shows an active Instagram/Snapchat story with NoteVix content and the correct link.";
+    const prompt = `Task: Is this a real social media (Instagram/Snap/FB) story? 
+    Does it have "NoteVix" branding or mention?
+    Template info: ${template.title}.
+    Verified must be true ONLY if both are confirmed.`;
 
     try {
-      // Use NVIDIA Vision for story verification (better rate limits and precision for vision tasks)
-      const res = await this.callNvidiaAPI(prompt, system, true, "meta/llama-3.2-11b-vision-instruct", 35000, imageData);
-      
-      let result;
+      // 1. Optimize Image (Compress & Resize to max 720px)
+      let optimizedImage = imageData;
       try {
-        const cleaned = res.replace(/```json|```/g, '').trim();
-        result = JSON.parse(cleaned);
-      } catch (parseErr) {
-        console.error("Failed to parse NVIDIA response:", res);
-        throw new Error("Invalid response format from verification engine.");
+        optimizedImage = await optimizeImageForAI(imageData, 720, 0.7);
+      } catch (optErr) {
+        console.warn("Image optimization failed, using original:", optErr);
       }
 
+      // 2. Try NVIDIA Vision First (8s timeout for stability)
+      try {
+        const res = await this.callNvidiaAPI(prompt, system, true, "meta/llama-3.2-11b-vision-instruct", 10000, optimizedImage);
+        const cleaned = res.replace(/```json|```/g, '').trim();
+        const result = JSON.parse(cleaned);
+        
+        if (result && typeof result.verified === 'boolean') {
+          return {
+            isValid: result.verified,
+            confidence: result.verified ? 1 : 0,
+            raw: result
+          };
+        }
+      } catch (nvidiaErr) {
+        console.warn("NVIDIA Verification failed/timed out, falling back to Gemini...", nvidiaErr);
+      }
+
+      // 3. Fallback to Gemini (Lightweight & Reliable)
+      const { apiKey } = getAI();
+      if (!apiKey) throw new Error("Verification verification engine offline.");
+
+      const ai = new GoogleGenAI({ apiKey });
+      const base64Data = optimizedImage.includes(',') ? optimizedImage.split(',')[1] : optimizedImage;
+      
+      const response = await ai.models.generateContent({
+        model: GEMINI_MODEL,
+        config: { 
+          systemInstruction: system,
+          responseMimeType: "application/json"
+        },
+        contents: [
+          { text: prompt },
+          { inlineData: { data: base64Data, mimeType: "image/jpeg" } }
+        ]
+      });
+
+      const text = response.text || "{}";
+      const result = JSON.parse(text.replace(/```json|```/g, '').trim());
+
       return {
-        isValid: Boolean(result.isValid && result.confidence >= 0.7),
-        confidence: Number(result.confidence || 0),
+        isValid: Boolean(result.verified || result.isValid),
+        confidence: result.verified ? 1 : (result.confidence || 0),
         raw: result
       };
+
     } catch (error: any) {
       console.error("Story Verification AI Failure:", error);
-      if (error.message?.includes("timed out")) {
-        throw new Error("Verification taking too long. Please ensure your net is stable or try a smaller screenshot.");
+      
+      if (error.message?.includes("timed out") || error.name === 'AbortError') {
+        throw new Error("Verification taking too long. Please try again.");
       }
-      throw error;
+      
+      throw new Error("Verification failed. Please upload a clearer screenshot.");
     }
   }
 };

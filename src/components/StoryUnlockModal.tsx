@@ -360,7 +360,7 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
                           </div>
                         </div>
                         <div className="space-y-1">
-                          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] animate-pulse">Running NVIDIA Vision AI</p>
+                          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] animate-pulse">Running AI Vision verification</p>
                           <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Scanning NoteVix Branding...</p>
                         </div>
                       </div>
@@ -395,13 +395,13 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
                       <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                       <div className="space-y-1">
                         <p className="text-[11px] font-bold text-red-500 leading-relaxed uppercase tracking-tight">
-                          {verificationResult.error && verificationResult.error.includes("failed") 
-                            ? "Story verification failed. Please upload a valid story screenshot."
+                          {verificationResult.error?.includes("long") 
+                            ? "Verification taking too long. Please try again."
                             : (verificationResult.error || "Story verification failed. Please upload a valid story screenshot.")
                           }
                         </p>
-                        {verificationResult.error && !verificationResult.error.includes("failed") && (
-                          <p className="text-[9px] text-red-400/60 font-medium uppercase tracking-widest">{verificationResult.error}</p>
+                        {verificationResult.error && !verificationResult.error.includes("too long") && (
+                          <p className="text-[9px] text-red-400/60 font-medium uppercase tracking-widest">Error: Verification failed. Please upload a clearer screenshot.</p>
                         )}
                       </div>
                     </motion.div>
