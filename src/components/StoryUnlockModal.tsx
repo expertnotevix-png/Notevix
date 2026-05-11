@@ -46,6 +46,7 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
   const [verifying, setVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<{ isValid: boolean, error?: string } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string>('');
   const [showShareSuccess, setShowShareSuccess] = useState(false);
   const templateRef = useRef<HTMLDivElement>(null);
 
@@ -109,10 +110,23 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
     if (!selectedTemplate || !templateRef.current) return;
 
     setIsGenerating(true);
+    setStatusMessage('Preparing Story...');
     try {
+      // Ensure images are loaded
+      const images = templateRef.current.getElementsByTagName('img');
+      await Promise.all(
+        Array.from(images).map(img => {
+          if (img.complete) return Promise.resolve();
+          return new Promise(resolve => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+        })
+      );
+
       const canvas = await html2canvas(templateRef.current, {
         useCORS: true,
-        scale: 2,
+        scale: 3,
         backgroundColor: '#000000',
         logging: false
       });
@@ -122,30 +136,55 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
 
       const file = new File([blob], `notevix-story.png`, { type: 'image/png' });
 
+      setStatusMessage('Opening Share Sheet...');
+
       // Check if Web Share API is available and can share files
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'NoteVix Story',
-          text: 'Check out 10th Class Premium Notes on NoteVix!',
-        });
-        setShowShareSuccess(true);
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'NoteVix Story',
+            text: 'Check out 10th Class Premium Notes on NoteVix!',
+          });
+          setShowShareSuccess(true);
+        } catch (shareErr: any) {
+          if (shareErr.name === 'AbortError') {
+             // User cancelled
+             return;
+          }
+          throw shareErr;
+        }
       } else {
-        // Fallback: Just download
+        throw new Error("Share API not available or file sharing not supported");
+      }
+    } catch (err: any) {
+      console.error("Share error details:", err);
+      
+      // Hard Fallback: Download
+      try {
+        const canvas = await html2canvas(templateRef.current!, {
+          useCORS: true,
+          scale: 3,
+          backgroundColor: '#000000',
+          logging: false
+        });
         const link = document.createElement('a');
         link.href = canvas.toDataURL('image/png', 1.0);
         link.download = `notevix-story.png`;
+        document.body.appendChild(link);
         link.click();
-        toast.info("Native sharing not supported. Image downloaded. Please share it manually.");
+        document.body.removeChild(link);
+        
+        toast.info("Instagram blocked direct sharing. Image downloaded successfully. Upload it manually to your story.", {
+          duration: 6000
+        });
         setShowShareSuccess(true);
-      }
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
-        console.error("Share error:", err);
+      } catch (fallbackErr) {
         toast.error("Failed to share story.");
       }
     } finally {
       setIsGenerating(false);
+      setStatusMessage('');
     }
   };
 
@@ -356,11 +395,16 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
                         className="w-full py-5 purple-gradient text-white rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-purple-600/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-70"
                       >
                         {isGenerating ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            {statusMessage || 'Processing...'}
+                          </>
                         ) : (
-                          <Instagram className="w-5 h-5" />
+                          <>
+                            <Instagram className="w-5 h-5" />
+                            Share to Instagram Story
+                          </>
                         )}
-                        Share to Instagram Story
                       </button>
 
                       <div className="grid grid-cols-2 gap-4">
