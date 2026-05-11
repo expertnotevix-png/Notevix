@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { UserProfile } from '../types';
-import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Trophy, Bell, Calendar, Sparkles, MessageSquare, BrainCircuit, FileText, Users, Instagram, Gift, Award, Zap, Clock } from 'lucide-react';
+import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Trophy, Bell, Calendar, Sparkles, MessageSquare, BrainCircuit, FileText, Users, Instagram, Gift, Award, Zap, Clock, ExternalLink } from 'lucide-react';
 import { collection, query, where, getDocs, limit, addDoc, updateDoc, doc, setDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, checkQuotaLock } from '../components/firebase';
 
@@ -36,7 +36,7 @@ export default function Home({ user }: HomeProps) {
   const [unlockedIds, setUnlockedIds] = useState<string[]>([]);
   const [loadingResources, setLoadingResources] = useState(false);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
-  const [activeUnlockResource, setActiveUnlockResource] = useState<{ id: string, subject: string, title: string } | null>(null);
+  const [activeUnlockResource, setActiveUnlockResource] = useState<{ id: string, subject: string, title: string, password?: string } | null>(null);
 
   useEffect(() => {
     if (selectedClass) {
@@ -280,7 +280,16 @@ export default function Home({ user }: HomeProps) {
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0f0f0f] via-transparent to-transparent" />
                   </div>
 
-                  <div className="p-10 pt-8 space-y-8">
+                  <div className="p-10 pt-8 space-y-4">
+                    <a 
+                      href="https://drive.google.com/drive/folders/1vKOFp9BjnGzXQNbW90Eldpnr2eGxVAv2"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-3 w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 transition-all active:scale-95 shadow-xl"
+                    >
+                      <ExternalLink className="w-4 h-4" /> ( OPEN LOCKED PDFs )
+                    </a>
+
                     <button 
                       onClick={() => handleDownloadClick(resource)}
                       className={`flex items-center justify-center gap-3 w-full py-6 rounded-[2.5rem] font-black text-sm uppercase tracking-widest shadow-2xl transition-all active:scale-95 border-b-4 ${

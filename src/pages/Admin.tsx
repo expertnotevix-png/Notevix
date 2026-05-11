@@ -555,7 +555,7 @@ export default function Admin() {
         setIsAddingResource(false);
         setEditingResource(null);
         setResourceCoverPreview(null);
-        setFreeResourceFormData({ subject: '', class_level: '10', description: '', drive_link: '', cover_url: '' });
+        setFreeResourceFormData({ subject: '', class_level: '10', description: '', drive_link: '', password: 'notesvixfreenotes', cover_url: '' });
         fetchFreeResources();
       } else {
         toast.error(res.error || "Operation failed");
@@ -2567,7 +2567,7 @@ export default function Admin() {
               <button 
                 onClick={() => {
                   setEditingResource(null);
-                  setFreeResourceFormData({ subject: '', class_level: '10', description: '', drive_link: '', cover_url: '' });
+                  setFreeResourceFormData({ subject: '', class_level: '10', description: '', drive_link: '', password: 'notesvixfreenotes', cover_url: '' });
                   setIsAddingResource(true);
                 }}
                 className="bg-emerald-600 hover:bg-emerald-500 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-emerald-600/20 active:scale-95"

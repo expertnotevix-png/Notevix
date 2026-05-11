@@ -233,12 +233,23 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
                   </div>
                 </div>
 
-                <button 
-                  onClick={() => setStep(2)}
-                  className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-indigo-600/20 hover:bg-indigo-500 transition-all flex items-center justify-center gap-2 group"
-                >
-                  Start Unlock <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                </button>
+                <div className="space-y-4">
+                  <a 
+                    href="https://drive.google.com/drive/folders/1vKOFp9BjnGzXQNbW90Eldpnr2eGxVAv2"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-3 w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 transition-all active:scale-95 shadow-xl"
+                  >
+                    <ExternalLink className="w-4 h-4" /> ( OPEN LOCKED PDFs )
+                  </a>
+
+                  <button 
+                    onClick={() => setStep(2)}
+                    className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-indigo-600/20 hover:bg-indigo-500 transition-all flex items-center justify-center gap-2 group"
+                  >
+                    Start Unlock <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                  </button>
+                </div>
               </motion.div>
             )}
 
