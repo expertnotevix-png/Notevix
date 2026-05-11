@@ -120,9 +120,11 @@ export interface Doubt {
 export interface VerifiedPayment {
   id: string;
   transactionId: string;
+  userId: string;
   phoneNumber: string;
   amount: number;
   subject: string;
+  verified: boolean;
   createdAt: string;
 }
 
@@ -145,7 +147,6 @@ export interface TransactionLedger {
   amount: number;
   planId: string;
   timestamp: string;
-  screenshotUrl?: string;
 }
 
 export interface PromoBanner {
@@ -186,12 +187,13 @@ export interface PurchaseRequest {
   amount: number;
   transactionId: string;
   status: 'pending' | 'approved' | 'rejected' | 'processed';
+  verified?: boolean; // New strict verification flag
   timestamp: string;
   whatsappNumber?: string;
   planType?: 'subscription' | 'one-time';
   targetClass?: string;
   instagramUsername?: string;
-  screenshotUrl?: string;
+  screenshotUrl?: string; // Deprecated - do not use
   isGuest?: boolean;
   source?: 'firebase' | 'supabase';
 }

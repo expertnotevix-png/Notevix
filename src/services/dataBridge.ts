@@ -455,14 +455,16 @@ export const dataBridge = {
     return false;
   },
 
-  async saveVerifiedPayment(paymentData: { transactionId: string, phoneNumber: string, amount: number, subject: string }) {
+  async saveVerifiedPayment(paymentData: { transactionId: string, phoneNumber: string, amount: number, subject: string, userId?: string, verified?: boolean }) {
     if (supabase) {
       try {
         const { error } = await supabase.from('verified_payments').insert([{
           transaction_id: paymentData.transactionId.toUpperCase().replace(/[^A-Z0-9]/g, ''),
+          user_id: paymentData.userId || 'GUEST',
           phone_number: paymentData.phoneNumber,
           amount: paymentData.amount,
           subject: paymentData.subject,
+          verified: paymentData.verified ?? true,
           created_at: new Date().toISOString()
         }]);
         if (error) throw error;
@@ -476,6 +478,8 @@ export const dataBridge = {
     try {
       await addDoc(collection(db, 'verified_payments'), {
         ...paymentData,
+        userId: paymentData.userId || 'GUEST',
+        verified: paymentData.verified ?? true,
         createdAt: serverTimestamp()
       });
       return { success: true };
@@ -515,6 +519,7 @@ export const dataBridge = {
             plan_name: requestData.planName,
             resource_id: requestData.resourceId || null,
             status: status,
+            verified: status === 'approved',
             created_at: new Date().toISOString()
           }]);
         
@@ -607,6 +612,7 @@ export const dataBridge = {
         ...requestData,
         transactionId: txId,
         status: status,
+        verified: status === 'approved',
         createdAt: serverTimestamp()
       });
       return { success: true, provider: 'fallback' };
@@ -1277,94 +1283,6 @@ export const dataBridge = {
       } catch (err) {}
     }
     return false;
-  },
-
-  /**
-   * Supabase Storage: Payment Screenshots
-   */
-  async uploadPaymentScreenshot(base64Data: string) {
-    if (!supabase) return null;
-    try {
-      // 1. Convert base64 to Blob
-      const base64Content = base64Data.split(',')[1];
-      if (!base64Content) throw new Error("Invalid image data");
-
-      const byteCharacters = atob(base64Content);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'image/jpeg' });
-
-      // 2. Generate unique filename
-      const filename = `screenshot_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
-      const filePath = `verifications/${filename}`;
-
-      // 3. Upload to Supabase Storage (Bucket must be 'payment-screenshots')
-      const { data, error } = await supabase.storage
-        .from('payment-screenshots')
-        .upload(filePath, blob, {
-          contentType: 'image/jpeg',
-          upsert: true
-        });
-
-      if (error) throw error;
-
-      // 4. Get Public URL
-      const { data: urlData } = supabase.storage
-        .from('payment-screenshots')
-        .getPublicUrl(filePath);
-
-      return {
-        path: filePath,
-        url: urlData.publicUrl
-      };
-    } catch (err) {
-      console.error("Screenshot upload failed:", err);
-      return null;
-    }
-  },
-
-  async deletePaymentScreenshot(path: string) {
-    if (!supabase || !path) return false;
-    try {
-      const { error } = await supabase.storage
-        .from('payment-screenshots')
-        .remove([path]);
-      
-      if (error) throw error;
-      return true;
-    } catch (err) {
-      console.error("Screenshot deletion failed:", err);
-      return false;
-    }
-  },
-
-  async cleanupOldScreenshots() {
-    if (!supabase) return { success: false, error: 'No connection' };
-    try {
-      // 1. List all files in the bucket
-      const { data, error } = await supabase.storage
-        .from('payment-screenshots')
-        .list('verifications', { limit: 1000 });
-
-      if (error) throw error;
-      if (!data || data.length === 0) return { success: true, count: 0 };
-
-      // 2. Delete them
-      const paths = data.map(f => `verifications/${f.name}`);
-      const { error: deleteError } = await supabase.storage
-        .from('payment-screenshots')
-        .remove(paths);
-
-      if (deleteError) throw deleteError;
-
-      return { success: true, count: data.length };
-    } catch (err: any) {
-      console.error("Cleanup failed:", err);
-      return { success: false, error: err.message };
-    }
   },
 
   /**

@@ -67,29 +67,7 @@ export default function Admin() {
   const templateInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
-  // One-time Storage Cleanup Logic
-  useEffect(() => {
-    const hasCleanedUp = localStorage.getItem('notevix_storage_cleanup_v1');
-    if (!hasCleanedUp) {
-      const performCleanup = async () => {
-        try {
-          const result = await dataBridge.cleanupOldScreenshots();
-          if (result.success) {
-            console.log(`Initial Storage Cleanup: Removed ${result.count} orphaned screenshots.`);
-            localStorage.setItem('notevix_storage_cleanup_v1', 'true');
-            if (result.count && result.count > 0) {
-              toast.info(`Storage Cleanup: Removed ${result.count} old screenshots.`);
-            }
-          }
-        } catch (err) {
-          console.error("Storage cleanup error:", err);
-        }
-      };
-      performCleanup();
-    }
-  }, []);
-
-  // Analytics State
+  // Red Team Audit Status State
   const [analyticsData, setAnalyticsData] = useState({
     totalRevenue: 0,
     salesCount: 0,
@@ -261,9 +239,11 @@ export default function Admin() {
           setVerifiedPayments(data.map(d => ({
             id: d.id,
             transactionId: d.transaction_id,
+            userId: d.user_id || 'GUEST',
             phoneNumber: d.phone_number,
             amount: d.amount,
             subject: d.subject,
+            verified: d.verified ?? true,
             createdAt: d.created_at
           })));
           return;
@@ -292,7 +272,9 @@ export default function Admin() {
         transactionId: manualPaymentData.transactionId.trim(),
         phoneNumber: manualPaymentData.phoneNumber.trim(),
         amount: Number(manualPaymentData.amount),
-        subject: manualPaymentData.subject.trim()
+        subject: manualPaymentData.subject.trim(),
+        userId: 'ADMIN_MANUAL',
+        verified: true
       });
       if (res.success) {
         toast.success("Manual Payment Recorded!");

@@ -159,42 +159,34 @@ export default function Landing() {
       setIsSubmitting(true);
       setAiVerifying(true);
       
-      // 1. Upload to Supabase Storage first for record (as requested by user to "delete after")
-      // This ensures we have a path to delete and fulfills the "uploaded screenshot" requirement
-      const uploadResult = await dataBridge.uploadPaymentScreenshot(screenshotPreview);
-      const screenshotPath = uploadResult?.path;
-      
+      // PER USER REQUEST: No screenshot storage. Gemini processes the base64 directly.
       const result = await geminiService.verifyPaymentScreenshot(screenshotPreview);
       setAiVerifying(false);
       
-      // Cleanup: Delete the "uploaded screenshot" from storage immediately after AI verification
-      // whether successful or not, as requested.
-      if (screenshotPath) {
-        // We delete it after use to save space and respect privacy
-        dataBridge.deletePaymentScreenshot(screenshotPath).catch(err => console.error("Auto-cleanup failed:", err));
-      }
-
       if (!result.isValid) {
-        throw new Error(result.error || "The analyzed screenshot is not valid. Please ensure recipient name 'Poonam Devi' and correct amount (₹39/₹99) are visible.");
+        throw new Error(result.error || "Verification failed. Please ensure your payment screenshot is clear and shows 'Poonam Devi' as recipient.");
       }
 
       const finalTxId = result.transactionId?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
       
       if (!finalTxId || finalTxId.length < 6) {
-        throw new Error("Could not extract a valid Transaction ID from the screenshot. Please ensure the UTR/Reference number is clearly visible.");
+        throw new Error("Could not extract a valid Transaction ID. Please ensure the UTR is visible.");
       }
 
       // Check anti-fraud in Supabase: Reject if transaction_id already exists
       const isRedeemed = await dataBridge.isTransactionRedeemed(finalTxId);
       if (isRedeemed) {
-        throw new Error("This screenshot has already been used");
+        throw new Error("This transaction has already been used to unlock notes.");
       }
       
-      // After verified: Save phone + purchase to Supabase verified_payments
+      // Save Transactional Log (Save ONLY requested fields + necessary purchase metadata)
       const saveResult = await dataBridge.saveVerifiedPayment({
         transactionId: finalTxId,
-        phoneNumber: whatsapp,
         amount: result.amount || selectedPlan?.price || 0,
+        userId: email || 'GUEST', // Using email as guest user_id per common practice if GUEST
+        verified: result.isValid,
+        // Carry forward info needed for UI
+        phoneNumber: whatsapp,
         subject: selectedPlan?.subject || selectedPlan?.name || 'Unknown'
       });
 

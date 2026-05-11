@@ -460,7 +460,7 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
 
                 <div className="bg-emerald-500/5 p-4 rounded-2xl border border-emerald-500/20">
                   <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest leading-relaxed text-left">
-                    Note: Enter this password exactly as shown (small letters) to open the PDF file you download.
+                    Note: Enter this password exactly as shown (notevixfreenotes) to open the PDF file you download.
                   </p>
                 </div>
 
