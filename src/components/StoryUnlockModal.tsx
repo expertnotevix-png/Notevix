@@ -352,16 +352,16 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
                 <div className="space-y-6">
                   <div className="bg-white/5 border border-dashed border-white/20 rounded-[2.5rem] p-10 text-center relative group overflow-hidden">
                     {verifying ? (
-                      <div className="space-y-4">
-                        <div className="relative w-16 h-16 mx-auto">
-                          <Loader2 className="w-16 h-16 text-indigo-500 animate-spin absolute inset-0" />
+                      <div className="flex flex-col items-center gap-6 py-4">
+                        <div className="relative">
+                          <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
                           <div className="absolute inset-0 flex items-center justify-center">
-                             <Zap className="w-6 h-6 text-indigo-400 animate-pulse" />
+                            <div className="w-8 h-8 bg-indigo-500/10 rounded-full animate-ping" />
                           </div>
                         </div>
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] animate-pulse">Running AI Vision verification</p>
-                          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Scanning NoteVix Branding...</p>
+                        <div className="text-center space-y-2">
+                          <p className="text-sm font-black text-white uppercase tracking-[0.2em] animate-pulse">Analyzing your story...</p>
+                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest px-4">This usually takes 3-5 seconds</p>
                         </div>
                       </div>
                     ) : (
@@ -397,12 +397,9 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
                         <p className="text-[11px] font-bold text-red-500 leading-relaxed uppercase tracking-tight">
                           {verificationResult.error?.includes("long") 
                             ? "Verification taking too long. Please try again."
-                            : (verificationResult.error || "Story verification failed. Please upload a valid story screenshot.")
+                            : "Couldn’t verify story. Please upload a clearer screenshot."
                           }
                         </p>
-                        {verificationResult.error && !verificationResult.error.includes("too long") && (
-                          <p className="text-[9px] text-red-400/60 font-medium uppercase tracking-widest">Error: Verification failed. Please upload a clearer screenshot.</p>
-                        )}
                       </div>
                     </motion.div>
                   )}

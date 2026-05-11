@@ -520,27 +520,19 @@ export const geminiService = {
   },
 
   async verifyStoryScreenshot(imageData: string, template: { title: string, link: string }): Promise<{ isValid: boolean, confidence: number, raw: any }> {
-    const system = `Social Media Verification Engine.
-    Analyze screenshot.
-    STRICT JSON ONLY: { "verified": boolean }`;
+    const system = "Social Media Verification Engine. Analyze screenshot. STRICT JSON ONLY: { \"verified\": boolean }";
     
-    const prompt = `Task: Is this a real social media (Instagram/Snap/FB) story? 
-    Does it have "NoteVix" branding or mention?
-    Template info: ${template.title}.
-    Verified must be true ONLY if both are confirmed.`;
+    const prompt = `Task: Is this a social media story with "NoteVix" branding or mention?
+    Template: ${template.title}.
+    Return JSON: { "verified": boolean }`;
 
-    try {
-      // 1. Optimize Image (Compress & Resize to max 720px)
-      let optimizedImage = imageData;
-      try {
-        optimizedImage = await optimizeImageForAI(imageData, 720, 0.7);
-      } catch (optErr) {
-        console.warn("Image optimization failed, using original:", optErr);
-      }
+    const MAX_RETRIES = 1;
+    let attempt = 0;
 
-      // 2. Try NVIDIA Vision First (8s timeout for stability)
+    const performVerification = async (img: string): Promise<any> => {
       try {
-        const res = await this.callNvidiaAPI(prompt, system, true, "meta/llama-3.2-11b-vision-instruct", 10000, optimizedImage);
+        // NVIDIA Vision with 8s timeout for stability
+        const res = await this.callNvidiaAPI(prompt, system, true, "meta/llama-3.2-11b-vision-instruct", 8000, img);
         const cleaned = res.replace(/```json|```/g, '').trim();
         const result = JSON.parse(cleaned);
         
@@ -551,46 +543,43 @@ export const geminiService = {
             raw: result
           };
         }
-      } catch (nvidiaErr) {
-        console.warn("NVIDIA Verification failed/timed out, falling back to Gemini...", nvidiaErr);
+        throw new Error("Malformed response");
+      } catch (err) {
+        throw err;
+      }
+    };
+
+    try {
+      // 1. Aggressive Image Optimization
+      let optimizedImage = imageData;
+      try {
+        optimizedImage = await optimizeImageForAI(imageData, 640, 0.6);
+      } catch (optErr) {
+        console.warn("Optimization failed:", optErr);
       }
 
-      // 3. Fallback to Gemini (Lightweight & Reliable)
-      const { apiKey } = getAI();
-      if (!apiKey) throw new Error("Verification verification engine offline.");
+      // 2. Retry Logic
+      while (attempt <= MAX_RETRIES) {
+        try {
+          return await performVerification(optimizedImage);
+        } catch (error) {
+          attempt++;
+          if (attempt > MAX_RETRIES) throw error;
+          console.warn(`Verification retry ${attempt}...`);
+          // Brief delay before retry
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
 
-      const ai = new GoogleGenAI({ apiKey });
-      const base64Data = optimizedImage.includes(',') ? optimizedImage.split(',')[1] : optimizedImage;
-      
-      const response = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        config: { 
-          systemInstruction: system,
-          responseMimeType: "application/json"
-        },
-        contents: [
-          { text: prompt },
-          { inlineData: { data: base64Data, mimeType: "image/jpeg" } }
-        ]
-      });
-
-      const text = response.text || "{}";
-      const result = JSON.parse(text.replace(/```json|```/g, '').trim());
-
-      return {
-        isValid: Boolean(result.verified || result.isValid),
-        confidence: result.verified ? 1 : (result.confidence || 0),
-        raw: result
-      };
-
+      throw new Error("Verification failed");
     } catch (error: any) {
-      console.error("Story Verification AI Failure:", error);
+      console.error("Story Verification Failure:", error);
       
       if (error.message?.includes("timed out") || error.name === 'AbortError') {
         throw new Error("Verification taking too long. Please try again.");
       }
       
-      throw new Error("Verification failed. Please upload a clearer screenshot.");
+      throw new Error("Couldn’t verify story. Please upload a clearer screenshot.");
     }
   }
 };
