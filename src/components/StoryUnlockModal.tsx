@@ -122,7 +122,12 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
     reader.onload = async (event) => {
       const base64 = event.target?.result as string;
       setUploading(false);
-      await verifyScreenshot(base64);
+      try {
+        await verifyScreenshot(base64);
+      } finally {
+        // Explicitly clear file data from memory after processing
+        e.target.value = '';
+      }
     };
     reader.onerror = () => {
       setUploading(false);
@@ -155,7 +160,10 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
             onClose();
           }, 3000);
         } else {
-          setVerificationResult({ isValid: false, error: "Database error recording unlock." });
+          setVerificationResult({ 
+            isValid: false, 
+            error: dbResult.error || "Database error recording unlock. Please try again or contact support." 
+          });
         }
       } else {
         setVerificationResult({ 

@@ -1515,42 +1515,118 @@ export const dataBridge = {
   },
 
   async recordStoryUnlock(uid: string, resourceId: string, templateId: string, aiMetadata: any) {
-    if (!supabase || !uid || uid === 'GUEST' || uid === 'undefined') return { success: false };
+    if (!uid || uid === 'GUEST' || uid === 'undefined' || uid === 'null') {
+      console.error("Record unlock failed: Invalid user ID", { uid });
+      return { success: false, error: "Invalid user session" };
+    }
+
+    const errors: string[] = [];
+    let success = false;
+
+    // 1. Try Supabase (Primary)
+    if (supabase) {
+      try {
+        // A. Record the unlock
+        const { error: unlockError } = await supabase
+          .from('story_unlocks')
+          .insert([{
+            user_id: uid,
+            resource_id: resourceId,
+            template_id: templateId,
+            status: 'approved',
+            verified: true,
+            created_at: new Date().toISOString()
+          }]);
+
+        if (unlockError) {
+          console.warn("Supabase story_unlocks insert failed:", unlockError);
+          errors.push(unlockError.message);
+        } else {
+          success = true;
+        }
+
+        // B. Record verification log (Optional, don't crash if fails)
+        try {
+          await supabase.from('verification_logs').insert([{
+            user_id: uid,
+            resource_id: resourceId,
+            confidence_score: aiMetadata.confidence || 0,
+            raw_ai_response: typeof aiMetadata.raw === 'string' ? aiMetadata.raw : JSON.stringify(aiMetadata.raw || {}),
+            created_at: new Date().toISOString()
+          }]);
+        } catch (logErr) {
+          console.warn("Optional verification log failed:", logErr);
+        }
+
+        // C. Update profile in Supabase
+        try {
+          const { data: profile } = await supabase.from('profiles').select('unlocked_resources').eq('id', uid).maybeSingle();
+          const currentUnlocked = profile?.unlocked_resources || [];
+          if (!currentUnlocked.includes(resourceId)) {
+            await supabase.from('profiles').update({
+              unlocked_resources: Array.from(new Set([...currentUnlocked, resourceId])),
+              updated_at: new Date().toISOString()
+            }).eq('id', uid);
+          }
+        } catch (profileErr) {
+          console.warn("Supabase profile update failed during story unlock:", profileErr);
+        }
+      } catch (err: any) {
+        console.error("Supabase recordStoryUnlock operation failed:", err);
+        errors.push(err.message);
+      }
+    }
+
+    // 2. Sync to Firestore (Backup/Fallback)
     try {
-      // 1. Record the unlock
-      const { error: unlockError } = await supabase
-        .from('story_unlocks')
-        .insert([{
-          user_id: uid,
-          resource_id: resourceId,
-          template_id: templateId,
-          status: 'approved'
-        }]);
-
-      if (unlockError) throw unlockError;
-
-      // 2. Record verification log
-      await supabase.from('verification_logs').insert([{
+      // A. Record unlock in Firestore
+      await addDoc(collection(db, 'story_unlocks'), {
         user_id: uid,
         resource_id: resourceId,
-        confidence_score: aiMetadata.confidence,
-        raw_ai_response: JSON.stringify(aiMetadata.raw)
-      }]);
+        template_id: templateId,
+        verified: true,
+        confidence: aiMetadata.confidence || 0,
+        createdAt: serverTimestamp()
+      });
+      success = true; // If Firestore succeeds, we consider it a success
 
-      // 3. Update profile to include this resource in unlockedResources
-      const { data: profile } = await supabase.from('profiles').select('unlocked_resources').eq('id', uid).single();
-      const currentUnlocked = profile?.unlocked_resources || [];
-      if (!currentUnlocked.includes(resourceId)) {
-        await supabase.from('profiles').update({
-          unlocked_resources: [...currentUnlocked, resourceId]
-        }).eq('id', uid);
+      // B. Update Firestore user doc
+      try {
+        const userRef = doc(db, 'users', uid);
+        const userDoc = await getDoc(userRef);
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          const unlocked = userData.unlockedResources || [];
+          if (!unlocked.includes(resourceId)) {
+            await firestoreUpdateDoc(userRef, {
+              unlockedResources: Array.from(new Set([...unlocked, resourceId])),
+              updatedAt: serverTimestamp()
+            });
+          }
+        } else {
+          // Create minimal doc if missing
+          await setDoc(userRef, {
+            unlockedResources: [resourceId],
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+        }
+      } catch (fsProfileErr) {
+        console.warn("Firestore profile update failed during story unlock:", fsProfileErr);
       }
-
-      return { success: true };
-    } catch (err: any) {
-      console.error("Record unlock failed:", err);
-      return { success: false, error: err.message };
+    } catch (fsErr: any) {
+      console.error("Firestore recordStoryUnlock failed:", fsErr);
+      errors.push(fsErr.message);
     }
+
+    if (!success) {
+      console.error("All database sync methods failed for recordStoryUnlock:", errors);
+    }
+
+    return { 
+      success: success, 
+      error: !success ? "Failed to record unlock in any database. Please check your connection." : undefined 
+    };
   },
 
   // Admin Methods for Templates

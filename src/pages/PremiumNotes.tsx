@@ -595,7 +595,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                                 {unlocked ? (
                                   <><Download className="w-3.5 h-3.5" /> DOWNLOAD</>
                                 ) : (
-                                  <><Crown className="w-3.5 h-3.5" /> BUT NOW</>
+                                  <><Crown className="w-3.5 h-3.5" /> BUY NOW</>
                                 )}
                               </button>
                             )}
