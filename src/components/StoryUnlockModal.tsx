@@ -436,11 +436,11 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
                   <div className="flex flex-col items-center gap-3">
                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">YOUR PDF PASSWORD</p>
                     <code className="text-xl font-black text-white tracking-[0.15em] bg-white/5 py-4 px-6 rounded-2xl border border-white/10 select-all w-full">
-                      {resource.password || "notesvixfreenotes"}
+                      {resource.password || "notevixfreenotes"}
                     </code>
                     <button 
                       onClick={() => {
-                        navigator.clipboard.writeText(resource.password || "notesvixfreenotes");
+                        navigator.clipboard.writeText(resource.password || "notevixfreenotes");
                         toast.success("Password Copied!");
                       }}
                       className="flex items-center gap-2 px-6 py-3 bg-indigo-500/10 rounded-2xl hover:bg-indigo-500/20 transition-all border border-indigo-500/20 text-indigo-400"

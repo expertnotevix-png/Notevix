@@ -534,7 +534,7 @@ export default function Admin() {
     class_level: '10',
     description: '',
     drive_link: '',
-    password: 'notesvixfreenotes',
+    password: 'notevixfreenotes',
     cover_url: ''
   });
 
@@ -555,7 +555,7 @@ export default function Admin() {
         setIsAddingResource(false);
         setEditingResource(null);
         setResourceCoverPreview(null);
-        setFreeResourceFormData({ subject: '', class_level: '10', description: '', drive_link: '', password: 'notesvixfreenotes', cover_url: '' });
+        setFreeResourceFormData({ subject: '', class_level: '10', description: '', drive_link: '', password: 'notevixfreenotes', cover_url: '' });
         fetchFreeResources();
       } else {
         toast.error(res.error || "Operation failed");
@@ -2567,7 +2567,7 @@ export default function Admin() {
               <button 
                 onClick={() => {
                   setEditingResource(null);
-                  setFreeResourceFormData({ subject: '', class_level: '10', description: '', drive_link: '', password: 'notesvixfreenotes', cover_url: '' });
+                  setFreeResourceFormData({ subject: '', class_level: '10', description: '', drive_link: '', password: 'notevixfreenotes', cover_url: '' });
                   setIsAddingResource(true);
                 }}
                 className="bg-emerald-600 hover:bg-emerald-500 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-emerald-600/20 active:scale-95"
@@ -2632,7 +2632,7 @@ export default function Admin() {
                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">PDF Password</label>
                        <input 
                          required
-                         placeholder="e.g. notesvixfreenotes"
+                         placeholder="e.g. notevixfreenotes"
                          value={freeResourceFormData.password}
                          onChange={(e) => setFreeResourceFormData({...freeResourceFormData, password: e.target.value})}
                          className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-emerald-500 outline-none"
