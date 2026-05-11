@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import html2canvas from 'html2canvas';
 import { 
   X, 
   Download, 
@@ -14,7 +15,8 @@ import {
   ChevronRight, 
   ExternalLink,
   ShieldCheck,
-  Zap
+  Zap,
+  Share2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { StoryTemplate, UserProfile } from '../types';
@@ -43,12 +45,16 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
   const [uploading, setUploading] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<{ isValid: boolean, error?: string } | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [showShareSuccess, setShowShareSuccess] = useState(false);
+  const templateRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
       fetchTemplates();
       setStep(1);
       setVerificationResult(null);
+      setShowShareSuccess(false);
     }
   }, [isOpen]);
 
@@ -60,16 +66,87 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
     setLoading(false);
   };
 
-  const handleDownloadTemplate = () => {
-    if (!selectedTemplate) return;
-    const link = document.createElement('a');
-    link.href = selectedTemplate.imageUrl;
-    link.download = `NoteVix-${selectedTemplate.title}.png`;
-    link.target = "_blank";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success("Template downloaded! Post this on your Story.");
+  const handleDownloadTemplate = async () => {
+    if (!selectedTemplate || !templateRef.current) return;
+    
+    setIsGenerating(true);
+    try {
+      // Ensure images are loaded
+      const images = templateRef.current.getElementsByTagName('img');
+      await Promise.all(
+        Array.from(images).map(img => {
+          if (img.complete) return Promise.resolve();
+          return new Promise(resolve => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+        })
+      );
+
+      const canvas = await html2canvas(templateRef.current, {
+        useCORS: true,
+        scale: 2,
+        backgroundColor: '#000000',
+        logging: false
+      });
+      
+      const link = document.createElement('a');
+      link.href = canvas.toDataURL('image/png', 1.0);
+      link.download = `NoteVix-Story-${selectedTemplate.title}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("Template saved! Post this on your Story.");
+    } catch (err) {
+      console.error("Capture error:", err);
+      toast.error("Failed to generate image.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleShareToInstagram = async () => {
+    if (!selectedTemplate || !templateRef.current) return;
+
+    setIsGenerating(true);
+    try {
+      const canvas = await html2canvas(templateRef.current, {
+        useCORS: true,
+        scale: 2,
+        backgroundColor: '#000000',
+        logging: false
+      });
+
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png', 1.0));
+      if (!blob) throw new Error("Blob creation failed");
+
+      const file = new File([blob], `notevix-story.png`, { type: 'image/png' });
+
+      // Check if Web Share API is available and can share files
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'NoteVix Story',
+          text: 'Check out 10th Class Premium Notes on NoteVix!',
+        });
+        setShowShareSuccess(true);
+      } else {
+        // Fallback: Just download
+        const link = document.createElement('a');
+        link.href = canvas.toDataURL('image/png', 1.0);
+        link.download = `notevix-story.png`;
+        link.click();
+        toast.info("Native sharing not supported. Image downloaded. Please share it manually.");
+        setShowShareSuccess(true);
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error("Share error:", err);
+        toast.error("Failed to share story.");
+      }
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleCopyLink = () => {
@@ -244,33 +321,69 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
                   </div>
                 ) : selectedTemplate ? (
                   <div className="space-y-6">
-                    <div className="relative group rounded-3xl overflow-hidden border border-white/10 aspect-[9/16] h-64 mx-auto">
+                    <div 
+                      ref={templateRef}
+                      className="relative group rounded-3xl overflow-hidden border border-white/10 aspect-[9/16] h-64 mx-auto bg-black"
+                    >
                       <img 
+                        crossOrigin="anonymous"
                         src={selectedTemplate.imageUrl} 
                         alt="Template" 
                         className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-700" 
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60" />
                       <div className="absolute bottom-4 left-4 right-4">
-                        <p className="text-[10px] font-black text-white uppercase tracking-widest drop-shadow-md">Active Template</p>
+                        <p className="text-[10px] font-black text-white uppercase tracking-widest drop-shadow-md">NoteVix Premium</p>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <button 
-                        onClick={handleDownloadTemplate}
-                        className="p-4 bg-white/5 border border-white/10 rounded-2xl flex flex-col items-center gap-2 hover:bg-white/10 transition-all group"
+                    {showShareSuccess && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-indigo-600/20 border border-indigo-500/30 p-4 rounded-2xl text-center"
                       >
-                        <Download className="w-6 h-6 text-indigo-400 group-hover:-translate-y-1 transition-transform" />
-                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Download Template</span>
-                      </button>
+                        <p className="text-[11px] font-black text-indigo-400 uppercase tracking-[0.2em] animate-pulse">
+                          Post the story and return to unlock 🚀
+                        </p>
+                      </motion.div>
+                    )}
+
+                    <div className="space-y-3">
                       <button 
-                        onClick={handleCopyLink}
-                        className="p-4 bg-white/5 border border-white/10 rounded-2xl flex flex-col items-center gap-2 hover:bg-white/10 transition-all group"
+                        onClick={handleShareToInstagram}
+                        disabled={isGenerating}
+                        className="w-full py-5 purple-gradient text-white rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-purple-600/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-70"
                       >
-                        <Copy className="w-6 h-6 text-indigo-400 group-hover:-translate-y-1 transition-transform" />
-                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Copy Story Link</span>
+                        {isGenerating ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Instagram className="w-5 h-5" />
+                        )}
+                        Share to Instagram Story
                       </button>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <button 
+                          onClick={handleDownloadTemplate}
+                          disabled={isGenerating}
+                          className="p-4 bg-white/5 border border-white/10 rounded-2xl flex flex-col items-center gap-2 hover:bg-white/10 transition-all group disabled:opacity-50"
+                        >
+                          {isGenerating ? (
+                            <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
+                          ) : (
+                            <Download className="w-6 h-6 text-indigo-400 group-hover:-translate-y-1 transition-transform" />
+                          )}
+                          <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Download Template</span>
+                        </button>
+                        <button 
+                          onClick={handleCopyLink}
+                          className="p-4 bg-white/5 border border-white/10 rounded-2xl flex flex-col items-center gap-2 hover:bg-white/10 transition-all group"
+                        >
+                          <Copy className="w-6 h-6 text-indigo-400 group-hover:-translate-y-1 transition-transform" />
+                          <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Copy Story Link</span>
+                        </button>
+                      </div>
                     </div>
 
                     <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 flex gap-4">
