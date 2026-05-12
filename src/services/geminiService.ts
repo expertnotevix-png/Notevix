@@ -184,106 +184,64 @@ export const geminiService = {
     }
   },
 
-  async verifyPaymentScreenshot(imageData: string): Promise<{ isValid: boolean, transactionId?: string, amount?: number, error?: string }> {
-    const system = `You are NoteVix Forensic Payment Verifier. 
-    Analyze this payment screenshot for NoteVix premium notes.
+  async verifyPaymentScreenshot(imageData: string, expectedPrice: number, pdfName: string, passwordToReturn: string): Promise<{ verified: boolean, unlock: boolean, password?: string, transactionId?: string, amount?: number, reason?: string, paymentApp?: string }> {
+    const system = `You are a strict NoteVix Premium Payment Verification AI.
     
-    STRICT VERIFICATION CRITERIA (Any failure = Reject):
-    1. REALITY CHECK: Image must be a genuine, unedited, high-quality mobile screenshot from a legitimate payment app (PhonePe, Google Pay, Paytm, Amazon Pay, MobiKwik). 
-       Reject if: 
-       - It is a photo taken from another screen (visible moiré patterns).
-       - Any sign of image manipulation (misaligned text, mismatched fonts, shadow artifacts, "cleaning" marks).
-       - It looks like a digital recreation or fake template.
-    2. RECIPIENT CHECK: Must show payment to:
-       - Name: "Poonam Devi" (Primary)
-       - UPI ID: "9236489649@mbk" or "9236489649@ybl" or similar ending in 9649.
-    3. STATUS CHECK: Transaction state must be "SUCCESSFUL", "PAID", or "DONE". 
-       Reject if: "Pending", "Failed", "Processing", or "Cancelled".
-    4. AMOUNT CHECK: Amount must follow our pricing (₹39, ₹99, or ₹199). 
-       Reject if amount is modified or zero.
-    5. TRANSACTION ID: Must have a clear, full, and readable Transaction ID (UTR, Ref No, or Txn ID). 
-       Extract at least 10 characters. Reject if obscured or illegible.
-    6. TIMESTAMP: Must show a recent date/time (today or within 24 hours of current system time).
-    
-    DATA EXTRACTION:
-    - amount (number)
-    - transactionId (string - extract exactly as shown, no extra characters)
-    - paymentApp (string - name of the app used)
-    - paymentTimestamp (string - as seen on screen)
-    
-    OUTPUT FORMAT (JSON ONLY):
-    {
-      "verified": boolean,
-      "reason": "Very short, specific reason (e.g. 'Invalid recipient name', 'Suspected image manipulation', 'Amount mismatch')",
-      "amount": number,
-      "transactionId": "string",
-      "paymentApp": "string",
-      "paymentTimestamp": "string"
-    }`;
+    APPROVE ONLY IF ALL CONDITIONS MATCH:
+    1. STATUS: Payment state must be "SUCCESSFUL", "PAID", or "DONE".
+    2. RECEIVER: Must be "Poonam Devi" OR UPI ID "9236489649@mbk" (or similar ending in 9649).
+    3. AMOUNT: Must EXACTLY match ₹${expectedPrice}.
+    4. APP: Must be a real payment app (Paytm, PhonePe, Google Pay, BHIM, Mobikwik).
+    5. LEGITIMACY: Must be a clear, unedited, genuine mobile screenshot. Reject if edited or photo of another screen.
+    6. TRANSACTION ID: Must have a clearly visible UTR / Ref No / Transaction ID.
 
-    const prompt = "Perform strict forensic verification on this payment receipt for NoteVix.";
+    IF VERIFIED:
+    Immediately return JSON: { "verified": true, "unlock": true, "password": "${passwordToReturn}", "transactionId": "...", "amount": ${expectedPrice}, "paymentApp": "..." }
+
+    IF FAILED:
+    Immediately return JSON: { "verified": false, "unlock": false, "reason": "Specific reason for rejection" }`;
+
+    const prompt = `Verify payment for "${pdfName}" (Price: ₹${expectedPrice}). Extract Transaction ID and Payment App. If valid, return the password "${passwordToReturn}".`;
 
     try {
       const { nvidiaKey } = getAI();
+      if (!nvidiaKey) throw new Error("Payment verification engine offline.");
 
-      // PER USER REQUEST: Replace Gemini with NVIDIA for premium verification
-      if (!nvidiaKey) throw new Error("Payment verification engine offline. Missing NVIDIA API Key.");
-
-      // Optimize image first
       let optimizedImage = imageData;
       try {
         optimizedImage = await optimizeImageForAI(imageData, 1024, 0.8);
       } catch (e) {
-        console.warn("Payment image optimization failed:", e);
+        console.warn("Image optimization failed:", e);
       }
 
-      // Use NVIDIA Vision with meta/llama-4-maverick-17b-128e-instruct
       const res = await this.callNvidiaAPI(
         prompt, 
         system, 
         true, 
         PREMIUM_MODEL, 
-        35000, 
+        15000, 
         optimizedImage,
-        { temperature: 0 }
+        { temperature: 0, max_tokens: 150 }
       );
 
-      return this.parsePaymentResult(res || "");
+      return this.parseStrictPaymentResult(res || "");
     } catch (error: any) {
       console.error("Forensic Payment Failure:", error);
-      return handleAIError(error);
+      return { verified: false, unlock: false, reason: error.message || "Network Error" };
     }
   },
 
-  parsePaymentResult(res: string): { isValid: boolean, transactionId?: string, amount?: number, error?: string } {
-    console.log("Gemini Forensic RAW:", res);
-    
+  parseStrictPaymentResult(res: string): any {
     try {
       const jsonMatch = res.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("No JSON response from AI");
-
-      const data = JSON.parse(jsonMatch[0].replace(/\\n/g, ''));
-      
-      return {
-        isValid: Boolean(data.verified),
-        transactionId: String(data.transactionId || "").toUpperCase().replace(/[^A-Z0-9]/g, ''),
-        amount: Number(data.amount || 0),
-        error: data.reason
-      };
+      if (!jsonMatch) throw new Error("Invalid AI response");
+      return JSON.parse(jsonMatch[0]);
     } catch (e) {
-      // Fallback for non-json or partial extraction using Regex if Gemini fails structured output
       const utrMatch = res.match(/\b\d{12}\b/);
-      const phonePeMatch = res.match(/\bT\d{18,}\b/i);
-      const foundId = utrMatch ? utrMatch[0] : (phonePeMatch ? phonePeMatch[0] : null);
-      
-      if (foundId) {
-        return {
-          isValid: res.toLowerCase().includes('success') || res.toLowerCase().includes('verified": true'),
-          transactionId: foundId.toUpperCase(),
-          amount: 0
-        };
+      if (utrMatch) {
+         return { verified: true, unlock: true, transactionId: utrMatch[0] };
       }
-      throw new Error("Verification failed. Please ensure your payment screenshot is clear and shows the UTR number.");
+      return { verified: false, unlock: false, reason: "Could not parse verification results." };
     }
   },
 

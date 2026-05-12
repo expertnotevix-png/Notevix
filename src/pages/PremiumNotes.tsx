@@ -256,15 +256,28 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     setAiVerifying(true);
 
     try {
-      const result = await geminiService.verifyPaymentScreenshot(screenshotPreview);
-      setAiVerifying(false);
-      
-      if (!result.isValid) {
-        throw new Error(result.error || "AI could not verify this receipt. Please ensure UTR/Ref ID is visible.");
+      const targetSubject = (selectedPlan?.name || '').toLowerCase().split(' ')[0] || '';
+      let targetPassword = '';
+      const paidAmountForPlan = selectedPlan?.price || 39;
+
+      if (paidAmountForPlan >= 99) {
+          targetPassword = Object.entries(SUBJECT_PASSWORDS)
+            .map(([subj, pass]) => `${subj.toUpperCase()}: ${pass}`)
+            .join('\n');
+      } else {
+          targetPassword = SUBJECT_PASSWORDS[targetSubject] || "CONTACT_ADMIN";
       }
 
-      if (result.amount !== (selectedPlan?.price || 0)) {
-         throw new Error(`Amount mismatch! AI detected ₹${result.amount} but this plan costs ₹${selectedPlan?.price}. Please pay the correct amount.`);
+      const result = await geminiService.verifyPaymentScreenshot(
+        screenshotPreview, 
+        paidAmountForPlan, 
+        selectedPlan?.name || 'Premium Notes',
+        targetPassword
+      );
+      setAiVerifying(false);
+      
+      if (!result.verified) {
+        throw new Error(result.reason || "AI could not verify this receipt. Please ensure UTR/Ref ID is visible.");
       }
 
       const finalTxId = result.transactionId?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
@@ -282,18 +295,17 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       const purchaseData = {
         whatsapp,
         transactionId: finalTxId,
-        amount: result.amount || selectedPlan?.price || 0,
+        amount: result.amount || paidAmountForPlan,
         planId: selectedPlan?.id,
         planName: selectedPlan?.name,
         class: selectedPlan?.class || activeClass,
         resourceId: selectedPlan?.resourceId || null,
+        paymentApp: result.paymentApp || 'Detected App',
+        passwordUnlocked: result.password || targetPassword,
+        productName: selectedPlan?.name,
         isGuest: !user,
         status: 'approved' // AI Verified = Approved
       };
-
-      // Show instant password for individual subjects
-      const subjectKey = selectedPlan?.name?.toLowerCase().split(' ')[0] || '';
-      const password = SUBJECT_PASSWORDS[subjectKey] || "CONTACT_ADMIN";
 
       let saveResult;
       if (user) {
@@ -308,7 +320,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           // If it was an individual subject purchase, show password immediately
           if (selectedPlan?.resourceId || selectedPlan?.id.startsWith('res_')) {
              setPurchaseSuccess({ 
-               password: password, 
+               password: result.password || targetPassword, 
                subject: selectedPlan.name.replace(' Premium', '') 
              });
           } else {
@@ -332,7 +344,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         if (saveResult.success) {
           if (selectedPlan?.resourceId || selectedPlan?.id.startsWith('res_')) {
             setPurchaseSuccess({ 
-              password: password, 
+              password: result.password || targetPassword, 
               subject: selectedPlan.name.replace(' Premium', '') 
             });
           } else {

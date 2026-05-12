@@ -159,12 +159,29 @@ export default function Landing() {
       setIsSubmitting(true);
       setAiVerifying(true);
       
+      const targetSubject = (selectedPlan?.subject || selectedPlan?.name || '').toLowerCase().split(' ')[0] || '';
+      let targetPassword = '';
+      const paidAmountForPlan = selectedPlan?.price || 39;
+
+      if (paidAmountForPlan >= 99) {
+          targetPassword = Object.entries(SUBJECT_PASSWORDS)
+            .map(([subj, pass]) => `${subj.toUpperCase()}: ${pass}`)
+            .join('\n');
+      } else {
+          targetPassword = SUBJECT_PASSWORDS[targetSubject] || "CONTACT_ADMIN";
+      }
+
       // PER USER REQUEST: No screenshot storage. Gemini processes the base64 directly.
-      const result = await geminiService.verifyPaymentScreenshot(screenshotPreview);
+      const result = await geminiService.verifyPaymentScreenshot(
+        screenshotPreview, 
+        paidAmountForPlan, 
+        selectedPlan?.name || 'Premium Notes',
+        targetPassword
+      );
       setAiVerifying(false);
       
-      if (!result.isValid) {
-        throw new Error(result.error || "Verification failed. Please ensure your payment screenshot is clear and shows 'Poonam Devi' as recipient.");
+      if (!result.verified) {
+        throw new Error(result.reason || "Verification failed. Please ensure your payment screenshot is clear and shows 'Poonam Devi' as recipient.");
       }
 
       const finalTxId = result.transactionId?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
@@ -182,39 +199,24 @@ export default function Landing() {
       // Save Transactional Log (Save ONLY requested fields + necessary purchase metadata)
       const saveResult = await dataBridge.saveVerifiedPayment({
         transactionId: finalTxId,
-        amount: result.amount || selectedPlan?.price || 0,
+        amount: result.amount || paidAmountForPlan,
         userId: email || 'GUEST', // Using email as guest user_id per common practice if GUEST
-        verified: result.isValid,
+        verified: result.verified,
         // Carry forward info needed for UI
         phoneNumber: whatsapp,
-        subject: selectedPlan?.subject || selectedPlan?.name || 'Unknown'
+        subject: selectedPlan?.subject || selectedPlan?.name || 'Unknown',
+        productName: selectedPlan?.name || 'Premium Notes',
+        paymentApp: result.paymentApp || 'Detected App',
+        passwordUnlocked: result.password || targetPassword
       });
 
       if (!saveResult.success) {
         throw new Error(saveResult.error || "Failed to save verified payment. Please contact support.");
       }
 
-      // Show PDF password on screen
-      let displayPassword = '';
-      let displaySubject = '';
-
-      const paidAmount = result.amount || selectedPlan?.price || 0;
-
-      if (paidAmount >= 99) {
-          // If combo pack, show all passwords
-          displayPassword = Object.entries(SUBJECT_PASSWORDS)
-            .map(([subj, pass]) => `${subj.toUpperCase()}: ${pass}`)
-            .join('\n');
-          displaySubject = "All Subjects (Master Pack)";
-      } else {
-          const subjectKey = (selectedPlan?.subject || selectedPlan?.name || '').toLowerCase().split(' ')[0] || '';
-          displayPassword = SUBJECT_PASSWORDS[subjectKey] || "CONTACT_ADMIN";
-          displaySubject = selectedPlan?.name?.replace(' Premium', '') || 'Subject';
-      }
-
       setPurchaseSuccess({ 
-        password: displayPassword, 
-        subject: displaySubject 
+        password: result.password || targetPassword, 
+        subject: selectedPlan?.name?.replace(' Premium', '') || 'Subject' 
       });
 
       setScreenshotPreview(null);

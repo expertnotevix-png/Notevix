@@ -1107,9 +1107,9 @@ export default function Admin() {
     setLoading(true);
     const toastId = toast.loading("AI is analyzing the receipt...");
     try {
-      const result = await geminiService.verifyPaymentScreenshot(req.screenshotUrl);
+      const result = await geminiService.verifyPaymentScreenshot(req.screenshotUrl, req.amount, req.planName, "ADMIN_AUDIT");
       
-      if (result.isValid) {
+      if (result.verified) {
         toast.dismiss(toastId);
         toast.success(`AI Verified: ₹${result.amount} Match! Transaction: ${result.transactionId}`, { duration: 6000 });
         
@@ -1119,7 +1119,7 @@ export default function Admin() {
         }
       } else {
         toast.dismiss(toastId);
-        toast.error(`AI Rejection: ${result.error || "Receipt looks invalid or incomplete."}`, { duration: 8000 });
+        toast.error(`AI Rejection: ${result.reason || "Receipt looks invalid or incomplete."}`, { duration: 8000 });
       }
     } catch (error: any) {
       toast.dismiss(toastId);

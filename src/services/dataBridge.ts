@@ -455,7 +455,17 @@ export const dataBridge = {
     return false;
   },
 
-  async saveVerifiedPayment(paymentData: { transactionId: string, phoneNumber: string, amount: number, subject: string, userId?: string, verified?: boolean }) {
+  async saveVerifiedPayment(paymentData: { 
+    transactionId: string, 
+    phoneNumber: string, 
+    amount: number, 
+    subject: string, 
+    userId?: string, 
+    verified?: boolean,
+    paymentApp?: string,
+    passwordUnlocked?: string,
+    productName?: string
+  }) {
     if (supabase) {
       try {
         const { error } = await supabase.from('verified_payments').insert([{
@@ -464,6 +474,9 @@ export const dataBridge = {
           phone_number: paymentData.phoneNumber,
           amount: paymentData.amount,
           subject: paymentData.subject,
+          product_name: paymentData.productName || paymentData.subject,
+          payment_app: paymentData.paymentApp || 'Unknown',
+          password_unlocked: paymentData.passwordUnlocked || '',
           verified: paymentData.verified ?? true,
           created_at: new Date().toISOString()
         }]);
@@ -518,6 +531,9 @@ export const dataBridge = {
             plan_id: requestData.planId,
             plan_name: requestData.planName,
             resource_id: requestData.resourceId || null,
+            payment_app: requestData.paymentApp || 'Unknown',
+            password_unlocked: requestData.passwordUnlocked || '',
+            product_name: requestData.productName || requestData.planName,
             status: status,
             verified: status === 'approved',
             created_at: new Date().toISOString()
