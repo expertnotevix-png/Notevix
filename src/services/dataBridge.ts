@@ -468,8 +468,14 @@ export const dataBridge = {
   }) {
     if (supabase) {
       try {
+        const txId = paymentData.transactionId.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        
+        // Anti-duplicate check
+        const { data: existing } = await supabase.from('verified_payments').select('id').eq('transaction_id', txId).maybeSingle();
+        if (existing) return { success: true, alreadyExists: true };
+
         const { error } = await supabase.from('verified_payments').insert([{
-          transaction_id: paymentData.transactionId.toUpperCase().replace(/[^A-Z0-9]/g, ''),
+          transaction_id: txId,
           user_id: paymentData.userId || 'GUEST',
           phone_number: paymentData.phoneNumber,
           amount: paymentData.amount,
@@ -544,6 +550,21 @@ export const dataBridge = {
             return { success: false, error: `Transaction ID ${txId} already verified/used.` };
           }
           throw error;
+        }
+
+        // 2. IF APPROVED (AI Verified or Admin manual), also save to verified_payments for Analytics & AI Verifies tab
+        if (status === 'approved') {
+          await this.saveVerifiedPayment({
+            transactionId: txId,
+            phoneNumber: requestData.whatsapp || requestData.whatsappNumber || 'Unknown',
+            amount: requestData.amount,
+            subject: requestData.productName || requestData.planName || 'Unknown',
+            userId: activeUserId,
+            verified: true,
+            paymentApp: requestData.paymentApp,
+            passwordUnlocked: requestData.passwordUnlocked,
+            productName: requestData.productName || requestData.planName
+          });
         }
 
         // IF INSTANTLY APPROVED (AI Verified), UPDATE USER PROFILE IMMEDIATELY

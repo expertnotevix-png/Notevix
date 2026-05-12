@@ -279,20 +279,22 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       setAiVerifying(false);
       
       if (!result.verified) {
-        setAiError(result.reason || "Verification failed");
-        throw new Error(result.reason || "AI could not verify this receipt. Please ensure UTR/Ref ID is visible.");
+        setAiError(result.reason || "Invalid or unclear payment screenshot.");
+        throw new Error(result.reason || "Invalid or unclear payment screenshot.");
       }
 
       const finalTxId = result.transactionId?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
       
       if (!finalTxId || finalTxId.length < 6) {
-        throw new Error("Could not find a valid Transaction ID. Please ensure the UTR/Reference number is clearly visible.");
+        setAiError("Transaction ID not detected.");
+        throw new Error("Transaction ID not detected. Please ensure your UTR/Reference number is clearly visible.");
       }
 
       // DOUBLE-SPEND PROTECTION using bridge
       const isRedeemed = await dataBridge.isTransactionRedeemed(finalTxId);
       if (isRedeemed) {
-        throw new Error(`Transaction ID ${finalTxId} has already been used to unlock resources.`);
+        setAiError("Transaction ID already used.");
+        throw new Error("Transaction ID already used. Duplicate payments are not allowed.");
       }
       
       const purchaseData = {

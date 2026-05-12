@@ -33,22 +33,22 @@ function handleAIError(error: any): never {
   }
 
   if (errorString.includes('429') || error?.status === 429 || errorString.includes('quota') || errorString.includes('exhausted')) {
-    throw new Error(`AI Limit Reached: The engine is busy. Please wait 60 seconds before trying again! ⏳`);
+    throw new Error(`Verification server busy. Try again.`);
   }
   
   if (errorString.includes('404') || errorString.includes('not found')) {
-    throw new Error("AI Model Error: The requested AI model is currently unavailable.");
+    throw new Error("Verification server busy. Try again.");
   }
   
   if (errorString.includes('failed to fetch') || errorString.includes('method not allowed') || errorString.includes('405')) {
-    throw new Error("AI Connection Error: Server proxy issue. Reconnecting... 🔄");
+    throw new Error("Verification server busy. Try again.");
   }
 
   if (errorString.includes('timeout') || errorString.includes('abort')) {
-    throw new Error("Verification taking too long. Please try again.");
+    throw new Error("Verification server busy. Try again.");
   }
 
-  throw new Error("Verification failed. Please upload a clearer screenshot.");
+  throw new Error("Invalid or unclear payment screenshot.");
 }
 
 export const geminiService = {
@@ -192,16 +192,26 @@ export const geminiService = {
     2. RECEIVER: Must be "Poonam Devi" OR UPI ID "9236489649@mbk" (or similar ending in 9649).
     3. AMOUNT: Must EXACTLY match ₹${expectedPrice}.
     4. APP: Must be a real payment app (Paytm, PhonePe, Google Pay, BHIM, Mobikwik).
-    5. LEGITIMACY: Must be a clear, unedited, genuine mobile screenshot. Reject if edited or photo of another screen.
-    6. TRANSACTION ID: Must have a clearly visible UTR / Ref No / Transaction ID.
+    5. LEGITIMACY: Reject if:
+       - Screenshot looks edited or manipulated (fonts don't match, UI looks fake).
+       - It is a photo of another mobile/computer screen.
+       - It is a partial screenshot missing critical info.
+    6. TRANSACTION ID: Must have a clearly visible UTR / Ref No / Transaction ID (usually 12 digits for UPI).
 
     IF VERIFIED:
     Immediately return JSON: { "verified": true, "unlock": true, "password": "${passwordToReturn}", "transactionId": "...", "amount": ${expectedPrice}, "paymentApp": "..." }
 
     IF FAILED:
-    Immediately return JSON: { "verified": false, "unlock": false, "reason": "Specific reason (e.g. 'Amount mismatch - ₹39 expected', 'Invalid recipient - Poonam Devi not found', 'Unclear screenshot - UTR missing')" }`;
+    Strictly return one of these specific reasons in the JSON:
+    - "Transaction ID already used." (Never return this reason yourself, but be aware of it)
+    - "Payment amount does not match PDF price." (if amount is wrong)
+    - "Receiver verification failed." (if recipient is not Poonam Devi)
+    - "Transaction ID not detected." (if UTR is missing or unreadable)
+    - "Invalid or unclear payment screenshot." (if edited, blurry, fake, or photo of screen)
+    
+    Return JSON: { "verified": false, "unlock": false, "reason": "Reason from above list" }`;
 
-    const prompt = `Verify payment for "${pdfName}" (Price: ₹${expectedPrice}). Extract Transaction ID and Payment App. If valid, return the password "${passwordToReturn}". If invalid, give a clear reason.`;
+    const prompt = `Very strictly verify payment for "${pdfName}" (Price: ₹${expectedPrice}). Extract the 12-digit UTR/Ref ID and Payment App. If valid, return the password "${passwordToReturn}". If invalid, pick the best reason from the approved list.`;
 
     try {
       const { nvidiaKey } = getAI();

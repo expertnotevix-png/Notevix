@@ -183,34 +183,39 @@ export default function Landing() {
       setAiVerifying(false);
       
       if (!result.verified) {
-        setAiError(result.reason || "Verification failed");
-        throw new Error(result.reason || "Verification failed. Please ensure your payment screenshot is clear and shows 'Poonam Devi' as recipient.");
+        setAiError(result.reason || "Invalid or unclear payment screenshot.");
+        throw new Error(result.reason || "Invalid or unclear payment screenshot.");
       }
 
       const finalTxId = result.transactionId?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
       
       if (!finalTxId || finalTxId.length < 6) {
-        throw new Error("Could not extract a valid Transaction ID. Please ensure the UTR is visible.");
+        setAiError("Transaction ID not detected.");
+        throw new Error("Transaction ID not detected. Please ensure your UTR/Reference number is clearly visible.");
       }
 
       // Check anti-fraud in Supabase: Reject if transaction_id already exists
       const isRedeemed = await dataBridge.isTransactionRedeemed(finalTxId);
       if (isRedeemed) {
-        throw new Error("This transaction has already been used to unlock notes.");
+        setAiError("Transaction ID already used.");
+        throw new Error("Transaction ID already used. Duplicate payments are not allowed.");
       }
       
       // Save Transactional Log (Save ONLY requested fields + necessary purchase metadata)
-      const saveResult = await dataBridge.saveVerifiedPayment({
+      const saveResult = await dataBridge.savePurchaseRequest({
         transactionId: finalTxId,
         amount: result.amount || paidAmountForPlan,
         userId: email || 'GUEST', // Using email as guest user_id per common practice if GUEST
+        status: 'approved',
         verified: result.verified,
         // Carry forward info needed for UI
-        phoneNumber: whatsapp,
-        subject: selectedPlan?.subject || selectedPlan?.name || 'Unknown',
+        whatsapp: whatsapp,
+        email: email,
+        planName: selectedPlan?.name || 'Premium Notes',
         productName: selectedPlan?.name || 'Premium Notes',
         paymentApp: result.paymentApp || 'Detected App',
-        passwordUnlocked: result.password || targetPassword
+        passwordUnlocked: result.password || targetPassword,
+        isGuest: true
       });
 
       if (!saveResult.success) {

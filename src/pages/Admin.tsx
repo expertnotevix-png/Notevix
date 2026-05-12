@@ -1111,6 +1111,14 @@ export default function Admin() {
       
       if (result.verified) {
         toast.dismiss(toastId);
+        
+        // Anti-fraud: check if already used
+        const isRedeemed = await dataBridge.isTransactionRedeemed(result.transactionId || "");
+        if (isRedeemed) {
+           toast.error("AI Alert: This Transaction ID has already been redeemed in another request!", { duration: 8000 });
+           return;
+        }
+
         toast.success(`AI Verified: ₹${result.amount} Match! Transaction: ${result.transactionId}`, { duration: 6000 });
         
         // Show a confirm dialog to auto-approve
@@ -1182,9 +1190,9 @@ export default function Admin() {
     }
   };
 
-  // Real-time listener for purchase requests and profiles
+  // Real-time listener for purchase requests, verified payments and profiles
   useEffect(() => {
-    if (activeTab !== 'payments' && activeTab !== 'users') return;
+    if (activeTab !== 'payments' && activeTab !== 'users' && activeTab !== 'verified_payments' && activeTab !== 'analytics') return;
     
     const channels: any[] = [];
     const setupAdminRealtime = async () => {
@@ -1201,6 +1209,16 @@ export default function Admin() {
             .subscribe();
           channels.push(payChannel);
         }
+
+        // AI Verified Payments (Tab: verified_payments)
+        const verifiedChannel = supabase
+          .channel(`admin_verified_${Math.random().toString(36).substring(7)}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'verified_payments' }, () => {
+            if (activeTab === 'verified_payments') fetchVerifiedPayments();
+            fetchAnalytics();
+          })
+          .subscribe();
+        channels.push(verifiedChannel);
 
         // Profiles / Users (Tab: users or payments for analytics)
         const userChannel = supabase
@@ -1236,6 +1254,17 @@ export default function Admin() {
       // 1. Update request status in the correct database
       if (req.source === 'supabase' && supabase) {
         await supabase.from('purchase_requests').update({ status: 'approved' }).eq('id', req.id);
+        
+        // Also save to verified_payments for unified AI Analytics
+        await dataBridge.saveVerifiedPayment({
+          transactionId: req.transactionId,
+          phoneNumber: req.whatsapp || req.whatsappNumber || 'ADMIN_SYSTEM',
+          amount: req.amount,
+          subject: req.planName || 'Manual Approval',
+          userId: req.userId,
+          verified: true,
+          productName: req.planName
+        });
       } else {
         try {
           await updateDoc(doc(db, 'purchase_requests', req.id), { status: 'approved' });
