@@ -79,6 +79,7 @@ export default function Landing() {
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiVerifying, setAiVerifying] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [purchaseSuccess, setPurchaseSuccess] = useState<{ password: string; subject: string } | null>(null);
   const lastAttemptRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -158,6 +159,7 @@ export default function Landing() {
     try {
       setIsSubmitting(true);
       setAiVerifying(true);
+      setAiError(null);
       
       const targetSubject = (selectedPlan?.subject || selectedPlan?.name || '').toLowerCase().split(' ')[0] || '';
       let targetPassword = '';
@@ -181,6 +183,7 @@ export default function Landing() {
       setAiVerifying(false);
       
       if (!result.verified) {
+        setAiError(result.reason || "Verification failed");
         throw new Error(result.reason || "Verification failed. Please ensure your payment screenshot is clear and shows 'Poonam Devi' as recipient.");
       }
 
@@ -620,6 +623,21 @@ export default function Landing() {
               </div>
 
               <div className="mt-6 pt-6 border-t border-white/5 flex-shrink-0">
+                {aiError && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl flex gap-3 items-start mb-4"
+                  >
+                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1 leading-none">AI Rejection Reason</p>
+                      <p className="text-xs text-secondary leading-relaxed font-medium">
+                        {aiError}
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
                 <button
                   disabled={isSubmitting || aiVerifying}
                   onClick={handleGuestPurchase}

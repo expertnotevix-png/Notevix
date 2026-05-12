@@ -199,9 +199,9 @@ export const geminiService = {
     Immediately return JSON: { "verified": true, "unlock": true, "password": "${passwordToReturn}", "transactionId": "...", "amount": ${expectedPrice}, "paymentApp": "..." }
 
     IF FAILED:
-    Immediately return JSON: { "verified": false, "unlock": false, "reason": "Specific reason for rejection" }`;
+    Immediately return JSON: { "verified": false, "unlock": false, "reason": "Specific reason (e.g. 'Amount mismatch - ₹39 expected', 'Invalid recipient - Poonam Devi not found', 'Unclear screenshot - UTR missing')" }`;
 
-    const prompt = `Verify payment for "${pdfName}" (Price: ₹${expectedPrice}). Extract Transaction ID and Payment App. If valid, return the password "${passwordToReturn}".`;
+    const prompt = `Verify payment for "${pdfName}" (Price: ₹${expectedPrice}). Extract Transaction ID and Payment App. If valid, return the password "${passwordToReturn}". If invalid, give a clear reason.`;
 
     try {
       const { nvidiaKey } = getAI();
@@ -221,27 +221,46 @@ export const geminiService = {
         PREMIUM_MODEL, 
         15000, 
         optimizedImage,
-        { temperature: 0, max_tokens: 150 }
+        { temperature: 0, max_tokens: 200 }
       );
 
-      return this.parseStrictPaymentResult(res || "");
+      const parsed = this.parseStrictPaymentResult(res || "");
+      if (parsed.verified && !parsed.password) {
+        parsed.password = passwordToReturn;
+      }
+      return parsed;
     } catch (error: any) {
       console.error("Forensic Payment Failure:", error);
-      return { verified: false, unlock: false, reason: error.message || "Network Error" };
+      return { verified: false, unlock: false, reason: error.message || "Connection Error" };
     }
   },
 
   parseStrictPaymentResult(res: string): any {
     try {
       const jsonMatch = res.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("Invalid AI response");
-      return JSON.parse(jsonMatch[0]);
+      if (!jsonMatch) throw new Error("AI response was not in JSON format.");
+
+      const data = JSON.parse(jsonMatch[0]);
+      if (data.verified === false && !data.reason) {
+        data.reason = "AI rejected the receipt but provided no specific reason.";
+      }
+      return data;
     } catch (e) {
       const utrMatch = res.match(/\b\d{12}\b/);
       if (utrMatch) {
          return { verified: true, unlock: true, transactionId: utrMatch[0] };
       }
-      return { verified: false, unlock: false, reason: "Could not parse verification results." };
+      
+      // If we can't parse JSON, try to extract a reason from the raw text
+      const failureKeywords = ['reject', 'failed', 'invalid', 'mismatch', 'unclear', 'recipient', 'amount'];
+      const lines = res.split('\n');
+      const reasonLine = lines.find(l => failureKeywords.some(k => l.toLowerCase().includes(k)));
+      
+      return { 
+        verified: false, 
+        unlock: false, 
+        reason: reasonLine ? reasonLine.trim().substring(0, 100) : "Could not verify payment details. Please try again with a clearer screenshot."
+      };
     }
   },
 
