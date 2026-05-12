@@ -1,27 +1,26 @@
-import { GoogleGenAI } from "@google/genai";
 import { optimizeImageForAI } from "../lib/imageOptimizer";
 
 let aiInstance: any = null;
 
 function getAI() {
-  const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
   const nvidiaKey = (import.meta as any).env?.VITE_NVIDIA_API_KEY;
   
-  if (!apiKey && !nvidiaKey) {
+  if (!nvidiaKey) {
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname.includes('ais-dev');
     const message = isLocal 
-      ? "AI Configuration Error: Please add VITE_GEMINI_API_KEY or VITE_NVIDIA_API_KEY to 'Settings > Secrets'."
-      : "AI Configuration Error: Missing API keys in environment.";
+      ? "AI Configuration Error: Please add VITE_NVIDIA_API_KEY to 'Settings > Secrets'."
+      : "AI Configuration Error: Missing NVIDIA API key in environment.";
     
     console.error("AI API Key Error:", message);
     throw new Error(message);
   }
-  return { apiKey, nvidiaKey };
+  return { nvidiaKey };
 }
 
 const MODEL_FAST = "meta/llama-3.1-8b-instruct";
 const MODEL_POWER = "meta/llama-3.1-70b-instruct";
-const GEMINI_MODEL = "gemini-3-flash-preview";
+// Using NVIDIA specialized model for premium tasks
+const PREMIUM_MODEL = "meta/llama-4-maverick-17b-128e-instruct";
 
 function handleAIError(error: any): never {
   console.error("AI Service Error:", error);
@@ -30,16 +29,15 @@ function handleAIError(error: any): never {
   const rawMessage = error?.message || "Internal network error";
   
   if (errorString.includes('unauthorized') || errorString.includes('401') || errorString.includes('invalid api key')) {
-    throw new Error(`AI Key Error: The key appears invalid. Please verify your NVIDIA/Gemini API key in Settings.`);
+    throw new Error(`AI Key Error: The key appears invalid. Please verify your NVIDIA API key in Settings.`);
   }
 
-  if (errorString.includes('429') || error?.status === 429 || errorString.includes('quota') || errorString.includes('exhausted') || errorString.includes('resource_exhausted')) {
-    const service = errorString.includes('nvidia') || errorString.includes('llama') ? 'NVIDIA' : 'Gemini AI';
-    throw new Error(`AI Limit Reached: ${service} is busy. Please wait 60 seconds before trying again! ⏳`);
+  if (errorString.includes('429') || error?.status === 429 || errorString.includes('quota') || errorString.includes('exhausted')) {
+    throw new Error(`AI Limit Reached: The engine is busy. Please wait 60 seconds before trying again! ⏳`);
   }
   
   if (errorString.includes('404') || errorString.includes('not found')) {
-    throw new Error("AI Model Error: The requested AI model is currently unavailable in your region or key type.");
+    throw new Error("AI Model Error: The requested AI model is currently unavailable.");
   }
   
   if (errorString.includes('failed to fetch') || errorString.includes('method not allowed') || errorString.includes('405')) {
@@ -54,40 +52,12 @@ function handleAIError(error: any): never {
 }
 
 export const geminiService = {
-  async callGeminiDirect(prompt: string, system: string, key: string) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: key });
-      const response = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        config: {
-          systemInstruction: system
-        },
-        contents: prompt,
-      });
-      return response.text;
-    } catch (err) {
-      console.error("Gemini Direct Error:", err);
-      throw err;
-    }
-  },
-
   async solveDoubt(query: string) {
     try {
-      const { apiKey, nvidiaKey } = getAI();
-
-      if (nvidiaKey) {
-        try {
-          return await this.callNvidiaAPI(query, "Expert CBSE tutor. Hinglish answers.", false, MODEL_FAST, 15000);
-        } catch (nvidiaErr) {
-          console.warn("NVIDIA failed, trying Gemini...", nvidiaErr);
-        }
-      }
-
-      if (apiKey) {
-        return await this.callGeminiDirect(query, "You are an expert CBSE tutor. Answer CBSE Class 8-10 doubts in simple Hinglish. Keep answers clear and student-friendly.", apiKey);
-      }
+      const { nvidiaKey } = getAI();
+      if (!nvidiaKey) throw new Error("AI engine offline.");
       
-      throw new Error("No AI providers available");
+      return await this.callNvidiaAPI(query, "Expert CBSE tutor. Hinglish answers.", false, MODEL_FAST, 15000);
     } catch (error) {
       return handleAIError(error);
     }
@@ -100,22 +70,11 @@ export const geminiService = {
     const system = "Expert CBSE Exam Setter. ONLY raw JSON []. No markdown.";
 
     try {
-      const { apiKey, nvidiaKey } = getAI();
+      const { nvidiaKey } = getAI();
+      if (!nvidiaKey) throw new Error("AI engine busy.");
 
-      if (nvidiaKey) {
-        try {
-          const res = await this.callNvidiaAPI(prompt, system, true, MODEL_FAST, 25000);
-          return JSON.parse(res.replace(/```json|```/g, '').trim());
-        } catch (err) {
-          console.warn("NVIDIA Quiz failed, trying Gemini...");
-        }
-      }
-
-      if (apiKey) {
-        const res = await this.callGeminiDirect(prompt, system, apiKey);
-        return JSON.parse(res.replace(/```json|```/g, '').trim());
-      }
-      throw new Error("AI engine busy.");
+      const res = await this.callNvidiaAPI(prompt, system, true, MODEL_FAST, 25000);
+      return JSON.parse(res.replace(/```json|```/g, '').trim());
     } catch (error) {
       return handleAIError(error);
     }
@@ -126,26 +85,16 @@ export const geminiService = {
     const system = "Helpful study assistant. 5 clear bullets.";
 
     try {
-      const { apiKey, nvidiaKey } = getAI();
-      if (nvidiaKey) {
-        try {
-          return await this.callNvidiaAPI(prompt, system, false, MODEL_FAST, 30000);
-        } catch (err) {
-          console.warn("NVIDIA Summary failed, trying Gemini...");
-        }
-      }
+      const { nvidiaKey } = getAI();
+      if (!nvidiaKey) throw new Error("AI engine busy.");
 
-      if (apiKey) {
-        return await this.callGeminiDirect(prompt, system, apiKey);
-      }
-      throw new Error("AI engine busy.");
+      return await this.callNvidiaAPI(prompt, system, false, MODEL_FAST, 30000);
     } catch (error) {
       return handleAIError(error);
     }
   },
 
   async summarizeLongText(text: string, pageCount: number) {
-    // Dynamic summary length: 50 pages -> 2 pages (~1000 words), 20 pages -> 1 page (~500 words)
     const targetWords = pageCount >= 40 ? 1000 : pageCount >= 20 ? 500 : 300;
     const prompt = `Please provide a detailed, comprehensive summary of this study material.
     Material length: ${pageCount} pages.
@@ -158,21 +107,10 @@ export const geminiService = {
     const system = `Expert Academic Summarizer. Provide a ${targetWords}-word detailed breakdown. Focus on core concepts and exam points.`;
 
     try {
-      const { apiKey, nvidiaKey } = getAI();
+      const { nvidiaKey } = getAI();
+      if (!nvidiaKey) throw new Error("AI engine currently busy.");
       
-      if (nvidiaKey) {
-        try {
-          // Long summaries need high tokens and time
-          return await this.callNvidiaAPI(prompt, system, false, MODEL_POWER, 60000);
-        } catch (err) {
-          console.warn("NVIDIA Long Summary failed, trying Gemini...");
-        }
-      }
-
-      if (apiKey) {
-        return await this.callGeminiDirect(prompt, system, apiKey);
-      }
-      throw new Error("AI engine currently busy.");
+      return await this.callNvidiaAPI(prompt, system, false, MODEL_POWER, 60000);
     } catch (error) {
       return handleAIError(error);
     }
@@ -182,22 +120,11 @@ export const geminiService = {
     const system = "You are NoteVix AI, a friendly study assistant for CBSE students. Answer anything related to the CBSE syllabus. Keep responses concise and helpful. Use simple Hinglish (Hindi + English). DO NOT use Markdown headers like '##'. DO NOT use '$' symbols for simple variables. Use bold text (**text**) for emphasis. Keep the tone conversational and easy to read for students.";
 
     try {
-      const { apiKey, nvidiaKey } = getAI();
+      const { nvidiaKey } = getAI();
+      if (!nvidiaKey) throw new Error("No AI available");
       
-      if (nvidiaKey) {
-        try {
-          const chatPrompt = history.map(h => `${h.role === 'model' ? 'assistant' : h.role}: ${h.parts[0].text}`).join("\n") + `\nuser: ${message}`;
-          return await this.callNvidiaAPI(chatPrompt, system, false, MODEL_FAST, 25000);
-        } catch (err) {
-          console.warn("NVIDIA chat failed, trying Gemini...");
-        }
-      }
-
-      if (apiKey) {
-        return await this.callGeminiDirect(message, system, apiKey);
-      }
-      
-      throw new Error("No AI available");
+      const chatPrompt = history.map(h => `${h.role === 'model' ? 'assistant' : h.role}: ${h.parts[0].text}`).join("\n") + `\nuser: ${message}`;
+      return await this.callNvidiaAPI(chatPrompt, system, false, MODEL_FAST, 25000);
     } catch (error) {
       return handleAIError(error);
     }
@@ -209,22 +136,11 @@ export const geminiService = {
     Return ONLY JSON: { "approved": boolean, "reason": "string if rejected" }`;
 
     try {
-      const { apiKey, nvidiaKey } = getAI();
-      
-      if (nvidiaKey) {
-        try {
-          const res = await this.callNvidiaAPI(prompt, "You are a strict community moderator. Return ONLY raw JSON.", true, MODEL_FAST, 10000);
-          return JSON.parse(res.replace(/```json|```/g, '').trim());
-        } catch (err) {
-          console.warn("NVIDIA Moderate failed, trying Gemini...");
-        }
-      }
+      const { nvidiaKey } = getAI();
+      if (!nvidiaKey) return { approved: true };
 
-      if (apiKey) {
-        const res = await this.callGeminiDirect(prompt, "Moderate school community content. JSON ONLY.", apiKey);
-        return JSON.parse(res.replace(/```json|```/g, '').trim());
-      }
-      return { approved: true };
+      const res = await this.callNvidiaAPI(prompt, "You are a strict community moderator. Return ONLY raw JSON.", true, MODEL_FAST, 10000);
+      return JSON.parse(res.replace(/```json|```/g, '').trim());
     } catch (error) {
       return { approved: true };
     }
@@ -243,22 +159,11 @@ export const geminiService = {
     Return ONLY JSON: { "approved": boolean, "reason": "...", "isNotes": boolean, "aiAnswer": "..." }`;
 
     try {
-      const { apiKey, nvidiaKey } = getAI();
-      
-      if (nvidiaKey) {
-        try {
-          const res = await this.callNvidiaAPI(prompt, "Expert CBSE Moderator. Return ONLY JSON.", true, MODEL_FAST, 20000);
-          return JSON.parse(res.replace(/```json|```/g, '').trim());
-        } catch (err) {
-          console.warn("NVIDIA Post Process failed, trying Gemini...");
-        }
-      }
+      const { nvidiaKey } = getAI();
+      if (!nvidiaKey) return { approved: true, isNotes: false };
 
-      if (apiKey) {
-        const res = await this.callGeminiDirect(prompt, "Expert CBSE Moderator. JSON ONLY.", apiKey);
-        return JSON.parse(res.replace(/```json|```/g, '').trim());
-      }
-      return { approved: true, isNotes: false };
+      const res = await this.callNvidiaAPI(prompt, "Expert CBSE Moderator. Return ONLY JSON.", true, MODEL_FAST, 20000);
+      return JSON.parse(res.replace(/```json|```/g, '').trim());
     } catch (error) {
       return { approved: true, isNotes: false };
     }
@@ -270,20 +175,10 @@ export const geminiService = {
     Description: ${description}`;
 
     try {
-      const { apiKey, nvidiaKey } = getAI();
-      
-      if (nvidiaKey) {
-        try {
-          return await this.callNvidiaAPI(prompt, "Expert CBSE Tutor.", false, MODEL_FAST, 20000);
-        } catch (err) {
-          console.warn("NVIDIA Community Answer failed, trying Gemini...");
-        }
-      }
+      const { nvidiaKey } = getAI();
+      if (!nvidiaKey) return "I'm looking into that for you!";
 
-      if (apiKey) {
-        return await this.callGeminiDirect(prompt, "Expert CBSE Tutor.", apiKey);
-      }
-      return "I'm looking into that for you!";
+      return await this.callNvidiaAPI(prompt, "Expert CBSE Tutor.", false, MODEL_FAST, 20000);
     } catch (error) {
       return handleAIError(error);
     }
@@ -329,13 +224,11 @@ export const geminiService = {
     const prompt = "Perform strict forensic verification on this payment receipt for NoteVix.";
 
     try {
-      const { apiKey } = getAI();
+      const { nvidiaKey } = getAI();
 
-      // PER USER REQUEST: Use Gemini ONLY for premium verification
-      if (!apiKey) throw new Error("Payment verification engine offline. Missing Gemini API Key.");
+      // PER USER REQUEST: Replace Gemini with NVIDIA for premium verification
+      if (!nvidiaKey) throw new Error("Payment verification engine offline. Missing NVIDIA API Key.");
 
-      const ai = new GoogleGenAI({ apiKey });
-      
       // Optimize image first
       let optimizedImage = imageData;
       try {
@@ -344,21 +237,18 @@ export const geminiService = {
         console.warn("Payment image optimization failed:", e);
       }
 
-      const base64Data = optimizedImage.includes(',') ? optimizedImage.split(',')[1] : optimizedImage;
-      
-      const response = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        config: { 
-          systemInstruction: system,
-          responseMimeType: "application/json"
-        },
-        contents: [
-          { text: prompt },
-          { inlineData: { data: base64Data, mimeType: "image/jpeg" } }
-        ]
-      });
+      // Use NVIDIA Vision with meta/llama-4-maverick-17b-128e-instruct
+      const res = await this.callNvidiaAPI(
+        prompt, 
+        system, 
+        true, 
+        PREMIUM_MODEL, 
+        35000, 
+        optimizedImage,
+        { temperature: 0 }
+      );
 
-      return this.parsePaymentResult(response.text || "");
+      return this.parsePaymentResult(res || "");
     } catch (error: any) {
       console.error("Forensic Payment Failure:", error);
       return handleAIError(error);
@@ -471,7 +361,7 @@ export const geminiService = {
     } catch (error: any) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
-        throw new Error(`AI Timeout: NVIDIA was too slow (> ${customTimeout/1000}s). Switching engine...`);
+        throw new Error(`AI Timeout: NVIDIA was too slow (> ${customTimeout/1000}s). Please try again.`);
       }
       
       // If server fetch fails (e.g. CORS or network issue), try direct with bundled key
