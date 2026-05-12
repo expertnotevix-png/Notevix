@@ -1586,6 +1586,52 @@ export const dataBridge = {
     };
   },
 
+  /**
+   * Save Story Log (Username collection)
+   */
+  async saveStoryLog(logData: {
+    username: string;
+    platform: string;
+    pdfName: string;
+    userId?: string;
+  }) {
+    if (!supabase) return { success: false, error: 'No connection' };
+    try {
+      const { error } = await supabase.from('free_pdf_story_logs').insert([{
+        user_id: logData.userId || 'GUEST',
+        username: logData.username,
+        platform: logData.platform,
+        pdf_name: logData.pdfName,
+        approved: true,
+        created_at: new Date().toISOString()
+      }]);
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      console.error("Save story log failed:", err);
+      return { success: false, error: err.message };
+    }
+  },
+
+  /**
+   * Get Story Logs (Admin)
+   */
+  async getStoryLogs(limitCount = 100) {
+    if (!supabase) return [];
+    try {
+      const { data, error } = await supabase
+        .from('free_pdf_story_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limitCount);
+      if (error) throw error;
+      return data || [];
+    } catch (err) {
+      console.error("Fetch story logs failed:", err);
+      return [];
+    }
+  },
+
   // Admin Methods for Templates
   async addStoryTemplate(template: Partial<StoryTemplate>) {
     if (!supabase) return { success: false };

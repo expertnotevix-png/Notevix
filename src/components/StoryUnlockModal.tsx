@@ -14,7 +14,8 @@ import {
   ChevronRight, 
   ExternalLink,
   ShieldCheck,
-  Zap
+  Zap,
+  Send
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { StoryTemplate, UserProfile } from '../types';
@@ -44,12 +45,18 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
   const [verifying, setVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<{ isValid: boolean, error?: string } | null>(null);
   const [downloading, setDownloading] = useState(false);
+  
+  // New: Social Username step state
+  const [socialUsername, setSocialUsername] = useState('');
+  const [socialPlatform, setSocialPlatform] = useState<'instagram'|'snapchat'>('instagram');
+  const [submittingLog, setSubmittingLog] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       fetchTemplates();
       setStep(1);
       setVerificationResult(null);
+      setSocialUsername('');
     }
   }, [isOpen]);
 
@@ -147,7 +154,7 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
         hasResolved = true;
         console.log("UX Fallback: Auto-verifying story after 5s delay...");
         setVerificationResult({ isValid: true });
-        setStep(4);
+        setStep(4); // Go to username collection
         setVerifying(false);
         toast.success("Verification in progress... Done!", { icon: '🎁' });
       }
@@ -160,11 +167,11 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
         hasResolved = true;
         clearTimeout(fallbackTimer);
         setVerificationResult({ isValid: result.isValid || true }); 
-        setStep(4);
+        setStep(4); // Go to username collection
         if (result.isValid) {
-          toast.success("Verified! PDF Password Revealed.", { icon: '🎁' });
+          toast.success("Verification complete!", { icon: '🎁' });
         } else {
-          toast.success("Verification finished! Check password below.", { icon: '🎁' });
+          toast.success("Verification finished!", { icon: '🎁' });
         }
       }
     } catch (err: any) {
@@ -173,11 +180,35 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
         hasResolved = true;
         clearTimeout(fallbackTimer);
         setVerificationResult({ isValid: true });
-        setStep(4);
+        setStep(4); // Go to username collection
         toast.success("Verification complete!", { icon: '🎁' });
       }
     } finally {
       if (hasResolved) setVerifying(false);
+    }
+  };
+
+  const handleSocialSubmit = async () => {
+    if (!socialUsername) {
+      toast.error("Please enter your username.");
+      return;
+    }
+    
+    setSubmittingLog(true);
+    try {
+      await dataBridge.saveStoryLog({
+        username: socialUsername,
+        platform: socialPlatform,
+        pdfName: resource.subject + ' - ' + resource.title,
+        userId: user.uid
+      });
+      setStep(5);
+    } catch (err) {
+      console.error("Failed to save story log:", err);
+      // Still unlock for user if storage fails to not block them
+      setStep(5);
+    } finally {
+      setSubmittingLog(false);
     }
   };
 
@@ -423,6 +454,82 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
             )}
 
             {step === 4 && (
+              <motion.div 
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="space-y-6"
+              >
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em]">Final Verification Step</span>
+                  <h4 className="text-xl font-black text-white italic uppercase tracking-tight">One Last Thing!</h4>
+                  <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
+                    Please provide your social handle where you posted the story.
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex p-1.5 bg-white/5 border border-white/10 rounded-2xl gap-2">
+                    <button
+                      onClick={() => setSocialPlatform('instagram')}
+                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl transition-all ${
+                        socialPlatform === 'instagram' 
+                          ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' 
+                          : 'text-gray-500 hover:text-gray-400'
+                      }`}
+                    >
+                      <Instagram size={16} />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Instagram</span>
+                    </button>
+                    <button
+                      onClick={() => setSocialPlatform('snapchat')}
+                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl transition-all ${
+                        socialPlatform === 'snapchat' 
+                          ? 'bg-yellow-500/10 text-yellow-600 border border-yellow-500/30' 
+                          : 'text-gray-500 hover:text-gray-400'
+                      }`}
+                    >
+                      <div className="w-4 h-4 rounded-sm bg-yellow-500/20" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Snapchat</span>
+                    </button>
+                  </div>
+
+                  <div className="relative">
+                    <input 
+                      type="text"
+                      placeholder={socialPlatform === 'instagram' ? "@username" : "Snapchat Username"}
+                      value={socialUsername}
+                      onChange={(e) => setSocialUsername(e.target.value)}
+                      className="w-full py-5 px-6 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-indigo-500 transition-all placeholder:text-gray-600"
+                    />
+                  </div>
+                  
+                  <div className="p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10">
+                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
+                      By submitting, you confirm the story is active on your profile.
+                    </p>
+                  </div>
+
+                  <button 
+                    onClick={handleSocialSubmit}
+                    disabled={submittingLog || !socialUsername}
+                    className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl hover:bg-indigo-500 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                  >
+                    {submittingLog ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Finalizing...
+                      </>
+                    ) : (
+                      <>
+                        Submit & Reveal Password <Send size={18} />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {step === 5 && (
               <motion.div 
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}

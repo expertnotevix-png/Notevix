@@ -9,7 +9,7 @@ import {
   MessageSquare, Bell, Send, CheckCircle2, Clock, ShieldCheck,
   Shield, RefreshCw, CreditCard, Check, XCircle, Users, 
   Instagram, LayoutDashboard, BarChart3, Settings, Menu, LogOut, Search, TrendingUp, DollarSign, UserCheck,
-  BookOpen, Zap, AlertCircle, AlertTriangle
+  BookOpen, Zap, AlertCircle, AlertTriangle, Smartphone
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -22,7 +22,7 @@ import {
 import { supabase } from '../lib/supabase';
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources' | 'valid_payments' | 'verified_payments' | 'settings' | 'banners' | 'free_notes' | 'story_unlocks'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources' | 'valid_payments' | 'verified_payments' | 'settings' | 'banners' | 'free_notes' | 'story_unlocks' | 'story_logs'>('analytics');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -54,6 +54,7 @@ export default function Admin() {
   const [bannerFormData, setBannerFormData] = useState({ imageUrl: '', link: '', location: 'home' });
   const [bannerImagePreview, setBannerImagePreview] = useState<string | null>(null);
   const [storyTemplates, setStoryTemplates] = useState<any[]>([]);
+  const [storyLogs, setStoryLogs] = useState<any[]>([]);
   const [isAddingStoryTemplate, setIsAddingStoryTemplate] = useState(false);
   const [storyTemplateForm, setStoryTemplateForm] = useState({ title: '', description: '', link: '', imageUrl: '' });
   const [storyTemplateImagePreview, setStoryTemplateImagePreview] = useState<string | null>(null);
@@ -108,7 +109,22 @@ export default function Admin() {
       fetchStoryTemplates();
       fetchStoryStats();
     }
+    if (activeTab === 'story_logs') {
+      fetchStoryLogs();
+    }
   }, [activeTab]);
+
+  const fetchStoryLogs = async () => {
+    setLoading(true);
+    try {
+      const data = await dataBridge.getStoryLogs(100);
+      setStoryLogs(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchStoryTemplates = async () => {
     setLoading(true);
@@ -1565,7 +1581,8 @@ export default function Admin() {
   const menuItems = [
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'banners', label: 'Promotion Banners', icon: LayoutDashboard },
-    { id: 'story_unlocks', label: 'Story Unlocks', icon: Instagram },
+    { id: 'story_unlocks', label: 'Story Templates', icon: Instagram },
+    { id: 'story_logs', label: 'Story Unlocks', icon: Search },
     { id: 'resources', label: 'Digital Library', icon: BookOpen },
     { id: 'free_notes', label: 'Free Notes', icon: Zap },
     { id: 'valid_payments', label: 'Verify Keys', icon: ShieldCheck },
@@ -1772,6 +1789,73 @@ export default function Admin() {
                 <div className="md:col-span-2 lg:col-span-3 py-20 text-center glass-card rounded-[2.5rem] bg-white/5 border border-dashed border-white/10">
                    <Instagram className="w-12 h-12 text-gray-700 mx-auto opacity-20 mb-4" />
                    <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest italic">No templates deployed yet.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      
+      case 'story_logs':
+        return (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="glass-card p-6 rounded-[2rem] bg-white/5 flex flex-col gap-2">
+                <div className="bg-emerald-500/10 w-10 h-10 rounded-2xl flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Total Approved Stories</p>
+                  <p className="text-2xl font-black tabular-nums">{storyLogs.length}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-card overflow-hidden rounded-[2.5rem] bg-white/5 border border-white/10">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/5 bg-white/5">
+                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Username</th>
+                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Platform</th>
+                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Resource Unlocked</th>
+                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Time</th>
+                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {storyLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-white/5 transition-colors group">
+                        <td className="px-8 py-6 font-bold text-white tracking-tight">{log.username}</td>
+                        <td className="px-8 py-6">
+                           <div className="flex items-center gap-2">
+                             {log.platform === 'instagram' ? (
+                               <div className="flex items-center gap-2 text-rose-400">
+                                 <Instagram size={14} />
+                                 <span className="text-[10px] font-black uppercase tracking-widest">Insta</span>
+                               </div>
+                             ) : (
+                               <div className="flex items-center gap-2 text-yellow-500">
+                                 <Smartphone size={14} />
+                                 <span className="text-[10px] font-black uppercase tracking-widest">Snap</span>
+                               </div>
+                             )}
+                           </div>
+                        </td>
+                        <td className="px-8 py-6 text-xs text-gray-400 max-w-[200px] truncate">{log.pdf_name}</td>
+                        <td className="px-8 py-6 text-[10px] text-gray-500 font-bold">{new Date(log.created_at).toLocaleString()}</td>
+                        <td className="px-8 py-6">
+                          <span className="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border border-green-500/30 text-green-400 bg-green-500/5">
+                            VERIFIED
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {storyLogs.length === 0 && !loading && (
+                <div className="py-20 text-center">
+                   <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">No story logs recorded yet.</p>
                 </div>
               )}
             </div>
@@ -3405,6 +3489,17 @@ CREATE TABLE IF NOT EXISTS public.verification_logs (
   resource_id TEXT NOT NULL,
   confidence_score NUMERIC,
   raw_ai_response TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4.1 Free PDF Story Logs
+CREATE TABLE IF NOT EXISTS public.free_pdf_story_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL,
+  username TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  pdf_name TEXT NOT NULL,
+  approved BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
