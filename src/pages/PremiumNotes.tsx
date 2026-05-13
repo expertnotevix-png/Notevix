@@ -798,9 +798,9 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                       <div className="absolute inset-4 bg-indigo-500/10 rounded-full animate-pulse" />
                     </div>
                     <div className="mt-8 text-center px-6">
-                      <p className="text-white font-black text-xs uppercase tracking-[0.2em] mb-2 animate-pulse">Running Forensic Scan</p>
+                      <p className="text-white font-black text-xs uppercase tracking-[0.2em] mb-2 animate-pulse">Verifying payment...</p>
                       <p className="text-white/40 text-[7px] font-bold uppercase tracking-widest leading-relaxed">
-                        AI is verifying payment authenticity... <br /> This takes about 5-10 seconds.
+                        AI is scanning your screenshot for authenticity... <br /> This can take up to 60 seconds if the server is busy.
                       </p>
                     </div>
                   </div>
@@ -937,7 +937,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                   className="w-full h-16 bg-indigo-600 text-white rounded-3xl font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50"
                 >
                   {aiVerifying ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-                  {aiVerifying ? 'Verifying...' : 'Verify Payment & Unlock'}
+                  {aiVerifying ? 'Verifying payment...' : 'Verify Payment & Unlock'}
                 </button>
               </div>
             </motion.div>

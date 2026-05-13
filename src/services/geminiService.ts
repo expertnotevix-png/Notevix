@@ -21,6 +21,7 @@ const MODEL_FAST = "meta/llama-3.1-8b-instruct";
 const MODEL_POWER = "meta/llama-3.1-70b-instruct";
 // Using NVIDIA specialized model for premium tasks
 const PREMIUM_MODEL = "meta/llama-4-maverick-17b-128e-instruct";
+const VISION_MODEL_FAST = "meta/llama-3.2-11b-vision-instruct";
 
 function handleAIError(error: any): never {
   console.error("AI Service Error:", error);
@@ -213,35 +214,67 @@ export const geminiService = {
 
     const prompt = `Very strictly verify payment for "${pdfName}" (Price: ₹${expectedPrice}). Extract the 12-digit UTR/Ref ID and Payment App. If valid, return the password "${passwordToReturn}". If invalid, pick the best reason from the approved list.`;
 
-    try {
-      const { nvidiaKey } = getAI();
-      if (!nvidiaKey) throw new Error("Payment verification engine offline.");
+    const MAX_ATTEMPTS = 2;
+    const TOTAL_TIMEOUT = 60000;
+    const startTime = Date.now();
 
-      let optimizedImage = imageData;
+    const attemptVerification = async (currentAttempt: number): Promise<any> => {
       try {
-        optimizedImage = await optimizeImageForAI(imageData, 1024, 0.8);
-      } catch (e) {
-        console.warn("Image optimization failed:", e);
-      }
+        const { nvidiaKey } = getAI();
+        if (!nvidiaKey) throw new Error("Payment verification engine offline.");
 
-      const res = await this.callNvidiaAPI(
-        prompt, 
-        system, 
-        true, 
-        PREMIUM_MODEL, 
-        15000, 
-        optimizedImage,
-        { temperature: 0, max_tokens: 200 }
-      );
+        // Compress image to reduce latency as requested
+        let optimizedImage = imageData;
+        try {
+          // Use 800px width and 0.6 quality for faster transmission
+          optimizedImage = await optimizeImageForAI(imageData, 800, 0.6);
+        } catch (e) {
+          console.warn("Image optimization failed:", e);
+        }
 
-      const parsed = this.parseStrictPaymentResult(res || "");
-      if (parsed.verified && !parsed.password) {
-        parsed.password = passwordToReturn;
+        const res = await this.callNvidiaAPI(
+          prompt, 
+          system, 
+          true, 
+          VISION_MODEL_FAST, // Use faster vision model
+          30000,             // 30s timeout per call
+          optimizedImage,
+          { temperature: 0, max_tokens: 200 }
+        );
+
+        const parsed = this.parseStrictPaymentResult(res || "");
+        
+        // If it's a clear failure reason (amount mismatch, wrong receiver), don't retry
+        const nonRetryableReasons = ["Payment amount does not match PDF price.", "Receiver verification failed."];
+        if (!parsed.verified && nonRetryableReasons.includes(parsed.reason)) {
+          return parsed;
+        }
+
+        if (parsed.verified && !parsed.password) {
+          parsed.password = passwordToReturn;
+        }
+        
+        if (!parsed.verified && currentAttempt < MAX_ATTEMPTS) {
+          throw new Error(parsed.reason || "Verification uncertain");
+        }
+
+        return parsed;
+      } catch (error: any) {
+        if (currentAttempt < MAX_ATTEMPTS && (Date.now() - startTime) < TOTAL_TIMEOUT) {
+          console.warn(`Payment verification attempt ${currentAttempt} failed, retrying...`, error.message);
+          // Wait 1s before retry
+          await new Promise(r => setTimeout(r, 1000));
+          return attemptVerification(currentAttempt + 1);
+        }
+        throw error;
       }
-      return parsed;
+    };
+
+    try {
+      return await attemptVerification(1);
     } catch (error: any) {
-      console.error("Forensic Payment Failure:", error);
-      return { verified: false, unlock: false, reason: error.message || "Connection Error" };
+      console.error("Forensic Payment Failure after retries:", error);
+      return { verified: false, unlock: false, reason: error.message || "Invalid or unclear payment screenshot." };
     }
   },
 

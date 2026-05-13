@@ -1121,7 +1121,7 @@ export default function Admin() {
     lastAdminAiAttemptRef.current = now;
     
     setLoading(true);
-    const toastId = toast.loading("AI is analyzing the receipt...");
+    const toastId = toast.loading("Verifying payment...");
     try {
       const result = await geminiService.verifyPaymentScreenshot(req.screenshotUrl, req.amount, req.planName, "ADMIN_AUDIT");
       

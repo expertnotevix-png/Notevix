@@ -519,9 +519,9 @@ export default function Landing() {
                     <div className="absolute inset-4 bg-indigo-500/10 rounded-full animate-pulse" />
                   </div>
                   <div className="mt-8 text-center px-6">
-                    <p className="text-white font-black text-xs uppercase tracking-[0.2em] mb-2 animate-pulse">Running Forensic Scan</p>
+                    <p className="text-white font-black text-xs uppercase tracking-[0.2em] mb-2 animate-pulse">Verifying payment...</p>
                     <p className="text-white/40 text-[7px] font-bold uppercase tracking-widest leading-relaxed">
-                      AI is verifying payment authenticity... <br /> This usually takes 5-10 seconds.
+                      AI is scanning your screenshot for authenticity... <br /> This can take up to 60 seconds if the server is busy.
                     </p>
                   </div>
                 </div>
@@ -648,7 +648,7 @@ export default function Landing() {
                   onClick={handleGuestPurchase}
                   className="w-full h-16 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-indigo-700 transition-all disabled:opacity-50 active:scale-95 shadow-xl shadow-indigo-600/20"
                 >
-                  {aiVerifying ? 'Verifying...' : isSubmitting ? 'Processing...' : 'Complete Purchase'}
+                  {aiVerifying ? 'Verifying payment...' : isSubmitting ? 'Processing...' : 'Complete Purchase'}
                 </button>
               </div>
             </motion.div>
