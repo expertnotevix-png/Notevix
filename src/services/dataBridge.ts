@@ -459,8 +459,13 @@ export const dataBridge = {
     transactionId: string, 
     phoneNumber: string, 
     amount: number, 
-    subject: string, 
-    verified?: boolean
+    subject?: string, 
+    productName?: string,
+    userId?: string,
+    paymentApp?: string,
+    passwordUnlocked?: string,
+    verified?: boolean,
+    reason?: string
   }) {
     if (supabase) {
       try {
@@ -470,13 +475,15 @@ export const dataBridge = {
         const { data: existing } = await supabase.from('verified_payments').select('id').eq('transaction_id', txId).maybeSingle();
         if (existing) return { success: true, alreadyExists: true };
 
-        // Root Cause: Insertion of product_name, payment_app, password_unlocked, user_id
-        // Fixed: Matching existing schema (transaction_id, phone_number, amount, subject, verified, created_at)
         const { error } = await supabase.from('verified_payments').insert([{
           transaction_id: txId,
           phone_number: paymentData.phoneNumber,
           amount: paymentData.amount,
-          subject: paymentData.subject,
+          product_name: paymentData.productName || paymentData.subject || 'Unknown',
+          user_id: paymentData.userId || 'GUEST',
+          payment_app: paymentData.paymentApp || 'Unknown',
+          password_unlocked: paymentData.passwordUnlocked || '',
+          verification_reason: paymentData.reason || 'AI Verified',
           verified: paymentData.verified ?? true,
           created_at: new Date().toISOString()
         }]);
@@ -491,6 +498,7 @@ export const dataBridge = {
     try {
       await addDoc(collection(db, 'verified_payments'), {
         ...paymentData,
+        userId: paymentData.userId || 'GUEST',
         verified: paymentData.verified ?? true,
         createdAt: serverTimestamp()
       });

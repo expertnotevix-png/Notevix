@@ -258,7 +258,10 @@ export default function Admin() {
             userId: d.user_id || 'GUEST',
             phoneNumber: d.phone_number,
             amount: d.amount,
-            subject: d.subject,
+            productName: d.product_name || 'Unknown',
+            paymentApp: d.payment_app,
+            passwordUnlocked: d.password_unlocked,
+            verificationReason: d.verification_reason,
             verified: d.verified ?? true,
             createdAt: d.created_at
           })));
@@ -288,8 +291,9 @@ export default function Admin() {
         transactionId: manualPaymentData.transactionId.trim(),
         phoneNumber: manualPaymentData.phoneNumber.trim(),
         amount: Number(manualPaymentData.amount),
-        subject: manualPaymentData.subject.trim(),
-        verified: true
+        productName: manualPaymentData.subject.trim(),
+        verified: true,
+        reason: 'ADMIN_MANUAL'
       });
       if (res.success) {
         toast.success("Manual Payment Recorded!");
@@ -2259,14 +2263,21 @@ export default function Admin() {
                   </div>
                   <div className="flex justify-between items-end pt-4 border-t border-white/5">
                     <div>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Subject</p>
-                      <p className="text-xs font-bold text-white uppercase">{p.subject}</p>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Product</p>
+                      <p className="text-xs font-bold text-white uppercase">{p.productName}</p>
+                      {p.paymentApp && <p className="text-[9px] text-indigo-400 font-bold mt-1 uppercase tracking-widest">{p.paymentApp}</p>}
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Amount</p>
                       <p className="text-xl font-black text-emerald-500">₹{p.amount}</p>
                     </div>
                   </div>
+                  {p.passwordUnlocked && (
+                    <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                       <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest mb-1">Pass Unlocked</p>
+                       <p className="text-xs font-mono text-indigo-300">{p.passwordUnlocked}</p>
+                    </div>
+                  )}
                 </div>
               ))}
               {verifiedPayments.length === 0 && (

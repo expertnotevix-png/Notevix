@@ -123,7 +123,10 @@ export interface VerifiedPayment {
   userId: string;
   phoneNumber: string;
   amount: number;
-  subject: string;
+  productName: string;
+  paymentApp?: string;
+  passwordUnlocked?: string;
+  verificationReason?: string;
   verified: boolean;
   createdAt: string;
 }
