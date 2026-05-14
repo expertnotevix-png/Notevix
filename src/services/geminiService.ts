@@ -188,31 +188,35 @@ export const geminiService = {
   async verifyPaymentScreenshot(imageData: string, expectedPrice: number, pdfName: string, passwordToReturn: string): Promise<{ verified: boolean, unlock: boolean, password?: string, transactionId?: string, amount?: number, reason?: string, paymentApp?: string }> {
     const system = `You are a strict NoteVix Premium Payment Verification AI.
     
+    RETURN ONLY STRICT JSON. 
+    DO NOT use markdown. 
+    DO NOT use ** or explanation.
+    DO NOT include any text outside the JSON object.
+
+    JSON FORMAT:
+    {
+      "verified": true,
+      "amount": ${expectedPrice},
+      "recipient": "POONAM DEVI",
+      "transaction_id": "ABC123",
+      "reason": "verified"
+    }
+
     APPROVE ONLY IF ALL CONDITIONS MATCH:
     1. STATUS: Payment state must be "SUCCESSFUL", "PAID", or "DONE".
     2. RECEIVER: Must be "Poonam Devi" OR UPI ID "9236489649@mbk" (or similar ending in 9649).
     3. AMOUNT: Must EXACTLY match ₹${expectedPrice}.
     4. APP: Must be a real payment app (Paytm, PhonePe, Google Pay, BHIM, Mobikwik).
-    5. LEGITIMACY: Reject if:
-       - Screenshot looks edited or manipulated (fonts don't match, UI looks fake).
-       - It is a photo of another mobile/computer screen.
-       - It is a partial screenshot missing critical info.
-    6. TRANSACTION ID: Must have a clearly visible UTR / Ref No / Transaction ID (usually 12 digits for UPI).
+    5. LEGITIMACY: Reject if edited, manipulate, or partial.
+    6. TRANSACTION ID: Must have a clearly visible UTR / Ref No / Transaction ID.
 
     IF VERIFIED:
-    Immediately return JSON: { "verified": true, "unlock": true, "password": "${passwordToReturn}", "transactionId": "...", "amount": ${expectedPrice}, "paymentApp": "..." }
+    Return: { "verified": true, "unlock": true, "password": "${passwordToReturn}", "transactionId": "...", "amount": ${expectedPrice}, "paymentApp": "...", "recipient": "..." }
 
     IF FAILED:
-    Strictly return one of these specific reasons in the JSON:
-    - "Transaction ID already used." (Never return this reason yourself, but be aware of it)
-    - "Payment amount does not match PDF price." (if amount is wrong)
-    - "Receiver verification failed." (if recipient is not Poonam Devi)
-    - "Transaction ID not detected." (if UTR is missing or unreadable)
-    - "Invalid or unclear payment screenshot." (if edited, blurry, fake, or photo of screen)
-    
-    Return JSON: { "verified": false, "unlock": false, "reason": "Reason from above list" }`;
+    Return: { "verified": false, "unlock": false, "reason": "Specific reason: amount mismatch, wrong receiver, etc." }`;
 
-    const prompt = `Very strictly verify payment for "${pdfName}" (Price: ₹${expectedPrice}). Extract the 12-digit UTR/Ref ID and Payment App. If valid, return the password "${passwordToReturn}". If invalid, pick the best reason from the approved list.`;
+    const prompt = `Strictly verify payment for "${pdfName}" (Price: ₹${expectedPrice}). RETURN ONLY JSON.`;
 
     const MAX_ATTEMPTS = 2;
     const TOTAL_TIMEOUT = 60000;
@@ -280,29 +284,31 @@ export const geminiService = {
 
   parseStrictPaymentResult(res: string): any {
     try {
-      const jsonMatch = res.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("AI response was not in JSON format.");
-
-      const data = JSON.parse(jsonMatch[0]);
+      // Find the first { and the last }
+      const start = res.indexOf('{');
+      const end = res.lastIndexOf('}');
+      if (start === -1 || end === -1 || end < start) {
+        throw new Error("AI response was not in JSON format.");
+      }
+      
+      const jsonStr = res.substring(start, end + 1).trim();
+      const data = JSON.parse(jsonStr);
+      
       if (data.verified === false && !data.reason) {
         data.reason = "AI rejected the receipt but provided no specific reason.";
       }
       return data;
     } catch (e) {
+      console.warn("JSON Parse Error in Payment Result:", e, "Raw result:", res);
       const utrMatch = res.match(/\b\d{12}\b/);
       if (utrMatch) {
          return { verified: true, unlock: true, transactionId: utrMatch[0] };
       }
       
-      // If we can't parse JSON, try to extract a reason from the raw text
-      const failureKeywords = ['reject', 'failed', 'invalid', 'mismatch', 'unclear', 'recipient', 'amount'];
-      const lines = res.split('\n');
-      const reasonLine = lines.find(l => failureKeywords.some(k => l.toLowerCase().includes(k)));
-      
       return { 
         verified: false, 
         unlock: false, 
-        reason: reasonLine ? reasonLine.trim().substring(0, 100) : "Could not verify payment details. Please try again with a clearer screenshot."
+        reason: "Could not verify payment details. Please provide a clearer screenshot."
       };
     }
   },
