@@ -289,7 +289,6 @@ export default function Admin() {
         phoneNumber: manualPaymentData.phoneNumber.trim(),
         amount: Number(manualPaymentData.amount),
         subject: manualPaymentData.subject.trim(),
-        userId: 'ADMIN_MANUAL',
         verified: true
       });
       if (res.success) {
@@ -1277,9 +1276,7 @@ export default function Admin() {
           phoneNumber: req.whatsapp || req.whatsappNumber || 'ADMIN_SYSTEM',
           amount: req.amount,
           subject: req.planName || 'Manual Approval',
-          userId: req.userId,
-          verified: true,
-          productName: req.planName
+          verified: true
         });
       } else {
         try {

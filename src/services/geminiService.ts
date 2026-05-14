@@ -198,7 +198,7 @@ export const geminiService = {
       "verified": true,
       "amount": ${expectedPrice},
       "recipient": "POONAM DEVI",
-      "transaction_id": "ABC123",
+      "transaction_id": "ABC123_OR_UTR_HERE",
       "reason": "verified"
     }
 
@@ -207,19 +207,18 @@ export const geminiService = {
     2. RECEIVER: Must be "Poonam Devi" OR UPI ID "9236489649@mbk" (or similar ending in 9649).
     3. AMOUNT: Must EXACTLY match ₹${expectedPrice}.
     4. APP: Must be a real payment app (Paytm, PhonePe, Google Pay, BHIM, Mobikwik).
-    5. LEGITIMACY: Reject if edited, manipulate, or partial.
-    6. TRANSACTION ID: Must have a clearly visible UTR / Ref No / Transaction ID.
+    5. TRANSACTION ID: Must have a clearly visible UTR / Ref No / Transaction ID (usually 12 digits for UPI).
 
     IF VERIFIED:
     Return: { "verified": true, "unlock": true, "password": "${passwordToReturn}", "transactionId": "...", "amount": ${expectedPrice}, "paymentApp": "...", "recipient": "..." }
 
     IF FAILED:
-    Return: { "verified": false, "unlock": false, "reason": "Specific reason: amount mismatch, wrong receiver, etc." }`;
+    Return: { "verified": false, "unlock": false, "reason": "Specific reason" }`;
 
-    const prompt = `Strictly verify payment for "${pdfName}" (Price: ₹${expectedPrice}). RETURN ONLY JSON.`;
+    const prompt = `Strictly verify payment for "${pdfName}" (Price: ₹${expectedPrice}). RETURN ONLY STRICT JSON.`;
 
     const MAX_ATTEMPTS = 2;
-    const TOTAL_TIMEOUT = 60000;
+    const TOTAL_TIMEOUT = 60000; // 60s total as requested
     const startTime = Date.now();
 
     const attemptVerification = async (currentAttempt: number): Promise<any> => {
@@ -227,30 +226,41 @@ export const geminiService = {
         const { nvidiaKey } = getAI();
         if (!nvidiaKey) throw new Error("Payment verification engine offline.");
 
-        // Compress image to reduce latency as requested
+        // Compress image to reduce latency
         let optimizedImage = imageData;
         try {
-          // Use 800px width and 0.6 quality for faster transmission
+          // Fast compression for efficiency
           optimizedImage = await optimizeImageForAI(imageData, 800, 0.6);
         } catch (e) {
           console.warn("Image optimization failed:", e);
         }
 
+        // Calculate remaining time for this attempt
+        const elapsed = Date.now() - startTime;
+        const remainingTotal = TOTAL_TIMEOUT - elapsed;
+        
+        // If we have less than 5s left, don't even start another call
+        if (remainingTotal < 5000) {
+          throw new Error("Verification timed out (60s limit).");
+        }
+
+        // Each attempt gets up to 30s but not more than total remaining
+        const currentCallTimeout = Math.min(30000, remainingTotal);
+
         const res = await this.callNvidiaAPI(
           prompt, 
           system, 
           true, 
-          VISION_MODEL_FAST, // Use faster vision model
-          30000,             // 30s timeout per call
+          VISION_MODEL_FAST, 
+          currentCallTimeout,
           optimizedImage,
           { temperature: 0, max_tokens: 200 }
         );
 
         const parsed = this.parseStrictPaymentResult(res || "");
         
-        // If it's a clear failure reason (amount mismatch, wrong receiver), don't retry
-        const nonRetryableReasons = ["Payment amount does not match PDF price.", "Receiver verification failed."];
-        if (!parsed.verified && nonRetryableReasons.includes(parsed.reason)) {
+        // If it's a clear fraud/mismatch, don't retry
+        if (!parsed.verified && (parsed.reason?.includes("amount") || parsed.reason?.includes("receiver"))) {
           return parsed;
         }
 
@@ -258,16 +268,18 @@ export const geminiService = {
           parsed.password = passwordToReturn;
         }
         
+        // Failure on first attempt triggers 1 retry
         if (!parsed.verified && currentAttempt < MAX_ATTEMPTS) {
           throw new Error(parsed.reason || "Verification uncertain");
         }
 
         return parsed;
       } catch (error: any) {
-        if (currentAttempt < MAX_ATTEMPTS && (Date.now() - startTime) < TOTAL_TIMEOUT) {
-          console.warn(`Payment verification attempt ${currentAttempt} failed, retrying...`, error.message);
-          // Wait 1s before retry
-          await new Promise(r => setTimeout(r, 1000));
+        const elapsed = Date.now() - startTime;
+        if (currentAttempt < MAX_ATTEMPTS && elapsed < TOTAL_TIMEOUT) {
+          console.warn(`Payment verification attempt ${currentAttempt} failed, retrying once...`, error.message);
+          // Small delay before retry
+          await new Promise(r => setTimeout(r, 1500));
           return attemptVerification(currentAttempt + 1);
         }
         throw error;
@@ -277,7 +289,7 @@ export const geminiService = {
     try {
       return await attemptVerification(1);
     } catch (error: any) {
-      console.error("Forensic Payment Failure after retries:", error);
+      console.error("Payment Verification Final Failure:", error);
       return { verified: false, unlock: false, reason: error.message || "Invalid or unclear payment screenshot." };
     }
   },
