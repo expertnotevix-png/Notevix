@@ -531,7 +531,7 @@ export const dataBridge = {
   },
 
   /**
-   * Save a purchase request (Supabase Primary) with Instant Approval helper
+   * Save a purchase request (Supabase Primary)
    */
   async savePurchaseRequest(requestData: any) {
     const txId = (requestData.transactionId || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -546,23 +546,20 @@ export const dataBridge = {
       } catch (err) {}
     }
 
-    // 1. Try Supabase First (Truth source)
+    // 1. Try Supabase First (Verified Payments table as requested)
     if (supabase) {
       try {
         const { error } = await supabase
-          .from('purchase_requests')
+          .from('verified_payments')
           .insert([{
             user_id: activeUserId,
-            email: requestData.email,
-            whatsapp: requestData.whatsapp,
+            phone_number: requestData.whatsapp || requestData.phoneNumber || '',
             transaction_id: txId,
             amount: requestData.amount,
-            plan_id: requestData.planId,
-            plan_name: requestData.planName,
-            resource_id: requestData.resourceId || null,
-            payment_app: requestData.paymentApp || 'Unknown',
-            password_unlocked: requestData.passwordUnlocked || '',
             product_name: requestData.productName || requestData.planName,
+            plan_id: requestData.planId,
+            resource_id: requestData.resourceId,
+            payment_app: requestData.paymentApp || 'Unknown',
             status: status,
             verified: status === 'approved',
             created_at: new Date().toISOString()
@@ -570,7 +567,7 @@ export const dataBridge = {
         
         if (error) {
           if (error.code === '23505') {
-            return { success: false, error: `Transaction ID ${txId} already verified/used.` };
+            return { success: false, error: `Transaction ID ${txId} already submitted or verified.` };
           }
           throw error;
         }
@@ -581,12 +578,14 @@ export const dataBridge = {
       }
     }
 
-    // 2. Sync to Firestore (Backup only - silent)
+    // 2. Sync to Firestore (Backup only)
     try {
-      await addDoc(collection(db, 'purchase_requests'), {
-        ...requestData,
+      await addDoc(collection(db, 'verified_payments'), {
         userId: activeUserId,
+        phoneNumber: requestData.whatsapp || requestData.phoneNumber || '',
         transactionId: txId,
+        amount: requestData.amount,
+        productName: requestData.productName || requestData.planName,
         status: status,
         verified: status === 'approved',
         createdAt: serverTimestamp()
@@ -604,12 +603,12 @@ export const dataBridge = {
   async approvePurchase(requestId: string, password?: string) {
     if (!supabase) return { success: false };
     try {
-      // 1. Fetch request details
-      const { data: req, error: fetchErr } = await supabase.from('purchase_requests').select('*').eq('id', requestId).single();
+      // 1. Fetch request details from verified_payments
+      const { data: req, error: fetchErr } = await supabase.from('verified_payments').select('*').eq('id', requestId).single();
       if (fetchErr || !req) throw new Error("Request not found");
 
-      // 2. Update status
-      const { error: updateErr } = await supabase.from('purchase_requests').update({
+      // 2. Update status in verified_payments
+      const { error: updateErr } = await supabase.from('verified_payments').update({
         status: 'approved',
         verified: true,
         password_unlocked: password || req.password_unlocked || '',
@@ -618,31 +617,36 @@ export const dataBridge = {
 
       if (updateErr) throw updateErr;
 
-      // 3. Grant access to user if possible
+      // 3. Grant access to user
       if (req.user_id && req.user_id !== 'GUEST') {
         const updates: any = {};
         
-        if (req.plan_id === 'plus_sub' || req.plan_id === 'monthly_sub') {
+        if (req.product_name?.toLowerCase().includes('premium') || req.product_name?.toLowerCase().includes('plus')) {
           updates.is_premium = true;
-          updates.plan_type = req.plan_id;
         }
 
+        // Fetch current profile to merge resources/classes
         const { data: profile } = await supabase.from('profiles').select('unlocked_resources, unlocked_classes').eq('id', req.user_id).maybeSingle();
         
         if (req.resource_id) {
-          updates.unlocked_resources = Array.from(new Set([...(profile?.unlocked_resources || []), req.resource_id]));
+          const currentResources = profile?.unlocked_resources || [];
+          if (!currentResources.includes(req.resource_id)) {
+            updates.unlocked_resources = Array.from(new Set([...currentResources, req.resource_id]));
+          }
         }
 
         const classMatch = req.plan_id?.match(/class_(\d+)_/);
         if (classMatch) {
-          updates.unlocked_classes = Array.from(new Set([...(profile?.unlocked_classes || []), classMatch[1]]));
+          const currentClasses = profile?.unlocked_classes || [];
+          if (!currentClasses.includes(classMatch[1])) {
+            updates.unlocked_classes = Array.from(new Set([...currentClasses, classMatch[1]]));
+          }
         }
 
         if (Object.keys(updates).length > 0) {
           await supabase.from('profiles').update(updates).eq('id', req.user_id);
-          
-          // Firestore sync for legacy support
           try {
+             // Firestore sync
              const fsUpdates: any = {};
              if (updates.is_premium) fsUpdates.isPremium = true;
              if (updates.unlocked_resources) fsUpdates.unlockedResources = updates.unlocked_resources;
@@ -665,8 +669,9 @@ export const dataBridge = {
   async rejectPurchase(requestId: string, reason: string) {
     if (!supabase) return { success: false };
     try {
-      const { error } = await supabase.from('purchase_requests').update({
+      const { error } = await supabase.from('verified_payments').update({
         status: 'rejected',
+        verified: false,
         rejection_reason: reason,
         updated_at: new Date().toISOString()
       }).eq('id', requestId);
@@ -685,9 +690,9 @@ export const dataBridge = {
     if (!supabase) return [];
     try {
       const { data, error } = await supabase
-        .from('purchase_requests')
+        .from('verified_payments')
         .select('*')
-        .or(`user_id.eq.${emailOrUid},email.eq.${emailOrUid}`)
+        .or(`user_id.eq.${emailOrUid}`)
         .order('created_at', { ascending: false });
       
       if (error) throw error;

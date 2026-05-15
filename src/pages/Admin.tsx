@@ -1120,21 +1120,24 @@ export default function Admin() {
     try {
       let data: any[] = [];
 
-      // 1. Fetch from Supabase (Primary - No Quota issues)
+      // 1. Fetch from Supabase (verified_payments table as requested)
       if (supabase) {
         try {
           const { data: sbData, error } = await supabase
-            .from('purchase_requests')
+            .from('verified_payments')
             .select('*')
             .order('created_at', { ascending: false })
-            .limit(200);
+            .limit(300);
           
           if (!error && sbData) {
             data = sbData.map(d => ({ 
               ...d, 
               source: 'supabase',
-              timestamp: d.created_at || d.timestamp,
-              transactionId: d.transactionId || d.transaction_id
+              timestamp: d.created_at,
+              transactionId: d.transaction_id,
+              whatsappNumber: d.phone_number,
+              planName: d.product_name,
+              userName: d.user_id || 'Unknown'
             } as any));
           }
         } catch (e) {
@@ -1142,25 +1145,26 @@ export default function Admin() {
         }
       }
 
-      // 2. Fetch from Firestore (Fallback - only if Supabase returned nothing)
+      // 2. Fetch from Firestore (Fallback)
       if (data.length === 0) {
         try {
-          const q = query(collection(db, 'purchase_requests'), orderBy('timestamp', 'desc'), limit(50));
+          const q = query(collection(db, 'verified_payments'), orderBy('createdAt', 'desc'), limit(50));
           const snapshot = await getDocs(q);
-          data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, source: 'firebase' } as any));
+          data = snapshot.docs.map(doc => ({ 
+            ...doc.data(), 
+            id: doc.id, 
+            source: 'firebase',
+            timestamp: doc.data().createdAt,
+            transactionId: doc.data().transactionId,
+            whatsappNumber: doc.data().phoneNumber,
+            planName: doc.data().productName
+          } as any));
         } catch (e) {
           console.warn("Firestore purchase fetch skipped");
         }
       }
 
-      // Sort final list
-      const sorted = data.sort((a, b) => {
-        const dateA = new Date(a.created_at || a.timestamp || 0).getTime();
-        const dateB = new Date(b.created_at || b.timestamp || 0).getTime();
-        return dateB - dateA;
-      });
-
-      setPurchaseRequests(sorted);
+      setPurchaseRequests(data);
     } catch (error: any) {
       console.error("Error fetching purchase requests:", error);
     } finally {
@@ -1329,15 +1333,23 @@ export default function Admin() {
     );
   }, [allUsers, searchQuery]);
 
+  const [showOnlyPending, setShowOnlyPending] = useState(true);
+
   const filteredPayments = useMemo(() => {
-    if (!searchQuery) return purchaseRequests;
+    let filtered = purchaseRequests;
+    if (showOnlyPending) {
+      filtered = filtered.filter(p => p.status === 'pending');
+    }
+    if (!searchQuery) return filtered;
+    
     const q = searchQuery.toLowerCase();
-    return purchaseRequests.filter(p => 
+    return filtered.filter(p => 
       p.userName?.toLowerCase().includes(q) || 
       p.userEmail?.toLowerCase().includes(q) ||
-      p.transactionId?.toLowerCase().includes(q)
+      p.transactionId?.toLowerCase().includes(q) ||
+      p.whatsappNumber?.toLowerCase().includes(q)
     );
-  }, [purchaseRequests, searchQuery]);
+  }, [purchaseRequests, searchQuery, showOnlyPending]);
 
   const menuItems = [
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
@@ -1347,10 +1359,10 @@ export default function Admin() {
     { id: 'resources', label: 'Digital Library', icon: BookOpen },
     { id: 'free_notes', label: 'Free Notes', icon: Zap },
     { id: 'valid_payments', label: 'Verify Keys', icon: ShieldCheck },
-    { id: 'verified_payments', label: 'AI Verified', icon: CheckCircle2 },
+    { id: 'verified_payments', label: 'Payment Ledger', icon: CreditCard },
     { id: 'chapters', label: 'Flashcards', icon: Database },
     { id: 'messages', label: 'Support', icon: MessageSquare },
-    { id: 'payments', label: 'Revenue', icon: CreditCard },
+    { id: 'payments', label: 'Premium Requests', icon: ShieldCheck },
     { id: 'registry', label: 'Registry', icon: Database },
     { id: 'users', label: 'Students', icon: Users },
     { id: 'notifications', label: 'Broadcast', icon: Bell },
@@ -2839,14 +2851,43 @@ export default function Admin() {
       case 'payments':
         return (
           <div className="space-y-6 animate-in fade-in duration-500">
-             <div className="relative max-w-md">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white/5 p-6 rounded-[2rem] border border-white/10">
+                <div>
+                  <h3 className="text-2xl font-black uppercase tracking-tight">Premium Payment Requests</h3>
+                  <p className="text-xs text-gray-500 font-bold mt-1 uppercase tracking-widest">Verify and approve student purchases from verified_payments table</p>
+                </div>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setShowOnlyPending(!showOnlyPending)}
+                    className={`px-4 py-2 rounded-xl border font-black text-[10px] uppercase tracking-widest transition-all ${
+                      showOnlyPending 
+                        ? 'bg-yellow-500 text-black border-yellow-500' 
+                        : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'
+                    }`}
+                  >
+                    {showOnlyPending ? 'Pending Only' : 'Show All'}
+                  </button>
+                  <div className="bg-yellow-500/10 px-4 py-2 rounded-xl border border-yellow-500/20">
+                    <p className="text-[8px] text-yellow-500 font-black uppercase tracking-widest">Pending</p>
+                    <p className="text-lg font-black">{purchaseRequests.filter(p => p.status === 'pending').length}</p>
+                  </div>
+                  <button 
+                    onClick={fetchPurchaseRequests}
+                    className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="relative max-w-lg">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input 
                   type="text"
-                  placeholder="Search payments by name, email or TxID..."
+                  placeholder="Search by name, TxID or Phone..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 py-3 text-sm focus:border-purple-500 focus:outline-none"
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm focus:border-purple-500 outline-none"
                 />
               </div>
 
@@ -2855,20 +2896,19 @@ export default function Admin() {
                   <div key={req.id} className="glass-card p-8 rounded-[2.5rem] bg-white/5 space-y-6">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-white/5">
                       <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400 text-xl font-black">
+                        <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 text-xl font-black">
                           {req.userName?.charAt(0) || 'U'}
                         </div>
                         <div>
-                          <h4 className="font-bold text-lg">{req.userName || req.email || 'Guest Student'}</h4>
+                          <h4 className="font-bold text-lg">{req.userName || 'Student'}</h4>
                           <div className="flex gap-2">
-                            <p className="text-xs text-gray-500">{req.userEmail || req.email}</p>
-                            <span className={`text-[8px] font-black px-2 py-0.5 rounded border ${
+                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{req.whatsappNumber || 'No Phone'}</p>
+                             <span className={`text-[8px] font-black px-2 py-0.5 rounded border ${
                               req.source === 'supabase' ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/5' : 'border-indigo-500/30 text-indigo-400 bg-indigo-500/5'
                             } uppercase tracking-tighter`}>
                               {req.source || 'Firebase'}
                             </span>
                           </div>
-                          <p className="text-[10px] text-purple-400 font-bold uppercase tracking-wider mt-1">WA: {req.whatsappNumber || 'N/A'}</p>
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-2">
@@ -2877,7 +2917,7 @@ export default function Admin() {
                           req.status === 'approved' ? 'bg-green-500/20 text-green-500' :
                           'bg-red-500/20 text-red-500'
                         }`}>
-                          {req.status === 'approved' ? 'AI VERIFIED' : req.status}
+                          {req.status}
                         </div>
                         <span className="text-[10px] text-gray-500 font-bold">{new Date(req.timestamp).toLocaleString()}</span>
                       </div>
@@ -2886,39 +2926,16 @@ export default function Admin() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                       <div className="space-y-4">
                         <div className="space-y-1">
-                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Plan Details</p>
+                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Product Details</p>
                           <h5 className="font-bold text-xl">{req.planName}</h5>
-                          <p className="text-2xl font-black text-green-500 tracking-tighter">₹{req.amount}</p>
+                          <p className="text-2xl font-black text-emerald-500 tracking-tighter">₹{req.amount}</p>
                         </div>
-                        {req.screenshotUrl && (
-                          <div className="space-y-2">
-                             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Payment Screenshot</p>
-                             <div className="relative group aspect-[9/16] max-h-[300px] w-full rounded-2xl overflow-hidden border border-white/10 bg-black">
-                                <img src={req.screenshotUrl} className="w-full h-full object-contain" />
-                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                   <button 
-                                     onClick={() => window.open(req.screenshotUrl, '_blank')}
-                                     className="bg-white text-black px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest"
-                                   >
-                                     View Full Size
-                                   </button>
-                                </div>
-                             </div>
-                          </div>
-                        )}
                       </div>
                       <div className="space-y-4">
                         <div className="space-y-1">
                           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Transaction Snapshot</p>
-                          <div className="bg-white/5 p-4 rounded-2xl border border-white/5 font-mono text-sm text-purple-400 break-all relative group">
+                          <div className="bg-white/5 p-4 rounded-2xl border border-white/5 font-mono text-sm text-indigo-400 break-all relative group">
                             {req.transactionId}
-                            {/* Check if UTR is in registry */}
-                            {registry?.find(r => r.id === req.transactionId) && (
-                              <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow-lg flex items-center gap-1">
-                                <AlertTriangle className="w-2.5 h-2.5" />
-                                DUPLICATE UTR
-                              </div>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -2945,14 +2962,14 @@ export default function Admin() {
                       <div className="flex gap-4 pt-4">
                         <button
                           onClick={() => handleApprovePurchase(req)}
-                          className="flex-1 bg-green-500 text-black py-4 rounded-[1.5rem] font-bold text-sm shadow-xl shadow-green-500/10 active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+                          className="flex-1 bg-indigo-500 text-white py-4 rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-500/10 active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
                         >
                           <CheckCircle2 className="w-5 h-5" />
                           Approve Payment
                         </button>
                         <button
                           onClick={() => handleRejectPurchase(req)}
-                          className="px-8 border border-red-500/20 text-red-500 py-4 rounded-[1.5rem] font-bold text-sm hover:bg-red-500/5 transition-all flex items-center justify-center gap-2"
+                          className="px-8 border border-red-500/20 text-red-500 py-4 rounded-[1.5rem] font-bold text-xs uppercase tracking-widest hover:bg-red-500/5 transition-all flex items-center justify-center gap-2"
                         >
                           <XCircle className="w-5 h-5" />
                           Reject
@@ -2961,6 +2978,13 @@ export default function Admin() {
                     )}
                   </div>
                 ))}
+                
+                {purchaseRequests.length === 0 && (
+                  <div className="py-20 text-center glass-card rounded-[2.5rem] bg-white/5 border border-dashed border-white/10">
+                    <ShieldCheck className="w-12 h-12 text-gray-700 mx-auto mb-4" />
+                    <p className="text-gray-500 font-bold uppercase tracking-widest text-sm">No payment requests found</p>
+                  </div>
+                )}
               </div>
           </div>
         );
@@ -3244,11 +3268,16 @@ CREATE TABLE IF NOT EXISTS public.verified_payments (
   amount NUMERIC,
   product_name TEXT,
   password_unlocked TEXT,
+  resource_id TEXT,
+  plan_id TEXT,
+  status TEXT DEFAULT 'pending',
+  rejection_reason TEXT,
   verified BOOLEAN DEFAULT false,
   user_id TEXT,
   payment_app TEXT,
   verification_reason TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- 5. Story Unlock System
