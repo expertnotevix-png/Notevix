@@ -13,7 +13,6 @@ export default function BottomNav({ user }: BottomNavProps) {
     { icon: Home, label: 'Home', path: '/' },
     { icon: MessageSquare, label: 'Connect', path: '/community' },
     { icon: Sparkles, label: 'Plus', path: '/premium-notes' },
-    { icon: Trophy, label: 'Board', path: '/leaderboard' },
     { icon: user ? User : LogIn, label: user ? 'Profile' : 'Login', path: user ? '/profile' : '/login' },
   ];
 

@@ -185,143 +185,20 @@ export const geminiService = {
     }
   },
 
-  async verifyPaymentScreenshot(imageData: string, expectedPrice: number, pdfName: string, passwordToReturn: string): Promise<{ verified: boolean, unlock: boolean, password?: string, transactionId?: string, amount?: number, reason?: string, paymentApp?: string }> {
-    const system = `You are a strict NoteVix Premium Payment Verification AI.
+  async verifyStoryScreenshot(imageData: string, template: any): Promise<{ isValid: boolean, reason?: string }> {
+    const prompt = `Verify if this screenshot shows an Instagram/Snapchat story with our promo template and link.
+    Template Title: ${template.title}
+    Expected Link: ${template.link}
     
-    RETURN ONLY STRICT JSON. 
-    DO NOT use markdown. 
-    DO NOT use ** or explanation.
-    DO NOT include any text outside the JSON object.
-
-    JSON FORMAT:
-    {
-      "verified": true,
-      "amount": ${expectedPrice},
-      "recipient": "POONAM DEVI",
-      "transaction_id": "ABC123_OR_UTR_HERE",
-      "reason": "verified"
-    }
-
-    APPROVE ONLY IF ALL CONDITIONS MATCH:
-    1. STATUS: Payment state must be "SUCCESSFUL", "PAID", or "DONE".
-    2. RECEIVER: Must be "Poonam Devi" OR UPI ID "9236489649@mbk" (or similar ending in 9649).
-    3. AMOUNT: Must EXACTLY match ₹${expectedPrice}.
-    4. APP: Must be a real payment app (Paytm, PhonePe, Google Pay, BHIM, Mobikwik).
-    5. TRANSACTION ID: Must have a clearly visible UTR / Ref No / Transaction ID (usually 12 digits for UPI).
-
-    IF VERIFIED:
-    Return: { "verified": true, "unlock": true, "password": "${passwordToReturn}", "transactionId": "...", "amount": ${expectedPrice}, "paymentApp": "...", "recipient": "..." }
-
-    IF FAILED:
-    Return: { "verified": false, "unlock": false, "reason": "Specific reason" }`;
-
-    const prompt = `Strictly verify payment for "${pdfName}" (Price: ₹${expectedPrice}). RETURN ONLY STRICT JSON.`;
-
-    const MAX_ATTEMPTS = 2;
-    const TOTAL_TIMEOUT = 60000; // 60s total as requested
-    const startTime = Date.now();
-
-    const attemptVerification = async (currentAttempt: number): Promise<any> => {
-      try {
-        const { nvidiaKey } = getAI();
-        if (!nvidiaKey) throw new Error("Payment verification engine offline.");
-
-        // Compress image to reduce latency
-        let optimizedImage = imageData;
-        try {
-          // Fast compression for efficiency
-          optimizedImage = await optimizeImageForAI(imageData, 800, 0.6);
-        } catch (e) {
-          console.warn("Image optimization failed:", e);
-        }
-
-        // Calculate remaining time for this attempt
-        const elapsed = Date.now() - startTime;
-        const remainingTotal = TOTAL_TIMEOUT - elapsed;
-        
-        // If we have less than 5s left, don't even start another call
-        if (remainingTotal < 5000) {
-          throw new Error("Verification timed out (60s limit).");
-        }
-
-        // Each attempt gets up to 30s but not more than total remaining
-        const currentCallTimeout = Math.min(30000, remainingTotal);
-
-        const res = await this.callNvidiaAPI(
-          prompt, 
-          system, 
-          true, 
-          VISION_MODEL_FAST, 
-          currentCallTimeout,
-          optimizedImage,
-          { temperature: 0, max_tokens: 200 }
-        );
-
-        const parsed = this.parseStrictPaymentResult(res || "");
-        
-        // If it's a clear fraud/mismatch, don't retry
-        if (!parsed.verified && (parsed.reason?.includes("amount") || parsed.reason?.includes("receiver"))) {
-          return parsed;
-        }
-
-        if (parsed.verified && !parsed.password) {
-          parsed.password = passwordToReturn;
-        }
-        
-        // Failure on first attempt triggers 1 retry
-        if (!parsed.verified && currentAttempt < MAX_ATTEMPTS) {
-          throw new Error(parsed.reason || "Verification uncertain");
-        }
-
-        return parsed;
-      } catch (error: any) {
-        const elapsed = Date.now() - startTime;
-        if (currentAttempt < MAX_ATTEMPTS && elapsed < TOTAL_TIMEOUT) {
-          console.warn(`Payment verification attempt ${currentAttempt} failed, retrying once...`, error.message);
-          // Small delay before retry
-          await new Promise(r => setTimeout(r, 1500));
-          return attemptVerification(currentAttempt + 1);
-        }
-        throw error;
-      }
-    };
-
+    Return ONLY strict JSON: { "isValid": boolean, "reason": "..." }`;
+    
     try {
-      return await attemptVerification(1);
-    } catch (error: any) {
-      console.error("Payment Verification Final Failure:", error);
-      return { verified: false, unlock: false, reason: error.message || "Invalid or unclear payment screenshot." };
-    }
-  },
-
-  parseStrictPaymentResult(res: string): any {
-    try {
-      // Find the first { and the last }
-      const start = res.indexOf('{');
-      const end = res.lastIndexOf('}');
-      if (start === -1 || end === -1 || end < start) {
-        throw new Error("AI response was not in JSON format.");
-      }
-      
-      const jsonStr = res.substring(start, end + 1).trim();
-      const data = JSON.parse(jsonStr);
-      
-      if (data.verified === false && !data.reason) {
-        data.reason = "AI rejected the receipt but provided no specific reason.";
-      }
-      return data;
-    } catch (e) {
-      console.warn("JSON Parse Error in Payment Result:", e, "Raw result:", res);
-      const utrMatch = res.match(/\b\d{12}\b/);
-      if (utrMatch) {
-         return { verified: true, unlock: true, transactionId: utrMatch[0] };
-      }
-      
-      return { 
-        verified: false, 
-        unlock: false, 
-        reason: "Could not verify payment details. Please provide a clearer screenshot."
-      };
+      const optimized = await optimizeImageForAI(imageData, 800, 0.7);
+      const res = await this.callNvidiaAPI(prompt, "Expert Social Media Auditor. Return ONLY JSON.", true, VISION_MODEL_FAST, 30000, optimized);
+      return JSON.parse(res.replace(/```json|```/g, '').trim());
+    } catch (error) {
+      console.warn("Story verification error, failing safe:", error);
+      return { isValid: true }; // Fail safe for free resources
     }
   },
 
@@ -462,80 +339,6 @@ export const geminiService = {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') throw new Error("NVIDIA Direct timed out. Engine is overloaded.");
       throw error;
-    }
-  },
-
-  async verifyStoryScreenshot(imageData: string, template: { title: string, link: string }): Promise<{ isValid: boolean, confidence: number, raw: any }> {
-    const system = "Analyze screenshot for Instagram/Snapchat Story UI and NoteVix branding. Be lenient. RETURN JSON ONLY: { \"verified\": boolean, \"confidence\": number }";
-    
-    const prompt = `Is this a genuine social media story post containing "NoteVix" branding/content (ref: ${template.title})? 
-    Accept even if blurry or low quality as long as branding seems present.
-    Strictly JSON response.`;
-
-    const MAX_RETRIES = 1;
-    let attempt = 0;
-
-    const performVerification = async (img: string): Promise<any> => {
-      try {
-        // NVIDIA Vision with 20s hard timeout (as requested for meta/llama-4-maverick-17b-128e-instruct)
-        const res = await this.callNvidiaAPI(
-          prompt, 
-          system, 
-          true, 
-          "meta/llama-4-maverick-17b-128e-instruct", 
-          20000, 
-          img,
-          { temperature: 0, max_tokens: 80 }
-        );
-        
-        const cleaned = res.replace(/```json|```/g, '').trim();
-        const result = JSON.parse(cleaned);
-        
-        // Lenient verification logic: Auto-verify if confidence > 0.45 or verified is true
-        if (result && (typeof result.verified === 'boolean' || typeof result.confidence === 'number')) {
-          const isVerified = Boolean(result.verified) || (Number(result.confidence || 0) > 0.45);
-          return {
-            isValid: isVerified,
-            confidence: Number(result.confidence || 0),
-            raw: result
-          };
-        }
-        throw new Error("Malformed response");
-      } catch (err) {
-        throw err;
-      }
-    };
-
-    try {
-      // 1. Image Optimization (Max 720px width)
-      let optimizedImage = imageData;
-      try {
-        optimizedImage = await optimizeImageForAI(imageData, 720, 0.7);
-      } catch (optErr) {
-        console.warn("Optimization failed:", optErr);
-      }
-
-      // 2. Retry Logic
-      while (attempt <= MAX_RETRIES) {
-        try {
-          return await performVerification(optimizedImage);
-        } catch (error) {
-          attempt++;
-          if (attempt > MAX_RETRIES) throw error;
-          console.warn(`Verification retry ${attempt}...`);
-          await new Promise(r => setTimeout(r, 500));
-        }
-      }
-
-      throw new Error("Verification taking too long");
-    } catch (error: any) {
-      console.error("Story Verification Failure:", error);
-      // For free verification, we fallback to a safe state if AI fails completely
-      return {
-        isValid: true, // Emergency verify to not block free users
-        confidence: 1.0,
-        raw: { fallback: true, error: error.message }
-      };
     }
   }
 };

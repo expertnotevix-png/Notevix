@@ -76,13 +76,10 @@ export default function Landing() {
   // Purchase Form State
   const [whatsapp, setWhatsapp] = useState('');
   const [email, setEmail] = useState('');
-  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
+  const [transactionId, setTransactionId] = useState('');
+  const [paidAmount, setPaidAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [aiVerifying, setAiVerifying] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
   const [purchaseSuccess, setPurchaseSuccess] = useState<{ password: string; subject: string } | null>(null);
-  const lastAttemptRef = useRef<number>(0);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const fetchResources = async () => {
@@ -91,150 +88,51 @@ export default function Landing() {
     };
     fetchResources();
     
-    // Real-time for resources from Supabase
-    let channel: any = null;
-    let unsubscribeFirestore: (() => void) | null = null;
-
-    const setupRealtime = async () => {
-      const { supabase } = await import('../lib/supabase');
-      
-      if (supabase) {
-        channel = supabase
-          .channel(`resources_landing_${activeClass}_${Math.random().toString(36).substring(7)}`)
-          .on('postgres_changes', { 
-            event: '*', 
-            schema: 'public', 
-            table: 'subject_resources',
-            filter: `class=eq.${activeClass}`
-          }, () => {
-            fetchResources();
-          })
-          .subscribe();
-      } else {
-        // Fallback to Firestore listener
-        const q = query(collection(db, 'subject_resources'), where('class', '==', activeClass));
-        unsubscribeFirestore = onSnapshot(q, (snap) => {
-          const data = snap.docs.map(doc => dataBridge.mapResource({ id: doc.id, ...doc.data() }));
-          setResources(data);
-        }, (err) => {
-          console.warn("Firestore landing listener failed:", err);
-        });
-      }
-    };
-
-    setupRealtime();
-    return () => {
-      if (channel) channel.unsubscribe();
-      if (unsubscribeFirestore) unsubscribeFirestore();
-    };
+    // PER USER REQUEST: Reduced API usage - Removed realtime listeners
+    return () => {};
   }, [activeClass]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        toast.error("File size must be less than 2MB");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => setScreenshotPreview(reader.result as string);
-      reader.readAsDataURL(file);
-    }
-  };
-
   const handleGuestPurchase = async () => {
-    if (isSubmitting || aiVerifying || !whatsapp || !email || !screenshotPreview) {
-      toast.error('Please provide Email, WhatsApp, and Payment Screenshot.');
+    if (isSubmitting || !whatsapp || !email || !transactionId || !paidAmount) {
+      toast.error('Please provide Email, WhatsApp, Amount, and Transaction ID.');
       return;
     }
-
-    // RATE LIMITING PROTECTION
-    const now = Date.now();
-    if (now - lastAttemptRef.current < 5000) {
-      toast.error("Please wait a few seconds before retrying.");
-      return;
-    }
-    lastAttemptRef.current = now;
 
     try {
       setIsSubmitting(true);
-      setAiVerifying(true);
-      setAiError(null);
       
       const targetSubject = (selectedPlan?.subject || selectedPlan?.name || '').toLowerCase().split(' ')[0] || '';
-      let targetPassword = '';
-      const paidAmountForPlan = selectedPlan?.price || 39;
-
-      if (paidAmountForPlan >= 99) {
-          targetPassword = Object.entries(SUBJECT_PASSWORDS)
-            .map(([subj, pass]) => `${subj.toUpperCase()}: ${pass}`)
-            .join('\n');
-      } else {
-          targetPassword = SUBJECT_PASSWORDS[targetSubject] || "CONTACT_ADMIN";
-      }
-
-      // PER USER REQUEST: No screenshot storage. Gemini processes the base64 directly.
-      const result = await geminiService.verifyPaymentScreenshot(
-        screenshotPreview, 
-        paidAmountForPlan, 
-        selectedPlan?.name || 'Premium Notes',
-        targetPassword
-      );
-      setAiVerifying(false);
       
-      if (!result.verified) {
-        setAiError(result.reason || "Invalid or unclear payment screenshot.");
-        throw new Error(result.reason || "Invalid or unclear payment screenshot.");
-      }
-
-      const finalTxId = result.transactionId?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
-      
-      if (!finalTxId || finalTxId.length < 6) {
-        setAiError("Transaction ID not detected.");
-        throw new Error("Transaction ID not detected. Please ensure your UTR/Reference number is clearly visible.");
-      }
-
-      // Check anti-fraud in Supabase: Reject if transaction_id already exists
-      const isRedeemed = await dataBridge.isTransactionRedeemed(finalTxId);
-      if (isRedeemed) {
-        setAiError("Transaction ID already used.");
-        throw new Error("Transaction ID already used. Duplicate payments are not allowed.");
-      }
-      
-      // Save Transactional Log (Save ONLY requested fields + necessary purchase metadata)
-      const saveResult = await dataBridge.savePurchaseRequest({
-        transactionId: finalTxId,
-        amount: result.amount || paidAmountForPlan,
-        userId: email || 'GUEST', // Using email as guest user_id per common practice if GUEST
-        status: 'approved',
-        verified: result.verified,
-        // Carry forward info needed for UI
-        whatsapp: whatsapp,
-        email: email,
-        planName: selectedPlan?.name || 'Premium Notes',
-        productName: selectedPlan?.name || 'Premium Notes',
-        paymentApp: result.paymentApp || 'Detected App',
-        passwordUnlocked: result.password || targetPassword,
+      // Save manual request for admin approval
+      await dataBridge.savePurchaseRequest({
+        userId: 'GUEST',
+        email,
+        whatsapp,
+        planId: selectedPlan?.id || 'guest_individual',
+        planName: selectedPlan?.name || 'Individual Notes',
+        amount: parseFloat(paidAmount),
+        transactionId: transactionId,
+        status: 'pending',
         isGuest: true
       });
 
-      if (!saveResult.success) {
-        throw new Error(saveResult.error || "Failed to save verified payment. Please contact support.");
-      }
-
-      setPurchaseSuccess({ 
-        password: result.password || targetPassword, 
-        subject: selectedPlan?.name?.replace(' Premium', '') || 'Subject' 
+      toast.success("Payment details sent! Admin will verify and email you the password.", {
+        duration: 8000
+      });
+      
+      setPurchaseSuccess({
+        subject: selectedPlan?.name || 'Purchase',
+        password: 'Admin will email password once verified.'
       });
 
-      setScreenshotPreview(null);
       setWhatsapp('');
       setEmail('');
+      setTransactionId('');
+      setPaidAmount('');
     } catch (error: any) {
       toast.error(error.message || "Failed");
     } finally {
       setIsSubmitting(false);
-      setAiVerifying(false);
     }
   };
 
@@ -511,17 +409,16 @@ export default function Landing() {
             >
               <div className="absolute top-0 inset-x-0 h-1.5 bg-indigo-600" />
               
-              {aiVerifying && (
+              {isSubmitting && (
                 <div className="absolute inset-0 bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center z-[200] rounded-[40px] border border-white/10">
                   <div className="w-16 h-16 relative">
                     <div className="absolute inset-0 border-4 border-indigo-500/20 rounded-full" />
                     <div className="absolute inset-0 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                    <div className="absolute inset-4 bg-indigo-500/10 rounded-full animate-pulse" />
                   </div>
                   <div className="mt-8 text-center px-6">
-                    <p className="text-white font-black text-xs uppercase tracking-[0.2em] mb-2 animate-pulse">Verifying payment...</p>
+                    <p className="text-white font-black text-xs uppercase tracking-[0.2em] mb-2 animate-pulse">Sending Details...</p>
                     <p className="text-white/40 text-[7px] font-bold uppercase tracking-widest leading-relaxed">
-                      AI is scanning your screenshot for authenticity... <br /> This can take up to 60 seconds if the server is busy.
+                      Please wait while we record your transaction ID.
                     </p>
                   </div>
                 </div>
@@ -580,25 +477,22 @@ export default function Landing() {
                     onChange={e => setWhatsapp(e.target.value)}
                     className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
                   />
-                  <div 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full h-40 border-2 border-dashed border-indigo-500/20 rounded-2xl flex flex-col items-center justify-center gap-3 bg-indigo-500/[0.02] hover:border-indigo-500/50 cursor-pointer overflow-hidden relative"
-                  >
-                    {screenshotPreview ? (
-                      <>
-                        <img src={screenshotPreview} className="w-full h-full object-contain" />
-                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                          <span className="text-[10px] font-black uppercase text-white tracking-[0.3em]">Change Receipt</span>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <Upload size={24} className="text-indigo-400/50" />
-                        <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest text-center px-6">Upload Payment Screenshot<br/><span className="text-[8px] text-indigo-400 group-hover:text-white transition-colors">AI Forensic Scan Enabled</span></span>
-                      </>
-                    )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <input 
+                      type="number" 
+                      placeholder="Amount Paid"
+                      value={paidAmount}
+                      onChange={e => setPaidAmount(e.target.value)}
+                      className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Transaction ID"
+                      value={transactionId}
+                      onChange={e => setTransactionId(e.target.value)}
+                      className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
+                    />
                   </div>
-                  <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*" />
                   
                   <div className="p-5 bg-indigo-500/5 rounded-3xl border border-indigo-500/10 space-y-4">
                     <div className="flex items-start gap-3 text-left">
@@ -627,28 +521,19 @@ export default function Landing() {
                 </div>
               </div>
 
-              <div className="mt-6 pt-6 border-t border-white/5 flex-shrink-0">
-                {aiError && (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl flex gap-3 items-start mb-4"
-                  >
-                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1 leading-none">AI Rejection Reason</p>
-                      <p className="text-xs text-secondary leading-relaxed font-medium">
-                        {aiError}
-                      </p>
-                    </div>
-                  </motion.div>
-                )}
-                <button
-                  disabled={isSubmitting || aiVerifying}
+              <div className="mt-8 pt-6 border-t border-white/5 flex-shrink-0">
+                <button 
                   onClick={handleGuestPurchase}
-                  className="w-full h-16 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-indigo-700 transition-all disabled:opacity-50 active:scale-95 shadow-xl shadow-indigo-600/20"
+                  disabled={isSubmitting}
+                  className="w-full h-16 bg-white text-black rounded-3xl font-black text-sm uppercase tracking-[0.3em] active:scale-95 transition-all shadow-xl shadow-white/10 disabled:opacity-50"
                 >
-                  {aiVerifying ? 'Verifying payment...' : isSubmitting ? 'Processing...' : 'Complete Purchase'}
+                  {isSubmitting ? 'PROCESSING...' : `SUBMIT DETAILS`}
+                </button>
+                <button 
+                  onClick={() => setSelectedPlan(null)}
+                  className="w-full h-12 text-gray-500 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors mt-4"
+                >
+                  GO BACK
                 </button>
               </div>
             </motion.div>

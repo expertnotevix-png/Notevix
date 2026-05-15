@@ -4,7 +4,7 @@ import {
   Crown, Check, ShieldCheck, Copy, ExternalLink, X, 
   CreditCard, Loader2, Zap, BookOpen, Lock, Download,
   ChevronRight, FileText, Upload, Image as ImageIcon,
-  SearchCheck, FilePlus, AlertCircle, Key, Info
+  SearchCheck, FilePlus, AlertCircle, Key, Info, Clock, XCircle
 } from 'lucide-react';
 import { UserProfile, SubjectResource, ValidPayment } from '../types';
 import { db, handleFirestoreError, OperationType } from '../components/firebase';
@@ -76,17 +76,19 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   const [resources, setResources] = useState<SubjectResource[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingError, setLoadingError] = useState<string | null>(null);
-  const [whatsapp, setWhatsapp] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [amount, setAmount] = useState('');
+  const [transactionId, setTransactionId] = useState('');
   const [email, setEmail] = useState('');
-  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [aiVerifying, setAiVerifying] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
   const [purchaseSuccess, setPurchaseSuccess] = useState<{ password: string; subject: string } | null>(null);
   const lastAttemptRef = useRef<number>(0);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const upiId = (import.meta as any).env?.VITE_UPI_ID || '9236489649@mbk';
+
+  const [purchaseStatuses, setPurchaseStatuses] = useState<{[key: string]: any}>({});
+  const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
 
   // Real-time listener removed to avoid Firestore quota, using Bridge (Supabase)
   useEffect(() => {
@@ -107,32 +109,31 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         // 1. Fetch Premium Resources
         const premiumData = await dataBridge.getResources(activeClass);
         
-        // 2. Fetch Free Resources from new table
-        const freeData = await dataBridge.getFreeResources(activeClass);
-
         if (!isMounted) return;
         
-        // Transform free resources to match SubjectResource type
-        const transformedFree = (freeData || []).map((f: any) => ({
-          id: f.id,
-          class: f.class_level,
-          subject: f.subject,
-          description: f.description,
-          driveLink: f.drive_link,
-          password: f.password,
-          coverUrl: f.cover_url,
-          isFree: true,
-          price: 0
-        }));
-
         const transformedPremium = (premiumData || []).map((p: any) => ({
           ...p,
           isFree: false // Ensure we mark them specifically
         }));
 
-        // Combine both - actually user wants to remove free resources from here
-        // Change: only use transformedPremium
         setResources(transformedPremium);
+
+        // 3. Fetch user purchase history if logged in
+        if (user) {
+          const history = await dataBridge.getUserPurchaseHistory(user.uid);
+          setPurchaseHistory(history);
+          
+          const statuses: {[key: string]: any} = {};
+          history.forEach((h: any) => {
+            if (h.resource_id) {
+              statuses[`res_${h.resource_id}`] = h;
+            }
+            if (h.plan_id) {
+              statuses[h.plan_id] = h;
+            }
+          });
+          setPurchaseStatuses(statuses);
+        }
       } catch (err) {
         console.error("PremiumNotes: Fetch error:", err);
         if (isMounted) setLoadingError("Failed to synchronize library. Please try again.");
@@ -198,50 +199,26 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     return false;
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 8 * 1024 * 1024) {
-        toast.error('Screenshot too large (Max 8MB)');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_SIZE = 1024; // HD processing
-          let width = img.width;
-          let height = img.height;
-          if (width > height) {
-            if (width > MAX_SIZE) {
-              height *= MAX_SIZE / width;
-              width = MAX_SIZE;
-            }
-          } else {
-            if (height > MAX_SIZE) {
-              width *= MAX_SIZE / height;
-              height = MAX_SIZE;
-            }
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(img, 0, 0, width, height);
-          }
-          setScreenshotPreview(canvas.toDataURL('image/jpeg', 0.9));
-        };
-        img.src = reader.result as string;
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const handlePurchase = async () => {
-    if (isSubmitting || aiVerifying || !whatsapp || (!user && !email) || !screenshotPreview) {
-      toast.error('Please provide WhatsApp and Payment Screenshot.');
+    if (isSubmitting || !phoneNumber || !amount || !transactionId || (!user && !email)) {
+      toast.error('Please fill all fields: Phone Number, Amount, and Transaction ID.');
+      return;
+    }
+
+    if (transactionId.length < 6) {
+      toast.error('Please enter a valid Transaction ID / UTR number.');
+      return;
+    }
+
+    const paidAmount = parseFloat(amount);
+    if (isNaN(paidAmount) || paidAmount <= 0) {
+      toast.error('Please enter a valid payment amount.');
+      return;
+    }
+
+    // Amount match check
+    if (paidAmount < (selectedPlan?.price || 0)) {
+      toast.error(`Amount mismatch. This plan costs ₹${selectedPlan?.price}. You entered ₹${paidAmount}.`);
       return;
     }
 
@@ -254,138 +231,62 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     lastAttemptRef.current = now;
 
     setIsSubmitting(true);
-    setAiVerifying(true);
-    setAiError(null);
 
     try {
-      const targetSubject = (selectedPlan?.name || '').toLowerCase().split(' ')[0] || '';
-      let targetPassword = '';
-      const paidAmountForPlan = selectedPlan?.price || 39;
-
-      if (paidAmountForPlan >= 99) {
-          targetPassword = Object.entries(SUBJECT_PASSWORDS)
-            .map(([subj, pass]) => `${subj.toUpperCase()}: ${pass}`)
-            .join('\n');
-      } else {
-          targetPassword = SUBJECT_PASSWORDS[targetSubject] || "CONTACT_ADMIN";
-      }
-
-      const result = await geminiService.verifyPaymentScreenshot(
-        screenshotPreview, 
-        paidAmountForPlan, 
-        selectedPlan?.name || 'Premium Notes',
-        targetPassword
-      );
-      setAiVerifying(false);
+      const finalTxId = transactionId.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
       
-      if (!result.verified) {
-        setAiError(result.reason || "Invalid or unclear payment screenshot.");
-        throw new Error(result.reason || "Invalid or unclear payment screenshot.");
-      }
-
-      const finalTxId = result.transactionId?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
-      
-      if (!finalTxId || finalTxId.length < 6) {
-        setAiError("Transaction ID not detected.");
-        throw new Error("Transaction ID not detected. Please ensure your UTR/Reference number is clearly visible.");
-      }
-
       // DOUBLE-SPEND PROTECTION using bridge
       const isRedeemed = await dataBridge.isTransactionRedeemed(finalTxId);
       if (isRedeemed) {
-        setAiError("Transaction ID already used.");
         throw new Error("Transaction ID already used. Duplicate payments are not allowed.");
       }
       
       const purchaseData = {
-        whatsapp,
+        phoneNumber,
         transactionId: finalTxId,
-        amount: result.amount || paidAmountForPlan,
+        amount: paidAmount,
         planId: selectedPlan?.id,
         planName: selectedPlan?.name,
         class: selectedPlan?.class || activeClass,
         resourceId: selectedPlan?.resourceId || null,
-        paymentApp: result.paymentApp || 'Detected App',
-        passwordUnlocked: result.password || targetPassword,
         productName: selectedPlan?.name,
         isGuest: !user,
-        status: 'approved' // AI Verified = Approved
+        status: 'pending' // Manual review flow
       };
 
       let saveResult;
       if (user) {
-        // Logged-in user: Save to bridge
         saveResult = await dataBridge.savePurchaseRequest({
           ...purchaseData,
           userId: user.uid,
           email: user.email
         });
-
-        if (saveResult.success) {
-          // If it was an individual subject purchase, show password immediately
-          if (selectedPlan?.resourceId || selectedPlan?.id.startsWith('res_')) {
-             setPurchaseSuccess({ 
-               password: result.password || targetPassword, 
-               subject: selectedPlan.name.replace(' Premium', '') 
-             });
-          } else {
-             // Master pack or sub
-             toast.success("AI Verified Successfully! Master Pack Unlocked. Refreshing...", {
-               duration: 8000,
-               icon: '✅'
-             });
-             setTimeout(() => window.location.reload(), 2000);
-          }
-          return;
-        }
       } else {
-        // Guest user flow
         saveResult = await dataBridge.savePurchaseRequest({
           ...purchaseData,
           email: email,
           userId: 'GUEST'
         });
-
-        if (saveResult.success) {
-          if (selectedPlan?.resourceId || selectedPlan?.id.startsWith('res_')) {
-            setPurchaseSuccess({ 
-              password: result.password || targetPassword, 
-              subject: selectedPlan.name.replace(' Premium', '') 
-            });
-          } else {
-            toast.success("Payment verified! Access will be linked to your email shortly. Please keep your receipt safe.");
-            setSelectedPlan(null);
-          }
-          return;
-        }
       }
 
-      // If we reach here, it means saveResult.success was false
-      // Handle failure with WhatsApp fallback
-      const waNumber = "919236489649"; // Admin WhatsApp
-      const waMessage = `Hi Admin, I just paid ₹${purchaseData.amount} for ${purchaseData.planName} (Tx: ${purchaseData.transactionId}). My email is ${user?.email || email}. Please verify my access!`;
-      const waLink = `https://wa.me/${waNumber}?text=${encodeURIComponent(waMessage)}`;
-
-      toast.error(saveResult?.error || "Database sync failed. Payment was verified but we couldn't link it to your account.", {
-        duration: 10000,
-        action: {
-          label: "Fix via WhatsApp",
-          onClick: () => window.open(waLink, '_blank')
-        }
-      });
-      
-      // Even if save failed, if it's the admin, just give access
-      if (user?.role === 'admin') {
-         toast.success("Admin detected: Granting session-access anyway.");
-         setTimeout(() => window.location.reload(), 2000);
+      if (saveResult.success) {
+        toast.success("Request submitted successfully! Admin will verify and grant access within 1-2 hours.", {
+          duration: 10000
+        });
+        setSelectedPlan(null);
+        setTransactionId('');
+        setAmount('');
+        // Clean up UI
+        return;
       }
+
+      throw new Error(saveResult?.error || "Submission failed. Please try again or contact admin.");
       
     } catch (error: any) {
-      console.error("Verification Error:", error);
-      toast.error(error.message || "Verification failed. Try again.");
+      console.error("Submission Error:", error);
+      toast.error(error.message || "Something went wrong.");
     } finally {
       setIsSubmitting(false);
-      setAiVerifying(false);
     }
   };
 
@@ -459,7 +360,11 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
             ) : resources.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-8">
                 {resources.map((res, idx) => {
-                  const unlocked = isUnlocked(res);
+                  const status = purchaseStatuses[`res_${res.id}`];
+                  const unlocked = isUnlocked(res) || status?.status === 'approved';
+                  const isPending = status?.status === 'pending';
+                  const isRejected = status?.status === 'rejected';
+                  const unlockedPassword = status?.password_unlocked || res.password || SUBJECT_PASSWORDS[res.subject.toLowerCase()];
                   const originalPrice = Math.round((res.price || 49) * 1.5);
                   const discount = Math.round(((originalPrice - (res.price || 49)) / originalPrice) * 100);
                   const rating = (4.7 + Math.random() * 0.3).toFixed(1);
@@ -543,7 +448,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                               <span className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">(1.2k+ Sold)</span>
                             </div>
                             <h3 className="text-sm font-black text-white uppercase tracking-tight line-clamp-1 group-hover:text-indigo-400 transition-colors">
-                              {res.subject} {unlocked ? '(UNLOCKED)' : ''}
+                              {res.subject} {unlocked ? '(UNLOCKED)' : isPending ? '(PENDING)' : isRejected ? '(REJECTED)' : ''}
                             </h3>
                           </div>
 
@@ -566,12 +471,12 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                                   <div className="overflow-hidden">
                                     <span className="text-[7px] font-black uppercase text-emerald-400 block mb-0.5">PASSWORD</span>
                                     <code className="text-[8px] font-black text-white tracking-widest break-all block">
-                                      {res.password || SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "SEE_ADMIN"}
+                                      {unlockedPassword || "SEE_ADMIN"}
                                     </code>
                                   </div>
                                   <button 
                                     onClick={() => {
-                                      navigator.clipboard.writeText(res.password || SUBJECT_PASSWORDS[res.subject.toLowerCase()] || "");
+                                      navigator.clipboard.writeText(unlockedPassword || "");
                                       toast.success("Copied!");
                                     }}
                                     className="p-1.5 hover:bg-emerald-500/20 rounded-lg transition-colors text-emerald-400"
@@ -579,15 +484,49 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                                     <Copy className="w-3 h-3" />
                                   </button>
                                 </div>
-                                <a 
-                                  href={getDirectDownloadLink(res.driveLink || res.fullNotesUrl || '')} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="w-full h-10 bg-white text-black rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest active:scale-95 transition-all shadow-xl"
+                                <div className="flex gap-2">
+                                  <span className="flex-1 h-10 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl flex items-center justify-center font-black text-[8px] uppercase tracking-widest cursor-default">
+                                    Already Purchased
+                                  </span>
+                                  <a 
+                                    href={getDirectDownloadLink(res.driveLink || res.fullNotesUrl || '')} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="px-4 h-10 bg-white text-black rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest active:scale-95 transition-all shadow-xl"
+                                  >
+                                    <Download className="w-3.5 h-3.5" />
+                                  </a>
+                                </div>
+                              </div>
+                            ) : isPending ? (
+                              <div className="space-y-2">
+                                <div className="w-full h-10 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest cursor-default">
+                                  <Clock className="w-4 h-4 animate-pulse" />
+                                  Pending Approval
+                                </div>
+                                <p className="text-[8px] text-gray-500 text-center font-bold uppercase tracking-tight">Admin is verifying your payment</p>
+                              </div>
+                            ) : isRejected ? (
+                              <div className="space-y-2">
+                                <div className="w-full h-10 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest cursor-default">
+                                  <XCircle className="w-4 h-4" />
+                                  Payment Rejected
+                                </div>
+                                {status.rejection_reason && (
+                                  <p className="text-[8px] text-red-400 text-center font-bold uppercase tracking-tight px-2">{status.rejection_reason}</p>
+                                )}
+                                <button 
+                                  onClick={() => setSelectedPlan({
+                                    id: `res_${res.id}`,
+                                    name: `${res.subject} Premium`,
+                                    price: res.price || 49,
+                                    resourceId: res.id,
+                                    type: 'one-time'
+                                  })}
+                                  className="w-full h-8 bg-white/5 text-gray-400 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-white/10 transition-all border border-white/5"
                                 >
-                                  <Download className="w-3.5 h-3.5" />
-                                  SAVE NOW
-                                </a>
+                                  Retry Purchase
+                                </button>
                               </div>
                             ) : (
                               <div className="space-y-3">
@@ -790,26 +729,11 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                 exit={{ opacity: 0, scale: 0.9, y: 20 }}
                 className="relative w-full max-w-lg max-h-[90vh] flex flex-col bg-[#0a0a0a] border border-white/10 rounded-[3rem] overflow-hidden"
               >
-                {aiVerifying && (
-                  <div className="absolute inset-0 bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center z-[200] rounded-[3rem] border border-white/10">
-                    <div className="w-16 h-16 relative">
-                      <div className="absolute inset-0 border-4 border-indigo-500/20 rounded-full" />
-                      <div className="absolute inset-0 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                      <div className="absolute inset-4 bg-indigo-500/10 rounded-full animate-pulse" />
-                    </div>
-                    <div className="mt-8 text-center px-6">
-                      <p className="text-white font-black text-xs uppercase tracking-[0.2em] mb-2 animate-pulse">Verifying payment...</p>
-                      <p className="text-white/40 text-[7px] font-bold uppercase tracking-widest leading-relaxed">
-                        AI is scanning your screenshot for authenticity... <br /> This can take up to 60 seconds if the server is busy.
-                      </p>
-                    </div>
-                  </div>
-                )}
                 <div className="p-8 space-y-8 overflow-y-auto flex-1 custom-scrollbar pb-10">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <h2 className="text-2xl font-black tracking-tight">{selectedPlan.name}</h2>
-                    <p className="text-xs text-indigo-400 font-bold uppercase tracking-widest">Verify ₹{selectedPlan.price} Payment</p>
+                    <p className="text-xs text-indigo-400 font-bold uppercase tracking-widest">Manual Payment Verification</p>
                   </div>
                   <button onClick={() => setSelectedPlan(null)} className="p-3 hover:bg-white/5 rounded-2xl transition-colors">
                     <X className="w-6 h-6 text-gray-400" />
@@ -827,7 +751,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                     </div>
                     <div className="text-center space-y-2">
                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
-                         Pay to: <span className="text-white">Poonam Devi</span> <br />
+                         Scan to Pay: <span className="text-white">₹{selectedPlan.price}</span> <br />
                          ID: <span className="text-white">{upiId}</span>
                        </p>
                        <button 
@@ -835,7 +759,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                           navigator.clipboard.writeText(upiId);
                           toast.success('UPI ID Copied!');
                         }}
-                        className="px-6 py-2 bg-white/5 rounded-xl border border-white/10 text-sm font-bold flex items-center gap-2 hover:bg-white/10 transition-colors"
+                        className="px-6 py-2 bg-white/5 rounded-xl border border-white/10 text-sm font-bold flex items-center gap-2 hover:bg-white/10 transition-colors mx-auto"
                        >
                          {upiId}
                          <Copy className="w-3 h-3 text-indigo-400" />
@@ -844,59 +768,66 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                   </div>
 
                   <div className="space-y-4 pb-10">
-                    <input 
-                      type="tel" 
-                      value={whatsapp}
-                      onChange={(e) => setWhatsapp(e.target.value)}
-                      placeholder="WhatsApp Number"
-                      className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-all"
-                    />
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">WhatsApp/Phone Number</label>
+                        <input 
+                          type="tel" 
+                          value={phoneNumber}
+                          onChange={(e) => setPhoneNumber(e.target.value)}
+                          placeholder="9236XXXXXX"
+                          className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-all"
+                        />
+                      </div>
 
-                    {!user && (
-                      <input 
-                        type="email" 
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="Email (for delivery)"
-                        className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-all"
-                      />
-                    )}
+                      {!user && (
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Email for Access</label>
+                          <input 
+                            type="email" 
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="your@email.com"
+                            className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-all"
+                          />
+                        </div>
+                      )}
 
-                    <div 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-full aspect-[2/1] rounded-3xl border-2 border-dashed border-indigo-500/20 flex flex-col items-center justify-center gap-3 hover:border-indigo-500/50 cursor-pointer overflow-hidden relative group bg-indigo-500/[0.02]"
-                    >
-                       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-                       {screenshotPreview ? (
-                         <>
-                           <img src={screenshotPreview} className="w-full h-full object-contain" />
-                           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                             <span className="text-[10px] font-black uppercase text-white tracking-widest">Change Screenshot</span>
-                           </div>
-                         </>
-                       ) : (
-                         <>
-                           <ImageIcon className="w-8 h-8 text-indigo-400 group-hover:text-indigo-500 transition-colors" />
-                           <div className="text-center px-4">
-                             <p className="text-[10px] font-black uppercase text-white tracking-widest mb-1">Upload Receipt Screenshot</p>
-                             <p className="text-[8px] font-bold text-indigo-400 uppercase tracking-widest">AI Forensic Verification Active</p>
-                           </div>
-                         </>
-                       )}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Amount Paid (₹)</label>
+                          <input 
+                            type="number" 
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            placeholder={selectedPlan.price.toString()}
+                            className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-all"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Transaction ID / UTR</label>
+                          <input 
+                            type="text" 
+                            value={transactionId}
+                            onChange={(e) => setTransactionId(e.target.value)}
+                            placeholder="12-digit UTR"
+                            className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-all"
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     <div className="p-5 bg-indigo-500/5 rounded-3xl border border-indigo-500/10 space-y-4">
                       <div className="flex items-start gap-3">
                         <Info className="w-5 h-5 text-indigo-400 mt-0.5" />
                         <div className="space-y-2 flex-1">
-                          <p className="text-[11px] font-black text-white uppercase tracking-widest">How it works</p>
+                          <p className="text-[11px] font-black text-white uppercase tracking-widest">Manual Verification Rules</p>
                           <div className="space-y-1.5">
-                            {PAYMENT_GUIDELINES.map((guide, i) => (
-                              <div key={i} className="flex gap-2 text-[8px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
-                                <span>•</span>
-                                <span>{guide}</span>
-                              </div>
-                            ))}
+                            <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
+                              • Enter your Transaction ID/UTR correctly. <br/>
+                              • Admin will verify payment and grant access instantly. <br/>
+                              • Do not submit duplicate requests.
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -916,28 +847,13 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
               </div>
 
               <div className="p-8 pt-0 flex-shrink-0">
-                {aiError && (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl flex gap-3 items-start mb-4"
-                  >
-                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1 leading-none">AI Rejection Reason</p>
-                      <p className="text-xs text-secondary leading-relaxed font-medium">
-                        {aiError}
-                      </p>
-                    </div>
-                  </motion.div>
-                )}
                 <button
                   onClick={handlePurchase}
-                  disabled={isSubmitting || aiVerifying}
+                  disabled={isSubmitting}
                   className="w-full h-16 bg-indigo-600 text-white rounded-3xl font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50"
                 >
-                  {aiVerifying ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-                  {aiVerifying ? 'Verifying payment...' : 'Verify Payment & Unlock'}
+                  {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
+                  {isSubmitting ? 'Submitting Details...' : 'Submit Payment Details'}
                 </button>
               </div>
             </motion.div>

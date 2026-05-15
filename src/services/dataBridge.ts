@@ -26,6 +26,22 @@ const withTimeout = async <T>(promiseOrThenable: any, timeoutMs: number = 8000, 
   ]);
 };
 
+// Simple local cache for static or slow-changing data
+const localCache = new Map<string, { data: any, timestamp: number }>();
+const CACHE_TTL = 300000; // 5 minutes in milliseconds
+
+const getCached = (key: string) => {
+  const cached = localCache.get(key);
+  if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+    return cached.data;
+  }
+  return null;
+};
+
+const setCache = (key: string, data: any) => {
+  localCache.set(key, { data, timestamp: Date.now() });
+};
+
 export const dataBridge = {
   /**
    * Syncs a Firebase user profile to Supabase
@@ -333,6 +349,10 @@ export const dataBridge = {
    * Get subject resources (Notes, etc) from Supabase primarily
    */
   async getResources(classLevel: string): Promise<SubjectResource[]> {
+    const cacheKey = `resources_${classLevel}`;
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
+
     // 1. Try Supabase (Absolute Truth)
     if (supabase) {
       try {
@@ -342,7 +362,9 @@ export const dataBridge = {
           .eq('class', classLevel);
         
         if (!error && data && data.length > 0) {
-          return data.map((d: any) => this.mapResource(d)) as SubjectResource[];
+          const mapped = data.map((d: any) => this.mapResource(d)) as SubjectResource[];
+          setCache(cacheKey, mapped);
+          return mapped;
         }
       } catch (err) {
         console.warn("Supabase resource fetch failed:", err);
@@ -512,7 +534,7 @@ export const dataBridge = {
    * Save a purchase request (Supabase Primary) with Instant Approval helper
    */
   async savePurchaseRequest(requestData: any) {
-    const txId = requestData.transactionId.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const txId = (requestData.transactionId || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     const status = requestData.status || 'pending';
     
     // Attempt to resolve real userId if 'GUEST' but email exists
@@ -553,92 +575,7 @@ export const dataBridge = {
           throw error;
         }
 
-        // 2. IF APPROVED (AI Verified or Admin manual), also save to verified_payments for Analytics & AI Verifies tab
-        if (status === 'approved') {
-          await this.saveVerifiedPayment({
-            transactionId: txId,
-            phoneNumber: requestData.whatsapp || requestData.whatsappNumber || 'Unknown',
-            amount: requestData.amount,
-            subject: requestData.productName || requestData.planName || 'Unknown',
-            userId: activeUserId,
-            verified: true,
-            paymentApp: requestData.paymentApp,
-            passwordUnlocked: requestData.passwordUnlocked,
-            productName: requestData.productName || requestData.planName
-          });
-        }
-
-        // IF INSTANTLY APPROVED (AI Verified), UPDATE USER PROFILE IMMEDIATELY
-        if (status === 'approved' && activeUserId && activeUserId !== 'GUEST') {
-             try {
-                // Fetch current profile to get existing unlocked items
-                const { data: profile } = await supabase.from('profiles').select('*').eq('id', activeUserId).maybeSingle();
-                
-                const updates: any = {};
-                
-                // Handle Premium Subscription
-                if (requestData.planId === 'plus_sub' || requestData.planId === 'monthly_sub') {
-                  updates.is_premium = true;
-                  updates.plan_type = requestData.planId;
-                }
-                
-                const currentResources = profile?.unlocked_resources || [];
-                const currentClasses = profile?.unlocked_classes || [];
-
-                // Handle Master Pack Purchase (class_<cls>_one_time)
-                if (requestData.planId?.includes('_one_time')) {
-                   const classMatch = requestData.planId.match(/class_(\d+)_/);
-                   if (classMatch) {
-                      const cls = classMatch[1];
-                      if (!currentClasses.includes(cls)) {
-                        updates.unlocked_classes = Array.from(new Set([...currentClasses, cls]));
-                      }
-                   }
-                }
-                
-                // Handle Individual Resource Purchase
-                const targetResId = requestData.resourceId || (requestData.planId?.startsWith('res_') ? requestData.planId.replace('res_', '') : null);
-                if (targetResId) {
-                   if (!currentResources.includes(targetResId)) {
-                     updates.unlocked_resources = Array.from(new Set([...currentResources, targetResId]));
-                   }
-                }
-                
-                // Update the profile in Supabase
-                if (Object.keys(updates).length > 0) {
-                  await supabase.from('profiles').update({
-                    ...updates,
-                    updated_at: new Date().toISOString()
-                  }).eq('id', activeUserId);
-                }
-
-                // IMPORTANT: ALSO UPDATE FIRESTORE PROFILE FOR INSTANT ACCESS SYNC
-                try {
-                   const firestoreUpdates: any = {};
-                   if (updates.is_premium) firestoreUpdates.isPremium = true;
-                   if (updates.unlocked_resources) firestoreUpdates.unlockedResources = updates.unlocked_resources;
-                   if (updates.unlocked_classes) firestoreUpdates.unlockedClasses = updates.unlocked_classes;
-                   
-                   if (Object.keys(firestoreUpdates).length > 0) {
-                      await firestoreUpdateDoc(doc(db, 'users', activeUserId), firestoreUpdates);
-                   }
-                } catch (fsErr) {
-                   console.error("Firestore instant sync failed:", fsErr);
-                }
-             } catch (updateErr) {
-                console.error("Instant access grant failed:", updateErr);
-             }
-          }
-          
-          // ALSO MARK TRANSACTION AS USED IN FIRESTORE REGISTRY
-          try {
-             await setDoc(doc(db, 'transaction_id_registry', txId), {
-               email: requestData.email,
-               usedAt: serverTimestamp()
-             });
-          } catch(e) {}
-
-          return { success: true, provider: 'supabase' };
+        return { success: true, provider: 'supabase' };
       } catch (err: any) {
         console.warn("Supabase save failed:", err);
       }
@@ -648,6 +585,7 @@ export const dataBridge = {
     try {
       await addDoc(collection(db, 'purchase_requests'), {
         ...requestData,
+        userId: activeUserId,
         transactionId: txId,
         status: status,
         verified: status === 'approved',
@@ -661,9 +599,135 @@ export const dataBridge = {
   },
 
   /**
+   * Admin: Approve a purchase manually
+   */
+  async approvePurchase(requestId: string, password?: string) {
+    if (!supabase) return { success: false };
+    try {
+      // 1. Fetch request details
+      const { data: req, error: fetchErr } = await supabase.from('purchase_requests').select('*').eq('id', requestId).single();
+      if (fetchErr || !req) throw new Error("Request not found");
+
+      // 2. Update status
+      const { error: updateErr } = await supabase.from('purchase_requests').update({
+        status: 'approved',
+        verified: true,
+        password_unlocked: password || req.password_unlocked || '',
+        updated_at: new Date().toISOString()
+      }).eq('id', requestId);
+
+      if (updateErr) throw updateErr;
+
+      // 3. Grant access to user if possible
+      if (req.user_id && req.user_id !== 'GUEST') {
+        const updates: any = {};
+        
+        if (req.plan_id === 'plus_sub' || req.plan_id === 'monthly_sub') {
+          updates.is_premium = true;
+          updates.plan_type = req.plan_id;
+        }
+
+        const { data: profile } = await supabase.from('profiles').select('unlocked_resources, unlocked_classes').eq('id', req.user_id).maybeSingle();
+        
+        if (req.resource_id) {
+          updates.unlocked_resources = Array.from(new Set([...(profile?.unlocked_resources || []), req.resource_id]));
+        }
+
+        const classMatch = req.plan_id?.match(/class_(\d+)_/);
+        if (classMatch) {
+          updates.unlocked_classes = Array.from(new Set([...(profile?.unlocked_classes || []), classMatch[1]]));
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await supabase.from('profiles').update(updates).eq('id', req.user_id);
+          
+          // Firestore sync for legacy support
+          try {
+             const fsUpdates: any = {};
+             if (updates.is_premium) fsUpdates.isPremium = true;
+             if (updates.unlocked_resources) fsUpdates.unlockedResources = updates.unlocked_resources;
+             if (updates.unlocked_classes) fsUpdates.unlockedClasses = updates.unlocked_classes;
+             await firestoreUpdateDoc(doc(db, 'users', req.user_id), fsUpdates);
+          } catch (e) {}
+        }
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      console.error("Approval flow failed:", err);
+      return { success: false, error: err.message };
+    }
+  },
+
+  /**
+   * Admin: Reject a purchase
+   */
+  async rejectPurchase(requestId: string, reason: string) {
+    if (!supabase) return { success: false };
+    try {
+      const { error } = await supabase.from('purchase_requests').update({
+        status: 'rejected',
+        rejection_reason: reason,
+        updated_at: new Date().toISOString()
+      }).eq('id', requestId);
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      console.error("Rejection failed:", err);
+      return { success: false, error: err.message };
+    }
+  },
+
+  /**
+   * For Users: Get purchase history
+   */
+  async getUserPurchaseHistory(emailOrUid: string) {
+    if (!supabase) return [];
+    try {
+      const { data, error } = await supabase
+        .from('purchase_requests')
+        .select('*')
+        .or(`user_id.eq.${emailOrUid},email.eq.${emailOrUid}`)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data || [];
+    } catch (err) {
+      console.error("Fetch history failed:", err);
+      return [];
+    }
+  },
+
+  /**
+   * Check if a product is already purchased/pending
+   */
+  async checkPurchaseStatus(email: string, planId: string) {
+    if (!supabase || !email) return null;
+    try {
+      const { data, error } = await supabase
+        .from('purchase_requests')
+        .select('*')
+        .eq('email', email)
+        .eq('plan_id', planId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data;
+    } catch (err) {
+      return null;
+    }
+  },
+
+  /**
    * Promo Banners - List from Supabase primarily
    */
   async getPromoBanners(limitCount = 5, location = 'home') {
+    const cacheKey = `banners_${location}_${limitCount}`;
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
+
     if (supabase) {
       try {
         let queryBuilder = supabase
@@ -676,13 +740,15 @@ export const dataBridge = {
         const { data, error } = await queryBuilder;
         
         if (!error && data) {
-           return data.map(b => ({
+           const mapped = data.map(b => ({
              id: b.id,
              imageUrl: b.image_url || b.imageUrl,
              link: b.link,
              location: b.location,
              createdAt: b.created_at || b.createdAt
            }));
+           setCache(cacheKey, mapped);
+           return mapped;
         }
       } catch (err) {
         console.warn("Supabase banners failed:", err);
@@ -1327,6 +1393,10 @@ export const dataBridge = {
    * Free Resources Management
    */
   async getFreeResources(classLevel?: string) {
+    const cacheKey = `free_resources_${classLevel || 'all'}`;
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
+
     if (!supabase) return [];
     try {
       let queryBuilder = supabase.from('free_resources').select('*').order('created_at', { ascending: false });
@@ -1338,7 +1408,9 @@ export const dataBridge = {
         if (error.code === 'PGRST205') console.warn("Free Resources table not yet created.");
         throw error;
       }
-      return data || [];
+      const result = data || [];
+      setCache(cacheKey, result);
+      return result;
     } catch (err) {
       console.error("Fetch free resources failed:", err);
       return [];
@@ -1426,6 +1498,10 @@ export const dataBridge = {
    * Story Unlock System
    */
   async getStoryTemplates(onlyActive: boolean = true) {
+    const cacheKey = `story_templates_${onlyActive}`;
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
+
     if (!supabase) return [];
     try {
       let query = supabase
@@ -1439,7 +1515,7 @@ export const dataBridge = {
       const { data, error } = await query.order('created_at', { ascending: false });
       
       if (error) throw error;
-      return (data || []).map(t => ({
+      const mapped = (data || []).map(t => ({
         id: t.id,
         title: t.title,
         description: t.description,
@@ -1448,6 +1524,9 @@ export const dataBridge = {
         isActive: t.is_active,
         createdAt: t.created_at
       } as StoryTemplate));
+
+      setCache(cacheKey, mapped);
+      return mapped;
     } catch (err) {
       console.error("Fetch templates failed:", err);
       return [];

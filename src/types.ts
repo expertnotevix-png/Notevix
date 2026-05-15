@@ -199,4 +199,7 @@ export interface PurchaseRequest {
   screenshotUrl?: string; // Deprecated - do not use
   isGuest?: boolean;
   source?: 'firebase' | 'supabase';
+  password_unlocked?: string;
+  rejection_reason?: string;
+  resourceId?: string;
 }

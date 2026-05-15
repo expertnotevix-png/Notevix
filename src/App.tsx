@@ -111,7 +111,6 @@ const Login = lazyWithRetry(() => import('./pages/Login'));
 const ChapterList = lazyWithRetry(() => import('./pages/ChapterList'));
 const NoteView = lazyWithRetry(() => import('./pages/NoteView'));
 const Admin = lazyWithRetry(() => import('./pages/Admin'));
-const Leaderboard = lazyWithRetry(() => import('./pages/Leaderboard'));
 const Schedule = lazyWithRetry(() => import('./pages/Schedule'));
 const Notifications = lazyWithRetry(() => import('./pages/Notifications'));
 const PrivacyPolicy = lazyWithRetry(() => import('./pages/PrivacyPolicy'));
@@ -250,44 +249,6 @@ export default function App() {
 
             // SYNC BACK TO SUPABASE (Ensure Supabase has the latest merged data from Firestore fallback)
             dataBridge.syncProfile(firebaseUser.uid, mergedProfile).catch(e => console.warn("Update sync failed:", e));
-
-            // SETUP REAL-TIME PROFILE SYNC (Supabase)
-            if (supabase) {
-              const profileChannel = supabase
-                .channel(`profile_sync_${firebaseUser.uid}`)
-                .on('postgres_changes', { 
-                  event: 'UPDATE', 
-                  schema: 'public', 
-                  table: 'profiles',
-                  filter: `id=eq.${firebaseUser.uid}`
-                }, (payload) => {
-                  setUser(current => {
-                    if (!current) return null;
-                    const updated = {
-                      ...current,
-                      displayName: payload.new.full_name || current.displayName,
-                      totalPoints: payload.new.xp ?? current.totalPoints,
-                      xp: payload.new.xp ?? current.totalPoints,
-                      totalFocusMinutes: payload.new.focus_minutes ?? current.totalFocusMinutes,
-                      streak: { 
-                        currentCount: payload.new.streak ?? current.streak?.currentCount,
-                        lastUpdateDate: current.streak?.lastUpdateDate
-                      },
-                      isPremium: payload.new.is_premium ?? current.isPremium,
-                      unlockedResources: payload.new.unlocked_resources ?? current.unlockedResources,
-                      unlockedClasses: payload.new.unlocked_classes ?? current.unlockedClasses,
-                      class: payload.new.class_level ?? current.class
-                    };
-                    localStorage.setItem(CACHED_USER_KEY, JSON.stringify(updated));
-                    return updated;
-                  });
-                })
-                .subscribe();
-              
-              unsubscribeUser = () => {
-                profileChannel.unsubscribe();
-              };
-            }
           }
 
           // Legacy / Fallback checks for premium status
@@ -467,7 +428,6 @@ export default function App() {
               
               <Route path="/" element={user ? <Home user={user} /> : <Landing />} />
               <Route path="/explore" element={<Explore />} />
-              <Route path="/leaderboard" element={<Leaderboard user={user} />} />
               <Route path="/schedule" element={user ? <Schedule user={user} /> : <Navigate to="/login" />} />
               <Route path="/notifications" element={user ? <Notifications user={user} /> : <Navigate to="/login" />} />
               <Route path="/saved" element={user ? <Saved user={user} /> : <Navigate to="/login" />} />
@@ -496,7 +456,6 @@ export default function App() {
           </Suspense>
           
           <BottomNav user={user} />
-          <PointsTracker user={user} />
           <FloatingChatbot />
           <Toaster position="top-center" expand={true} richColors theme="dark" />
         </div>

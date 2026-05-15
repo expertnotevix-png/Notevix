@@ -989,8 +989,9 @@ export default function Admin() {
 
     checkActiveUsers();
     // Re-check every 5 minutes if tab is active
-    const interval = setInterval(checkActiveUsers, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+    // Poll for active users removed to reduce API pressure
+    // const interval = setInterval(checkActiveUsers, 5 * 60 * 1000);
+    // return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -1109,51 +1110,9 @@ export default function Admin() {
     }
   };
 
+  // AI Verification removed as requested
   const handleAIVerify = async (req: PurchaseRequest) => {
-    if (!req.screenshotUrl) {
-      toast.error("No screenshot provided for this request.");
-      return;
-    }
-    
-    // Admin Quota Protection
-    const now = Date.now();
-    if (now - lastAdminAiAttemptRef.current < 4000) {
-      toast.error("AI is cooling down. Please wait 4 seconds.");
-      return;
-    }
-    lastAdminAiAttemptRef.current = now;
-    
-    setLoading(true);
-    const toastId = toast.loading("Verifying payment...");
-    try {
-      const result = await geminiService.verifyPaymentScreenshot(req.screenshotUrl, req.amount, req.planName, "ADMIN_AUDIT");
-      
-      if (result.verified) {
-        toast.dismiss(toastId);
-        
-        // Anti-fraud: check if already used
-        const isRedeemed = await dataBridge.isTransactionRedeemed(result.transactionId || "");
-        if (isRedeemed) {
-           toast.error("AI Alert: This Transaction ID has already been redeemed in another request!", { duration: 8000 });
-           return;
-        }
-
-        toast.success(`AI Verified: ₹${result.amount} Match! Transaction: ${result.transactionId}`, { duration: 6000 });
-        
-        // Show a confirm dialog to auto-approve
-        if (window.confirm(`AI recommends APPROVING this. \n\nAmount Found: ₹${result.amount}\nID Found: ${result.transactionId}\nRequest ID: ${req.transactionId}\n\nProceed with Auto-Approval?`)) {
-          await handleApprovePurchase(req);
-        }
-      } else {
-        toast.dismiss(toastId);
-        toast.error(`AI Rejection: ${result.reason || "Receipt looks invalid or incomplete."}`, { duration: 8000 });
-      }
-    } catch (error: any) {
-      toast.dismiss(toastId);
-      toast.error("AI Audit failed: " + error.message);
-    } finally {
-      setLoading(false);
-    }
+    toast.info("AI verification is deprecated. Please verify manually using the screenshot.");
   };
 
   const fetchPurchaseRequests = async () => {
@@ -1209,180 +1168,39 @@ export default function Admin() {
     }
   };
 
-  // Real-time listener for purchase requests, verified payments and profiles
+  // Refreshes for purchase requests, verified payments and profiles
+  // Realtime listeners removed to reduce Supabase API usage as requested
   useEffect(() => {
     if (activeTab !== 'payments' && activeTab !== 'users' && activeTab !== 'verified_payments' && activeTab !== 'analytics') return;
     
-    const channels: any[] = [];
-    const setupAdminRealtime = async () => {
-      const { supabase } = await import('../lib/supabase');
-      if (supabase) {
-        // Purchase Requests (Tab: payments)
-        if (activeTab === 'payments') {
-          const payChannel = supabase
-            .channel(`admin_payments_${Math.random().toString(36).substring(7)}`)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_requests' }, () => {
-              fetchPurchaseRequests();
-              fetchAnalytics();
-            })
-            .subscribe();
-          channels.push(payChannel);
-        }
-
-        // AI Verified Payments (Tab: verified_payments)
-        const verifiedChannel = supabase
-          .channel(`admin_verified_${Math.random().toString(36).substring(7)}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'verified_payments' }, () => {
-            if (activeTab === 'verified_payments') fetchVerifiedPayments();
-            fetchAnalytics();
-          })
-          .subscribe();
-        channels.push(verifiedChannel);
-
-        // Profiles / Users (Tab: users or payments for analytics)
-        const userChannel = supabase
-          .channel(`admin_users_${Math.random().toString(36).substring(7)}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-            if (activeTab === 'users') fetchUsers();
-            
-            // Analytics update (Live Active Users badge)
-            const checkActiveUsers = async () => {
-              const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-              try {
-                const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).gt('updated_at', fiveMinutesAgo);
-                setActiveUsers(count || 0);
-              } catch (e) {
-                console.warn("Active users count fetch failed", e);
-              }
-            };
-            checkActiveUsers();
-          })
-          .subscribe();
-        channels.push(userChannel);
-      }
-    };
-    setupAdminRealtime();
-
-    return () => {
-      channels.forEach(ch => ch.unsubscribe());
-    };
+    // We already fetch data on activeTab change in another useEffect
+    // Removing the live subscription channel logic
   }, [activeTab]);
 
   const handleApprovePurchase = async (req: any) => {
+    const password = window.prompt("Enter Unlock Password (leave blank to use default):");
+    if (password === null) return;
+
     try {
-      // 1. Update request status in the correct database
-      if (req.source === 'supabase' && supabase) {
-        await supabase.from('purchase_requests').update({ status: 'approved' }).eq('id', req.id);
-        
-        // Also save to verified_payments for unified AI Analytics
-        await dataBridge.saveVerifiedPayment({
-          transactionId: req.transactionId,
-          phoneNumber: req.whatsapp || req.whatsappNumber || 'ADMIN_SYSTEM',
-          amount: req.amount,
-          subject: req.planName || 'Manual Approval',
-          verified: true
-        });
-      } else {
-        try {
-          await updateDoc(doc(db, 'purchase_requests', req.id), { status: 'approved' });
-        } catch (e) {
-          console.error("Firestore status update failed:", e);
+      const result = await dataBridge.approvePurchase(req.id, password || undefined);
+      
+      if (result.success) {
+        if (req.userId && req.userId !== 'GUEST') {
+          await addDoc(collection(db, 'notifications'), {
+            userId: req.userId,
+            title: 'Purchase Approved! 👑',
+            message: `Your payment for ${req.planName} has been verified. Password: ${password || 'Check product page.'}`,
+            type: 'rank',
+            read: false,
+            timestamp: new Date().toISOString()
+          });
         }
-      }
-
-      if (req.isGuest || req.userId === 'GUEST') {
-        toast.success("Guest purchase approved!");
+        
         fetchPurchaseRequests();
-        return;
-      }
-
-      // 2. Grant access to user in Firestore (Profile management stays in Firebase as requested)
-      const userRef = doc(db, 'users', req.userId);
-      const userSnap = await getDoc(userRef);
-      
-      let finalUserRef = userRef;
-      let userData = userSnap.data();
-
-      if (!userSnap.exists()) {
-        const userQuery = query(collection(db, 'users'), where('uid', '==', req.userId));
-        const qSnap = await getDocs(userQuery);
-        if (qSnap.empty) {
-          toast.error("Could not find user record.");
-          return;
-        }
-        finalUserRef = doc(db, 'users', qSnap.docs[0].id);
-        userData = qSnap.docs[0].data();
-      }
-
-      if (req.planType === 'subscription') {
-        const updateData = { 
-          isPremium: true,
-          subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-        };
-        await updateDoc(finalUserRef, updateData);
-        // Supabase Sync
-        if (supabase) {
-          await supabase.from('profiles').update({ is_premium: true, updated_at: new Date().toISOString() }).eq('id', req.userId);
-        }
-      } else if (req.planId?.startsWith('res_') || req.resourceId) {
-        const resId = req.resourceId || req.planId.replace('res_', '');
-        const currentUnlocked = (userData?.unlockedResources || []) as string[];
-        if (!currentUnlocked.includes(resId)) {
-          const newResources = Array.from(new Set([...currentUnlocked, resId]));
-          await updateDoc(finalUserRef, { 
-            unlockedResources: newResources
-          });
-          
-          if (supabase) {
-             // Sync to Supabase profile
-             const { data: profile } = await supabase.from('profiles').select('unlocked_resources').eq('id', req.userId).maybeSingle();
-             const sbResources = Array.from(new Set([...(profile?.unlocked_resources || []), resId]));
-             await supabase.from('profiles').update({ 
-               unlocked_resources: sbResources,
-               updated_at: new Date().toISOString()
-             }).eq('id', req.userId);
-          }
-        }
-      } else if (req.targetClass || req.planId?.includes('_one_time')) {
-        const targetCls = req.targetClass || (req.planId?.match(/class_(\d+)_/)?.[1]);
-        const currentClasses = (userData?.unlockedClasses || []) as string[];
-        
-        if (targetCls && !currentClasses.includes(targetCls)) {
-          const newClasses = Array.from(new Set([...currentClasses, targetCls]));
-          await updateDoc(finalUserRef, { 
-            unlockedClasses: newClasses
-          });
-          
-          if (supabase) {
-             const { data: profile } = await supabase.from('profiles').select('unlocked_classes').eq('id', req.userId).maybeSingle();
-             const sbClasses = Array.from(new Set([...(profile?.unlocked_classes || []), targetCls]));
-             await supabase.from('profiles').update({ 
-               unlocked_classes: sbClasses,
-               updated_at: new Date().toISOString()
-             }).eq('id', req.userId);
-          }
-        }
+        toast.success("Purchase approved!");
       } else {
-        await updateDoc(finalUserRef, { isPremium: true });
-        if (supabase) {
-          await supabase.from('profiles').update({ is_premium: true, updated_at: new Date().toISOString() }).eq('id', req.userId);
-        }
+        toast.error(result.error || "Approval failed");
       }
-      
-      // 3. Notify user
-      await addDoc(collection(db, 'notifications'), {
-        userId: req.userId,
-        title: 'Premium Activated! 👑',
-        message: `Your payment for ${req.planName} has been verified. Enjoy your premium access!`,
-        type: 'rank',
-        read: false,
-        timestamp: new Date().toISOString()
-      });
-
-      if (activeTab === 'users') fetchUsers();
-      if (activeTab === 'payments') fetchPurchaseRequests();
-
-      toast.success("Purchase approved and student upgraded!");
     } catch (error) {
       console.error(error);
       toast.error("Verification failed");
@@ -1390,30 +1208,32 @@ export default function Admin() {
   };
 
   const handleRejectPurchase = async (req: any) => {
-    const reason = window.prompt("Reason for rejection?");
+    const reason = window.prompt("Reason for rejection (Optional):") || "Invalid transaction details.";
     if (reason === null) return;
 
     try {
-      if (req.source === 'supabase' && supabase) {
-        await supabase.from('purchase_requests').update({ status: 'rejected' }).eq('id', req.id);
-      } else {
-        await updateDoc(doc(db, 'purchase_requests', req.id), { status: 'rejected' });
-      }
+      const result = await dataBridge.rejectPurchase(req.id, reason);
       
-      if (req.userId && req.userId !== 'GUEST') {
-        await addDoc(collection(db, 'notifications'), {
-          userId: req.userId,
-          title: 'Payment Rejected',
-          message: `Your payment verification failed. Reason: ${reason}. Please contact support with Transaction ID.`,
-          type: 'info',
-          read: false,
-          timestamp: new Date().toISOString()
-        });
+      if (result.success) {
+        if (req.userId && req.userId !== 'GUEST') {
+          await addDoc(collection(db, 'notifications'), {
+            userId: req.userId,
+            title: 'Payment Rejected',
+            message: `Your payment verification failed. Reason: ${reason}.`,
+            type: 'info',
+            read: false,
+            timestamp: new Date().toISOString()
+          });
+        }
+        
+        fetchPurchaseRequests();
+        toast.success("Purchase rejected.");
+      } else {
+        toast.error(result.error || "Rejection failed");
       }
-
-      toast.success("Purchase rejected.");
     } catch (error) {
       console.error(error);
+      toast.error("Rejection failed");
     }
   };
 
@@ -1496,67 +1316,7 @@ export default function Admin() {
   };
 
   const handleManualLeaderboardReset = async () => {
-    if (!window.confirm("Are you sure? This will set EVERYONE'S points to 0. This cannot be undone!")) return;
-    
-    const loadingToast = toast.loading("Resetting leaderboard...");
-    try {
-      // Try server-side reset first (it's faster and handles large amounts of users)
-      const response = await fetch('/api/admin/reset-leaderboard', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        toast.dismiss(loadingToast);
-        toast.success("Leaderboard has been reset to zero via server!");
-        if (activeTab === 'users') fetchUsers();
-        return;
-      }
-
-      // Fallback to client-side if API fails (e.g. during local dev without server or if endpoint is broken)
-      console.warn("Server reset failed, falling back to client-side batch reset");
-      
-      const resetCollection = async (collName: string) => {
-        const snap = await getDocs(collection(db, collName));
-        if (snap.empty) return;
-
-        let batch = writeBatch(db);
-        let count = 0;
-
-        for (const doc of snap.docs) {
-          batch.update(doc.ref, {
-            totalPoints: 0,
-            totalFocusMinutes: 0,
-            ...(collName === 'users' ? { 'streak.currentCount': 1 } : {})
-          });
-          count++;
-
-          // Firestore batch limit is 500
-          if (count === 450) {
-            await batch.commit();
-            batch = writeBatch(db);
-            count = 0;
-          }
-        }
-
-        if (count > 0) {
-          await batch.commit();
-        }
-      };
-
-      await resetCollection('users');
-      await resetCollection('leaderboard');
-
-      toast.dismiss(loadingToast);
-      toast.success("Leaderboard has been reset to zero!");
-      if (activeTab === 'users') fetchUsers();
-    } catch (error) {
-      console.error("Leaderboard reset error:", error);
-      toast.dismiss(loadingToast);
-      toast.error("Failed to reset leaderboard. Check console for details.");
-    }
+    toast.info("Leaderboard system is disabled.");
   };
 
   const filteredUsers = useMemo(() => {
@@ -3030,13 +2790,6 @@ export default function Admin() {
                   className="w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 py-3 text-sm focus:border-purple-500 focus:outline-none"
                 />
               </div>
-              <button 
-                onClick={handleManualLeaderboardReset}
-                className="bg-red-500/10 text-red-500 border border-red-500/20 px-6 py-3 rounded-2xl text-[10px] font-bold tracking-widest uppercase flex items-center justify-center gap-2"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Reset Leaderboard
-              </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -3061,8 +2814,6 @@ export default function Admin() {
                   </div>
                   <div className="flex items-center gap-2 pt-2 border-t border-white/5">
                      <span className="text-[10px] font-bold text-purple-400">Class {u.class || '?'}</span>
-                     <div className="w-1 h-1 rounded-full bg-white/10" />
-                     <span className="text-[10px] font-bold text-blue-400">Pts: {u.totalPoints || 0}</span>
                      <button 
                        onClick={async () => {
                          if(window.confirm(`Delete student ${u.displayName}?`)) {
@@ -3170,17 +2921,25 @@ export default function Admin() {
                             )}
                           </div>
                         </div>
-                        {req.status === 'pending' && req.screenshotUrl && (
-                          <button
-                            onClick={() => handleAIVerify(req)}
-                            className="w-full flex items-center justify-center gap-3 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all active:scale-95"
-                          >
-                            <Zap className="w-4 h-4" />
-                            AI Audit Shortcut
-                          </button>
-                        )}
                       </div>
                     </div>
+
+                    {req.status === 'approved' && req.password_unlocked && (
+                      <div className="bg-green-500/10 border border-green-500/20 p-4 rounded-2xl flex items-center justify-between">
+                        <div>
+                          <p className="text-[10px] text-green-500 font-bold uppercase tracking-widest mb-1">Unlocked Password</p>
+                          <p className="font-mono font-bold text-white">{req.password_unlocked}</p>
+                        </div>
+                        <CheckCircle2 className="w-6 h-6 text-green-500" />
+                      </div>
+                    )}
+
+                    {req.status === 'rejected' && req.rejection_reason && (
+                      <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl">
+                        <p className="text-[10px] text-red-500 font-bold uppercase tracking-widest mb-1">Rejection Reason</p>
+                        <p className="text-xs text-gray-400">{req.rejection_reason}</p>
+                      </div>
+                    )}
 
                     {req.status === 'pending' && (
                       <div className="flex gap-4 pt-4">
@@ -3361,17 +3120,6 @@ export default function Admin() {
                     </button>
                   </div>
 
-                  <div className="p-6 rounded-3xl bg-red-500/5 border border-red-500/10 space-y-4">
-                    <h4 className="font-bold text-lg">Reset Leaderboard</h4>
-                    <p className="text-xs text-gray-500">Set all students points and focus minutes to zero. Start a new season.</p>
-                    <button 
-                      onClick={handleManualLeaderboardReset}
-                      className="w-full bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all"
-                    >
-                      Reset All Points
-                    </button>
-                  </div>
-
                   <div className="p-6 rounded-3xl bg-indigo-500/5 border border-indigo-500/10 space-y-4">
                     <h4 className="font-bold text-lg">System Health</h4>
                     <p className="text-xs text-gray-500">Fix 'Internal Assertion' or 'Unexpected State' errors by clearing cache.</p>
@@ -3470,7 +3218,40 @@ CREATE TABLE IF NOT EXISTS public.subject_resources (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. Story Unlock System
+-- 4. Transactions (Purchase Tracking)
+CREATE TABLE IF NOT EXISTS public.purchase_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id TEXT,
+    email TEXT,
+    whatsapp TEXT,
+    transaction_id TEXT UNIQUE NOT NULL,
+    amount NUMERIC NOT NULL,
+    plan_id TEXT,
+    plan_name TEXT,
+    resource_id TEXT,
+    status TEXT DEFAULT 'pending',
+    password_unlocked TEXT,
+    rejection_reason TEXT,
+    verified BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 4.1 Verified Payments (Strict Schema)
+CREATE TABLE IF NOT EXISTS public.verified_payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  transaction_id TEXT UNIQUE NOT NULL,
+  phone_number TEXT,
+  amount NUMERIC,
+  product_name TEXT,
+  password_unlocked TEXT,
+  verified BOOLEAN DEFAULT false,
+  user_id TEXT,
+  payment_app TEXT,
+  verification_reason TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 5. Story Unlock System
 CREATE TABLE IF NOT EXISTS public.story_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title TEXT NOT NULL,

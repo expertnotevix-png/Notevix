@@ -2,11 +2,11 @@ import { auth } from '../components/firebase';
 import { signOut } from 'firebase/auth';
 import { dataBridge } from '../services/dataBridge';
 import { UserProfile } from '../types';
-import { LogOut, Settings, Shield, CreditCard, Bell, ChevronRight, Award, Instagram, Send, BookOpen, Moon, Bookmark, Share2, Copy, Check, Download, QrCode, MessageSquare, History, Gift } from 'lucide-react';
+import { LogOut, Settings, Shield, CreditCard, Bell, ChevronRight, Award, Instagram, Send, BookOpen, Moon, Bookmark, Share2, Copy, Check, Download, QrCode, MessageSquare, History, Gift, Clock, XCircle, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { toast } from 'sonner';
 
@@ -18,13 +18,29 @@ export default function Profile({ user, setUser }: { user: UserProfile, setUser:
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
   const [userPostsCount, setUserPostsCount] = useState(0);
+  const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
 
   useEffect(() => {
     const fetchUserStats = async () => {
       const count = await dataBridge.getUserPostCount(user.uid);
       setUserPostsCount(count);
     };
+
+    const fetchHistory = async () => {
+      setLoadingHistory(true);
+      try {
+        const history = await dataBridge.getUserPurchaseHistory(user.uid);
+        setPurchaseHistory(history);
+      } catch (err) {
+        console.error("Error fetching history:", err);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+
     fetchUserStats();
+    fetchHistory();
   }, [user.uid]);
 
   const handleLogout = () => {
@@ -165,6 +181,70 @@ export default function Profile({ user, setUser }: { user: UserProfile, setUser:
         </div>
         <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${user.isPremium ? 'bg-yellow-500/20 text-yellow-500' : 'bg-purple-500/20 text-purple-400'}`}>
           {user.isPremium ? 'Pro' : 'Free'}
+        </div>
+      </div>
+
+      {/* Purchase History */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+           <h3 className="font-bold text-gray-400 uppercase text-xs tracking-widest">Purchase History</h3>
+           <History className="w-4 h-4 text-gray-600" />
+        </div>
+        
+        <div className="space-y-3">
+          {loadingHistory ? (
+            <div className="h-20 bg-white/5 animate-pulse rounded-3xl" />
+          ) : purchaseHistory.length > 0 ? (
+            purchaseHistory.map((h) => (
+              <div key={h.id} className="glass-card p-5 rounded-3xl bg-white/5 border border-white/5 space-y-4">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <h4 className="font-bold text-sm">{h.plan_name || h.product_name || 'E-Book / Course'}</h4>
+                    <p className="text-[9px] text-gray-500 uppercase font-black tracking-widest">
+                       {new Date(h.created_at).toLocaleDateString()} • ₹{h.amount}
+                    </p>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                    h.status === 'approved' ? 'bg-green-500/20 text-green-500' :
+                    h.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500' :
+                    'bg-red-500/20 text-red-500'
+                  }`}>
+                    {h.status === 'approved' ? 'Verified' : h.status}
+                  </div>
+                </div>
+
+                {h.status === 'approved' && h.password_unlocked && (
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-2xl flex items-center justify-between">
+                    <div className="overflow-hidden">
+                      <p className="text-[8px] text-emerald-500 font-black uppercase tracking-widest mb-1">PDF Password</p>
+                      <code className="text-sm font-black text-white tracking-widest select-all">{h.password_unlocked}</code>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(h.password_unlocked);
+                        toast.success("Password Copied!");
+                      }}
+                      className="p-2 bg-emerald-500/20 rounded-xl text-emerald-400"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                {h.status === 'rejected' && h.rejection_reason && (
+                  <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-2xl">
+                    <p className="text-[8px] text-red-500 font-black uppercase tracking-widest mb-1">Reason</p>
+                    <p className="text-[10px] text-gray-400 font-medium">{h.rejection_reason}</p>
+                  </div>
+                )}
+              </div>
+            ))
+          ) : (
+            <div className="p-10 text-center glass-card rounded-3xl bg-white/5 border border-dashed border-white/10">
+              <Gift className="w-8 h-8 text-gray-700 mx-auto mb-3" />
+              <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">No purchases yet</p>
+            </div>
+          )}
         </div>
       </div>
 
