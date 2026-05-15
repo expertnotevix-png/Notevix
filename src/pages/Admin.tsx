@@ -3348,6 +3348,18 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- 8. Policies (Idempotent)
+ALTER TABLE public.verified_payments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Insert Verified Payments" ON public.verified_payments;
+CREATE POLICY "Public Insert Verified Payments" ON public.verified_payments FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Admin All Verified Payments" ON public.verified_payments;
+CREATE POLICY "Admin All Verified Payments" ON public.verified_payments FOR ALL USING (true);
+
+ALTER TABLE public.purchase_requests ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Insert Purchase Requests" ON public.purchase_requests;
+CREATE POLICY "Public Insert Purchase Requests" ON public.purchase_requests FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Admin All Purchase Requests" ON public.purchase_requests;
+CREATE POLICY "Admin All Purchase Requests" ON public.purchase_requests FOR ALL USING (true);
+
 ALTER TABLE public.promo_banners ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public Read Banners" ON public.promo_banners;
 CREATE POLICY "Public Read Banners" ON public.promo_banners FOR SELECT USING (true);

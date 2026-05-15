@@ -88,6 +88,39 @@ CREATE TABLE IF NOT EXISTS public.purchase_requests (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- 4.1 Verified Payments (Strict Schema)
+CREATE TABLE IF NOT EXISTS public.verified_payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  transaction_id TEXT UNIQUE NOT NULL,
+  phone_number TEXT,
+  amount NUMERIC,
+  product_name TEXT,
+  password_unlocked TEXT,
+  resource_id TEXT,
+  plan_id TEXT,
+  status TEXT DEFAULT 'pending',
+  rejection_reason TEXT,
+  verified BOOLEAN DEFAULT false,
+  user_id TEXT,
+  payment_app TEXT,
+  verification_reason TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- RLS for Payments
+ALTER TABLE public.verified_payments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Insert Verified Payments" ON public.verified_payments;
+CREATE POLICY "Public Insert Verified Payments" ON public.verified_payments FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Admin All Verified Payments" ON public.verified_payments;
+CREATE POLICY "Admin All Verified Payments" ON public.verified_payments FOR ALL USING (true);
+
+ALTER TABLE public.purchase_requests ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Insert Purchase Requests" ON public.purchase_requests;
+CREATE POLICY "Public Insert Purchase Requests" ON public.purchase_requests FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Admin All Purchase Requests" ON public.purchase_requests;
+CREATE POLICY "Admin All Purchase Requests" ON public.purchase_requests FOR ALL USING (true);
+
 -- 5. Schedules (Study Plans)
 CREATE TABLE IF NOT EXISTS public.schedules (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
