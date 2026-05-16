@@ -2,25 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, 
-  Download, 
-  Copy, 
-  Upload, 
   CheckCircle2, 
-  AlertCircle, 
   Loader2, 
-  Instagram, 
-  Smartphone, 
-  Gift, 
   ChevronRight, 
-  ExternalLink,
-  ShieldCheck,
+  Send,
   Zap,
-  Send
+  User,
+  GraduationCap,
+  Mail,
+  Phone,
+  AtSign
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { StoryTemplate, UserProfile } from '../types';
+import { UserProfile } from '../types';
 import { dataBridge } from '../services/dataBridge';
-import { geminiService } from '../services/geminiService';
 
 interface StoryUnlockModalProps {
   isOpen: boolean;
@@ -38,177 +33,63 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
   onSuccess 
 }) => {
   const [step, setStep] = useState(1);
-  const [templates, setTemplates] = useState<StoryTemplate[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState<StoryTemplate | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [verificationResult, setVerificationResult] = useState<{ isValid: boolean, error?: string } | null>(null);
-  const [downloading, setDownloading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   
-  // New: Social Username step state
-  const [socialUsername, setSocialUsername] = useState('');
-  const [socialPlatform, setSocialPlatform] = useState<'instagram'|'snapchat'>('instagram');
-  const [submittingLog, setSubmittingLog] = useState(false);
+  // Form State
+  const [formData, setFormData] = useState({
+    fullName: user.displayName || '',
+    class: user.class_level || '10',
+    email: user.email || '',
+    phoneNumber: '',
+    socialHandle: ''
+  });
 
   useEffect(() => {
     if (isOpen) {
-      fetchTemplates();
       setStep(1);
-      setVerificationResult(null);
-      setSocialUsername('');
-    }
-  }, [isOpen]);
-
-  const fetchTemplates = async () => {
-    setLoading(true);
-    const data = await dataBridge.getStoryTemplates();
-    setTemplates(data);
-    if (data.length > 0) setSelectedTemplate(data[0]);
-    setLoading(false);
-  };
-
-  const handleDownloadTemplate = async () => {
-    if (!selectedTemplate) return;
-    
-    setDownloading(true);
-    try {
-      // 1. Fetch image as blob
-      const response = await fetch(selectedTemplate.imageUrl);
-      if (!response.ok) throw new Error("Failed to fetch image");
-      const blob = await response.blob();
-      
-      // 2. Create downloadable URL
-      const url = URL.createObjectURL(blob);
-      
-      // 3. Trigger REAL download
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `NoteVix-Story-${selectedTemplate.title}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      
-      // 4. Cleanup
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
-      toast.success("Template saved to downloads!");
-    } catch (err) {
-      console.error("Download error:", err);
-      
-      // Fallback: Open in new tab
-      window.open(selectedTemplate.imageUrl, '_blank');
-      toast.info("Automatic save failed. Long press the image in the new tab to download.", {
-        duration: 6000
+      setFormData({
+        fullName: user.displayName || '',
+        class: user.class_level || '10',
+        email: user.email || '',
+        phoneNumber: '',
+        socialHandle: ''
       });
-    } finally {
-      setDownloading(false);
     }
+  }, [isOpen, user]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleCopyLink = () => {
-    if (!selectedTemplate) return;
-    navigator.clipboard.writeText(selectedTemplate.link);
-    toast.success("Link copied! Add this to your Story.");
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedTemplate) return;
-
-    if (!file.type.startsWith('image/')) {
-      toast.error("Please upload an image file (screenshot).");
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.fullName || !formData.email || !formData.phoneNumber || !formData.socialHandle) {
+      toast.error("Please fill all fields");
       return;
     }
 
-    setUploading(true);
-    setVerificationResult(null);
-
-    // Convert to base64 for processing (no permanent storage)
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const base64 = event.target?.result as string;
-      setUploading(false);
-      try {
-        await verifyScreenshot(base64);
-      } finally {
-        // Explicitly clear file data from memory after processing
-        e.target.value = '';
-      }
-    };
-    reader.onerror = () => {
-      setUploading(false);
-      toast.error("Failed to read file.");
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const verifyScreenshot = async (imageData: string) => {
-    if (!selectedTemplate) return;
-    setVerifying(true);
-    let hasResolved = false;
-    
-    // Fallback: Auto-verify after 5 seconds to ensure smooth UX
-    const fallbackTimer = setTimeout(() => {
-      if (!hasResolved) {
-        hasResolved = true;
-        console.log("UX Fallback: Auto-verifying story after 5s delay...");
-        setVerificationResult({ isValid: true });
-        setStep(4); // Go to username collection
-        setVerifying(false);
-        toast.success("Verification in progress... Done!", { icon: '🎁' });
-      }
-    }, 5000);
-
+    setSubmitting(true);
     try {
-      const result = await geminiService.verifyStoryScreenshot(imageData, selectedTemplate);
-      
-      if (!hasResolved) {
-        hasResolved = true;
-        clearTimeout(fallbackTimer);
-        setVerificationResult({ isValid: result.isValid || true }); 
-        setStep(4); // Go to username collection
-        if (result.isValid) {
-          toast.success("Verification complete!", { icon: '🎁' });
-        } else {
-          toast.success("Verification finished!", { icon: '🎁' });
-        }
-      }
-    } catch (err: any) {
-      console.error("Verification error:", err);
-      if (!hasResolved) {
-        hasResolved = true;
-        clearTimeout(fallbackTimer);
-        setVerificationResult({ isValid: true });
-        setStep(4); // Go to username collection
-        toast.success("Verification complete!", { icon: '🎁' });
-      }
-    } finally {
-      if (hasResolved) setVerifying(false);
-    }
-  };
-
-  const handleSocialSubmit = async () => {
-    if (!socialUsername) {
-      toast.error("Please enter your username.");
-      return;
-    }
-    
-    setSubmittingLog(true);
-    try {
-      await dataBridge.saveStoryLog({
-        username: socialUsername,
-        platform: socialPlatform,
-        pdfName: resource.subject + ' - ' + resource.title,
+      const result = await dataBridge.submitPdfRequest({
+        ...formData,
+        resourceId: resource.id,
+        resourceName: `${resource.subject} Combo Pack`,
         userId: user.uid
       });
-      setStep(5);
+
+      if (result.success) {
+        setStep(2);
+        toast.success("Request submitted successfully!");
+      } else {
+        toast.error(result.error || "Failed to submit request");
+      }
     } catch (err) {
-      console.error("Failed to save story log:", err);
-      // Still unlock for user if storage fails to not block them
-      setStep(5);
+      console.error("Submit error:", err);
+      toast.error("Something went wrong. Try again.");
     } finally {
-      setSubmittingLog(false);
+      setSubmitting(false);
     }
   };
 
@@ -238,8 +119,8 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
                 <Zap className="w-6 h-6 text-indigo-400" />
               </div>
               <div>
-                <h3 className="font-black text-lg tracking-tight uppercase italic leading-none">Flash Unlock</h3>
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Story Verification System</p>
+                <h3 className="font-black text-lg tracking-tight uppercase italic leading-none">Free Unlock</h3>
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Manual Approval System</p>
               </div>
             </div>
             <button 
@@ -250,286 +131,136 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
             </button>
           </div>
 
-          <div className="p-8 pb-10 max-h-[70vh] overflow-y-auto no-scrollbar">
+          <div className="p-8 pb-10 max-h-[75vh] overflow-y-auto no-scrollbar">
             {step === 1 && (
               <motion.div 
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
                 className="space-y-6"
               >
-                <div className="space-y-2">
+                <div className="space-y-2 text-center">
                   <h4 className="text-2xl font-black text-white leading-tight uppercase italic">
-                    Unlock <span className="text-indigo-400">Permanently</span>
+                    Claim Your <span className="text-indigo-400">PDF Access</span>
                   </h4>
-                  <p className="text-sm text-gray-400 font-medium">To unlock the <span className="text-white font-bold">{resource.subject}</span> PDF for free, simply share our promotional story on your Instagram or Snapchat.</p>
+                  <p className="text-sm text-gray-400 font-medium max-w-xs mx-auto">
+                    Fill in your details to request access to the <span className="text-white font-bold">{resource.subject}</span> combo pack.
+                  </p>
                 </div>
 
-                <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-3xl p-6 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-indigo-500/20 flex items-center justify-center">
-                      <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  {/* Full Name */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Full Name</label>
+                    <div className="relative group">
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-indigo-400 transition-colors" />
+                      <input 
+                        type="text"
+                        name="fullName"
+                        value={formData.fullName}
+                        onChange={handleInputChange}
+                        placeholder="Enter your name"
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white font-bold placeholder:text-gray-600 outline-none focus:border-indigo-500/50 transition-all"
+                        required
+                      />
                     </div>
-                    <span className="text-xs font-bold text-gray-300 uppercase tracking-wide">3-Step Process</span>
                   </div>
-                  <div className="space-y-3">
-                     {[
-                       'Download the promotional template',
-                       'Post as Story with our website link',
-                       'Upload screenshot for Instant AI verification'
-                     ].map((item, idx) => (
-                       <div key={idx} className="flex items-center gap-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-                         <span className="w-5 h-5 rounded-md bg-white/5 flex items-center justify-center text-indigo-400 border border-white/5">{idx + 1}</span>
-                         {item}
-                       </div>
-                     ))}
+
+                  {/* Class Level */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Your Class</label>
+                    <div className="relative group">
+                      <GraduationCap className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-indigo-400 transition-colors" />
+                      <select 
+                        name="class"
+                        value={formData.class}
+                        onChange={handleInputChange}
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white font-bold outline-none focus:border-indigo-500/50 appearance-none transition-all"
+                      >
+                        <option value="8" className="bg-[#0a0a0a]">Class 8</option>
+                        <option value="9" className="bg-[#0a0a0a]">Class 9</option>
+                        <option value="10" className="bg-[#0a0a0a]">Class 10</option>
+                      </select>
+                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-4">
-                  <a 
-                    href="https://drive.google.com/drive/folders/1vKOFp9BjnGzXQNbW90Eldpnr2eGxVAv2"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-3 w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 transition-all active:scale-95 shadow-xl"
-                  >
-                    <ExternalLink className="w-4 h-4" /> ( OPEN LOCKED PDFs )
-                  </a>
+                  {/* Email */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Email Address</label>
+                    <div className="relative group">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-indigo-400 transition-colors" />
+                      <input 
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        placeholder="your@email.com"
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white font-bold placeholder:text-gray-600 outline-none focus:border-indigo-500/50 transition-all"
+                        required
+                      />
+                    </div>
+                  </div>
 
-                  <button 
-                    onClick={() => setStep(2)}
-                    className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-indigo-600/20 hover:bg-indigo-500 transition-all flex items-center justify-center gap-2 group"
-                  >
-                    Start Unlock <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                  </button>
-                </div>
+                  {/* Phone Number */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">WhatsApp Number</label>
+                    <div className="relative group">
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-indigo-400 transition-colors" />
+                      <input 
+                        type="tel"
+                        name="phoneNumber"
+                        value={formData.phoneNumber}
+                        onChange={handleInputChange}
+                        placeholder="+91 00000 00000"
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white font-bold placeholder:text-gray-600 outline-none focus:border-indigo-500/50 transition-all"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Social Handle */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Instagram/Snapchat Handle</label>
+                    <div className="relative group">
+                      <AtSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-indigo-400 transition-colors" />
+                      <input 
+                        type="text"
+                        name="socialHandle"
+                        value={formData.socialHandle}
+                        onChange={handleInputChange}
+                        placeholder="@username"
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white font-bold placeholder:text-gray-600 outline-none focus:border-indigo-500/50 transition-all"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-4">
+                    <button 
+                      type="submit"
+                      disabled={submitting}
+                      className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-indigo-600/20 hover:bg-indigo-500 transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
+                    >
+                      {submitting ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Submitting...
+                        </>
+                      ) : (
+                        <>
+                          Submit Request <Send size={18} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+
+                <p className="text-[9px] text-gray-600 font-bold uppercase tracking-widest text-center">
+                  Requests are manually verified within 24-48 hours.
+                </p>
               </motion.div>
             )}
 
             {step === 2 && (
-              <motion.div 
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="space-y-6"
-              >
-                <div className="space-y-1">
-                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em]">Step 01 / 02</span>
-                  <h4 className="text-xl font-black text-white italic uppercase tracking-tight">Prepare Your Story</h4>
-                </div>
-
-                {loading ? (
-                  <div className="h-64 flex flex-col items-center justify-center gap-4 bg-white/5 rounded-3xl animate-pulse">
-                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Loading Template...</span>
-                  </div>
-                ) : selectedTemplate ? (
-                  <div className="space-y-6">
-                    <div 
-                      className="relative group rounded-3xl overflow-hidden border border-white/10 aspect-[9/16] h-64 mx-auto bg-black"
-                    >
-                      <img 
-                        crossOrigin="anonymous"
-                        src={selectedTemplate.imageUrl} 
-                        alt="Template" 
-                        className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-700" 
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60" />
-                      <div className="absolute bottom-4 left-4 right-4">
-                        <p className="text-[10px] font-black text-white uppercase tracking-widest drop-shadow-md">NoteVix Premium</p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <button 
-                        onClick={handleDownloadTemplate}
-                        disabled={downloading}
-                        className="w-full py-5 purple-gradient text-white rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-purple-600/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-70"
-                      >
-                        {downloading ? (
-                          <>
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                            Saving to Gallery...
-                          </>
-                        ) : (
-                          <>
-                            <Download className="w-5 h-5" />
-                            Download Story Template
-                          </>
-                        )}
-                      </button>
-
-                      <button 
-                        onClick={handleCopyLink}
-                        className="w-full p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center gap-3 hover:bg-white/10 transition-all group"
-                      >
-                        <Copy className="w-5 h-5 text-indigo-400 group-hover:-translate-y-1 transition-transform" />
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-300">Copy Story Link sticker</span>
-                      </button>
-                    </div>
-
-                    <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 flex gap-4">
-                       <Smartphone className="w-6 h-6 text-emerald-400 shrink-0" />
-                       <div className="space-y-1">
-                         <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Post Instructions</p>
-                         <p className="text-[11px] text-gray-400">Post this image on Instagram or Snapchat story. Use the 'Link' sticker to add: <span className="text-white font-mono bg-white/5 px-1 rounded">{selectedTemplate.link}</span></p>
-                       </div>
-                    </div>
-
-                    <button 
-                      onClick={() => setStep(3)}
-                      className="w-full py-5 bg-white text-black rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] hover:bg-gray-200 transition-all flex items-center justify-center gap-2"
-                    >
-                      I've Posted! Next <ChevronRight size={18} />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="bg-red-500/10 border border-red-500/20 p-6 rounded-3xl text-center">
-                    <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
-                    <p className="text-sm font-bold text-red-500">No active templates available.</p>
-                  </div>
-                )}
-              </motion.div>
-            )}
-
-            {step === 3 && (
-              <motion.div 
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="space-y-6"
-              >
-                <div className="space-y-1">
-                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em]">Step 02 / 02</span>
-                  <h4 className="text-xl font-black text-white italic uppercase tracking-tight">Verify via AI</h4>
-                </div>
-
-                <div className="space-y-6">
-                  <div className="bg-white/5 border border-dashed border-white/20 rounded-[2.5rem] p-10 text-center relative group overflow-hidden">
-                    {verifying ? (
-                      <div className="flex flex-col items-center gap-6 py-4">
-                        <div className="relative">
-                          <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-8 h-8 bg-indigo-500/10 rounded-full animate-ping" />
-                          </div>
-                        </div>
-                        <div className="text-center space-y-2">
-                          <p className="text-sm font-black text-white uppercase tracking-[0.2em] animate-pulse">Analyzing your story...</p>
-                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest px-4">This usually takes 3-5 seconds</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <input 
-                          type="file" 
-                          accept="image/*"
-                          onChange={handleFileUpload}
-                          className="absolute inset-0 opacity-0 cursor-pointer z-10" 
-                          disabled={uploading}
-                        />
-                        <div className="space-y-4 relative z-0">
-                          <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center mx-auto border border-white/10 group-hover:scale-110 transition-transform">
-                            <Upload className="w-8 h-8 text-gray-500" />
-                          </div>
-                          <div className="space-y-1">
-                            <p className="text-sm font-black text-white uppercase tracking-tight">Upload Screenshot</p>
-                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Proof of your Story post</p>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Removed Error UI as requested for smoother UX. Verification now always succeeds or falls back. */}
-
-                  <div className="space-y-4">
-                    <p className="text-[10px] text-gray-600 font-black uppercase tracking-[0.3em] text-center">Privacy Guarantee</p>
-                    <div className="p-4 bg-white/5 rounded-2xl flex items-center gap-4 border border-white/5">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                        <Lock className="w-4 h-4 text-emerald-400" />
-                      </div>
-                      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-widest leading-normal">Screenshots are processed in real-time and <span className="text-white">NOT</span> permanently stored.</p>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {step === 4 && (
-              <motion.div 
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="space-y-6"
-              >
-                <div className="space-y-1">
-                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em]">Final Verification Step</span>
-                  <h4 className="text-xl font-black text-white italic uppercase tracking-tight">One Last Thing!</h4>
-                  <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
-                    Please provide your social handle where you posted the story.
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex p-1.5 bg-white/5 border border-white/10 rounded-2xl gap-2">
-                    <button
-                      onClick={() => setSocialPlatform('instagram')}
-                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl transition-all ${
-                        socialPlatform === 'instagram' 
-                          ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' 
-                          : 'text-gray-500 hover:text-gray-400'
-                      }`}
-                    >
-                      <Instagram size={16} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Instagram</span>
-                    </button>
-                    <button
-                      onClick={() => setSocialPlatform('snapchat')}
-                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl transition-all ${
-                        socialPlatform === 'snapchat' 
-                          ? 'bg-yellow-500/10 text-yellow-600 border border-yellow-500/30' 
-                          : 'text-gray-500 hover:text-gray-400'
-                      }`}
-                    >
-                      <div className="w-4 h-4 rounded-sm bg-yellow-500/20" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Snapchat</span>
-                    </button>
-                  </div>
-
-                  <div className="relative">
-                    <input 
-                      type="text"
-                      placeholder={socialPlatform === 'instagram' ? "@username" : "Snapchat Username"}
-                      value={socialUsername}
-                      onChange={(e) => setSocialUsername(e.target.value)}
-                      className="w-full py-5 px-6 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-indigo-500 transition-all placeholder:text-gray-600"
-                    />
-                  </div>
-                  
-                  <div className="p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10">
-                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
-                      By submitting, you confirm the story is active on your profile.
-                    </p>
-                  </div>
-
-                  <button 
-                    onClick={handleSocialSubmit}
-                    disabled={submittingLog || !socialUsername}
-                    className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl hover:bg-indigo-500 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-                  >
-                    {submittingLog ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Finalizing...
-                      </>
-                    ) : (
-                      <>
-                        Submit & Reveal Password <Send size={18} />
-                      </>
-                    )}
-                  </button>
-                </div>
-              </motion.div>
-            )}
-
-            {step === 5 && (
               <motion.div 
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -547,40 +278,24 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  <h4 className="text-2xl font-black text-white italic uppercase tracking-tighter">Verification Successful!</h4>
-                  <p className="text-gray-400 text-xs font-bold uppercase tracking-[0.2em]">The password for {resource.subject} is revealed below:</p>
+                  <h4 className="text-2xl font-black text-white italic uppercase tracking-tighter">Request Received!</h4>
+                  <p className="text-gray-400 text-xs font-bold uppercase tracking-[0.2em] max-w-xs mx-auto leading-relaxed">
+                    We've received your request for the <span className="text-white">{resource.subject}</span> combo pack.
+                  </p>
                 </div>
 
-                <div className="p-6 rounded-[2rem] bg-white/5 border border-white/10 space-y-4">
-                  <div className="flex flex-col items-center gap-3">
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">YOUR PDF PASSWORD</p>
-                    <code className="text-xl font-black text-white tracking-[0.15em] bg-white/5 py-4 px-6 rounded-2xl border border-white/10 select-all w-full">
-                      {resource.password || "notevixfreenotes"}
-                    </code>
-                    <button 
-                      onClick={() => {
-                        navigator.clipboard.writeText(resource.password || "notevixfreenotes");
-                        toast.success("Password Copied!");
-                      }}
-                      className="flex items-center gap-2 px-6 py-3 bg-indigo-500/10 rounded-2xl hover:bg-indigo-500/20 transition-all border border-indigo-500/20 text-indigo-400"
-                    >
-                      <Copy className="w-4 h-4" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Copy Password</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-emerald-500/5 p-4 rounded-2xl border border-emerald-500/20">
-                  <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest leading-relaxed text-left">
-                    Note: Enter this password exactly as shown (notevixfreenotes) to open the PDF file you download.
+                <div className="p-6 rounded-[2rem] bg-emerald-500/5 border border-emerald-500/10 space-y-2">
+                  <p className="text-[10px] text-emerald-500 font-extrabold uppercase tracking-widest">Wait for Approval</p>
+                  <p className="text-[11px] text-gray-400 font-medium">
+                    Our team will verify your details soon. You'll get access to the PDF in your dashboard once approved.
                   </p>
                 </div>
 
                 <button 
                   onClick={onClose}
-                  className="w-full py-5 bg-white text-black rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] hover:bg-gray-200 transition-all"
+                  className="w-full py-5 bg-white text-black rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] hover:bg-gray-200 transition-all flex items-center justify-center gap-2 group"
                 >
-                  Close & Done
+                  Done <ChevronRight size={18} />
                 </button>
               </motion.div>
             )}
@@ -590,20 +305,3 @@ export const StoryUnlockModal: React.FC<StoryUnlockModalProps> = ({
     </AnimatePresence>
   );
 };
-
-const Lock = ({ ...props }) => (
-  <svg 
-    {...props} 
-    xmlns="http://www.w3.org/2000/svg" 
-    width="24" height="24" 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
-  >
-    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </svg>
-);

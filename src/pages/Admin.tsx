@@ -22,12 +22,13 @@ import {
 import { supabase } from '../lib/supabase';
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources' | 'valid_payments' | 'verified_payments' | 'settings' | 'banners' | 'free_notes' | 'story_unlocks' | 'story_logs'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'chapters' | 'messages' | 'notifications' | 'moderation' | 'payments' | 'users' | 'registry' | 'resources' | 'valid_payments' | 'verified_payments' | 'pdf_requests' | 'settings' | 'banners' | 'free_notes'>('analytics');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
+  const [pdfRequests, setPdfRequests] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [registry, setRegistry] = useState<any[]>([]);
   const [subjectResources, setSubjectResources] = useState<any[]>([]);
@@ -53,12 +54,6 @@ export default function Admin() {
   const [isAddingBanner, setIsAddingBanner] = useState(false);
   const [bannerFormData, setBannerFormData] = useState({ imageUrl: '', link: '', location: 'home' });
   const [bannerImagePreview, setBannerImagePreview] = useState<string | null>(null);
-  const [storyTemplates, setStoryTemplates] = useState<any[]>([]);
-  const [storyLogs, setStoryLogs] = useState<any[]>([]);
-  const [isAddingStoryTemplate, setIsAddingStoryTemplate] = useState(false);
-  const [storyTemplateForm, setStoryTemplateForm] = useState({ title: '', description: '', link: '', imageUrl: '' });
-  const [storyTemplateImagePreview, setStoryTemplateImagePreview] = useState<string | null>(null);
-  const [storyStats, setStoryStats] = useState({ totalUnlocks: 0 });
   const [isUploading, setIsUploading] = useState(false);
   const lastAdminAiAttemptRef = useRef<number>(0);
   
@@ -79,6 +74,8 @@ export default function Admin() {
     dailyRevenue: [] as any[],
     planDistribution: [] as any[],
     burnedIds: 0,
+    pdfRequestsCount: 0,
+    pendingPdfRequests: 0,
   });
 
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
@@ -105,20 +102,16 @@ export default function Admin() {
     if (activeTab === 'verified_payments') {
       fetchVerifiedPayments();
     }
-    if (activeTab === 'story_unlocks') {
-      fetchStoryTemplates();
-      fetchStoryStats();
-    }
-    if (activeTab === 'story_logs') {
-      fetchStoryLogs();
+    if (activeTab === 'pdf_requests') {
+      fetchPdfRequests();
     }
   }, [activeTab]);
 
-  const fetchStoryLogs = async () => {
+  const fetchPdfRequests = async () => {
     setLoading(true);
     try {
-      const data = await dataBridge.getStoryLogs(100);
-      setStoryLogs(data);
+      const data = await dataBridge.getPdfRequests(showOnlyPending ? 'pending' : 'all' as any);
+      setPdfRequests(data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -126,123 +119,32 @@ export default function Admin() {
     }
   };
 
-  const fetchStoryTemplates = async () => {
-    setLoading(true);
+  const handleApprovePdfRequest = async (requestId: string) => {
     try {
-      const data = await dataBridge.getStoryTemplates(false);
-      setStoryTemplates(data);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load story templates");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchStoryStats = async () => {
-    try {
-      const count = await dataBridge.getStoryUnlocksCount();
-      setStoryStats({ totalUnlocks: count });
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleStoryTemplateImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        toast.error('Image too large (Max 2MB)');
-        return;
-      }
-
-      setIsUploading(true);
-      const loadingToast = toast.loading("Uploading template to Supabase...");
-
-      try {
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          const img = new Image();
-          img.onload = async () => {
-            const canvas = document.createElement('canvas');
-            const MAX_SIZE = 1280;
-            let width = img.width;
-            let height = img.height;
-
-            if (width > height) {
-              if (width > MAX_SIZE) {
-                height *= MAX_SIZE / width;
-                width = MAX_SIZE;
-              }
-            } else {
-              if (height > MAX_SIZE) {
-                width *= MAX_SIZE / height;
-                height = MAX_SIZE;
-              }
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            
-            if (ctx) {
-              ctx.imageSmoothingEnabled = true;
-              ctx.imageSmoothingQuality = 'high';
-              ctx.drawImage(img, 0, 0, width, height);
-            }
-            
-            const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
-            if (blob) {
-              const uploadRes = await dataBridge.uploadImage(new File([blob], file.name, { type: 'image/jpeg' }), 'story-templates');
-              if (uploadRes.success && uploadRes.url) {
-                setStoryTemplateImagePreview(uploadRes.url);
-                toast.success("Template uploaded!", { id: loadingToast });
-              } else {
-                toast.error(`Upload failed: ${uploadRes.error}`, { id: loadingToast });
-              }
-            }
-            setIsUploading(false);
-          };
-          img.src = reader.result as string;
-        };
-        reader.readAsDataURL(file);
-      } catch (err) {
-        console.error("Template upload error:", err);
-        toast.error("Process failed", { id: loadingToast });
-        setIsUploading(false);
-      }
-    }
-  };
-
-  const handleAddStoryTemplate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!storyTemplateForm.title || !storyTemplateImagePreview || !storyTemplateForm.link) {
-      toast.error("Title, Image and Link are required");
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await dataBridge.addStoryTemplate({
-        title: storyTemplateForm.title,
-        description: storyTemplateForm.description,
-        link: storyTemplateForm.link,
-        imageUrl: storyTemplateImagePreview,
-        isActive: true
-      });
+      const res = await dataBridge.approvePdfRequest(requestId);
       if (res.success) {
-        toast.success("Story Template Added!");
-        setIsAddingStoryTemplate(false);
-        setStoryTemplateForm({ title: '', description: '', link: '', imageUrl: '' });
-        setStoryTemplateImagePreview(null);
-        fetchStoryTemplates();
+        toast.success("PDF Access Approved!");
+        fetchPdfRequests();
       } else {
-        toast.error(res.error || "Failed to add template");
+        toast.error(res.error || "Approval failed");
       }
     } catch (err) {
-      console.error(err);
-      toast.error("Error saving story template");
-    } finally {
-      setLoading(false);
+      toast.error("Error approving request");
+    }
+  };
+
+  const handleRejectPdfRequest = async (requestId: string) => {
+    if (!window.confirm("Reject this request?")) return;
+    try {
+      const res = await dataBridge.rejectPdfRequest(requestId);
+      if (res.success) {
+        toast.success("Request Rejected");
+        fetchPdfRequests();
+      } else {
+        toast.error(res.error || "Rejection failed");
+      }
+    } catch (err) {
+      toast.error("Error rejecting request");
     }
   };
 
@@ -798,6 +700,10 @@ export default function Admin() {
       // 3. Simple Count of Burned IDs (Registry)
       const { count: burnedCount } = await supabase.from('transaction_id_registry').select('*', { count: 'exact', head: true });
 
+      // 3.1 Fetch PDF Requests Stats
+      const { count: pdfTotal } = await supabase.from('pdf_requests').select('*', { count: 'exact', head: true });
+      const { count: pdfPending } = await supabase.from('pdf_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+
       // 4. Process Payment Analytics
       let totalRev = 0;
       const dailyMap: Record<string, number> = {};
@@ -835,7 +741,9 @@ export default function Admin() {
         activeToday: active24h || 0,
         dailyRevenue,
         planDistribution,
-        burnedIds: burnedCount || 0
+        burnedIds: burnedCount || 0,
+        pdfRequestsCount: pdfTotal || 0,
+        pendingPdfRequests: pdfPending || 0,
       });
 
     } catch (error) {
@@ -1354,8 +1262,6 @@ export default function Admin() {
   const menuItems = [
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'banners', label: 'Promotion Banners', icon: LayoutDashboard },
-    { id: 'story_unlocks', label: 'Story Templates', icon: Instagram },
-    { id: 'story_logs', label: 'Story Unlocks', icon: Search },
     { id: 'resources', label: 'Digital Library', icon: BookOpen },
     { id: 'free_notes', label: 'Free Notes', icon: Zap },
     { id: 'valid_payments', label: 'Verify Keys', icon: ShieldCheck },
@@ -1363,6 +1269,7 @@ export default function Admin() {
     { id: 'chapters', label: 'Flashcards', icon: Database },
     { id: 'messages', label: 'Support', icon: MessageSquare },
     { id: 'payments', label: 'Premium Requests', icon: ShieldCheck },
+    { id: 'pdf_requests', label: 'Free PDF Requests', icon: FileText },
     { id: 'registry', label: 'Registry', icon: Database },
     { id: 'users', label: 'Students', icon: Users },
     { id: 'notifications', label: 'Broadcast', icon: Bell },
@@ -1370,271 +1277,8 @@ export default function Admin() {
     { id: 'moderation', label: 'Moderation', icon: Shield },
   ];
 
-  const handleToggleStoryTemplate = async (id: string, current: boolean) => {
-    try {
-      const res = await dataBridge.updateStoryTemplate(id, { isActive: !current });
-      if (res) {
-        toast.success("Template status updated");
-        fetchStoryTemplates();
-      }
-    } catch (err) {
-      toast.error("Failed to update status");
-    }
-  };
-
-  const handleDeleteStoryTemplate = async (id: string) => {
-    if (!window.confirm("Delete this template?")) return;
-    try {
-      const res = await dataBridge.deleteStoryTemplate(id);
-      if (res) {
-        toast.success("Deleted successfully");
-        fetchStoryTemplates();
-      }
-    } catch (err) {
-      toast.error("Delete failed");
-    }
-  };
-
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'story_unlocks':
-        return (
-          <div className="space-y-6 animate-in fade-in duration-500">
-            {/* Stats Header */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="glass-card p-6 rounded-[2rem] bg-white/5 flex flex-col gap-2">
-                <div className="bg-indigo-500/10 w-10 h-10 rounded-2xl flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-indigo-500" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Total Unlocks</p>
-                  <p className="text-2xl font-black tabular-nums">{storyStats.totalUnlocks}</p>
-                </div>
-              </div>
-              <div className="glass-card p-6 rounded-[2rem] bg-white/5 flex flex-col gap-2">
-                <div className="bg-emerald-500/10 w-10 h-10 rounded-2xl flex items-center justify-center">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Active Templates</p>
-                  <p className="text-2xl font-black tabular-nums">{storyTemplates.filter(t => t.is_active).length}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-between items-center bg-white/5 p-6 rounded-[2rem] border border-white/10">
-              <div>
-                <h3 className="text-xl font-black">Story Templates</h3>
-                <p className="text-xs text-gray-400">Manage promotional templates for social media sharing</p>
-              </div>
-              <button 
-                onClick={() => setIsAddingStoryTemplate(true)}
-                className="bg-indigo-600 hover:bg-indigo-500 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-indigo-600/20 active:scale-95"
-              >
-                <Plus className="w-4 h-4" /> Add Template
-              </button>
-            </div>
-
-            {isAddingStoryTemplate && (
-              <div className="glass-card p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6 animate-in slide-in-from-top duration-500">
-                <div className="flex justify-between items-center">
-                  <h4 className="font-black text-xs uppercase tracking-[0.3em] text-indigo-400">New Story Template</h4>
-                  <button onClick={() => setIsAddingStoryTemplate(false)} className="p-2 hover:bg-white/5 rounded-full"><X className="w-4 h-4" /></button>
-                </div>
-                <form onSubmit={handleAddStoryTemplate} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-white/10 rounded-[2.5rem] bg-white/5 hover:bg-white/10 transition-all cursor-pointer group"
-                    onClick={() => templateInputRef.current?.click()}>
-                    {storyTemplateImagePreview ? (
-                      <div className="relative aspect-video w-full rounded-2xl overflow-hidden border border-white/10">
-                        <img src={storyTemplateImagePreview} className="w-full h-full object-cover" />
-                        <button 
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setStoryTemplateImagePreview(null);
-                          }}
-                          className="absolute top-2 right-2 p-2 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-red-500 transition-colors"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-3">
-                        <Instagram className="w-10 h-10 text-indigo-500 group-hover:scale-110 transition-transform duration-500" />
-                        <div className="text-center">
-                          <p className="text-xs font-black uppercase tracking-widest text-indigo-400">Upload Template Image</p>
-                          <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold">Max 2MB (Portrait/Story Ratio)</p>
-                        </div>
-                      </div>
-                    )}
-                    <input 
-                      type="file"
-                      ref={templateInputRef}
-                      className="hidden"
-                      accept="image/*"
-                      onChange={handleStoryTemplateImageChange}
-                    />
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2 mb-2 block">Template Title</label>
-                      <input 
-                        required
-                        value={storyTemplateForm.title}
-                        onChange={(e) => setStoryTemplateForm({...storyTemplateForm, title: e.target.value})}
-                        placeholder="e.g., Free Class 10 Notes Challenge"
-                        className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-indigo-500 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2 mb-2 block">Website Link to Include</label>
-                      <input 
-                        required
-                        value={storyTemplateForm.link}
-                        onChange={(e) => setStoryTemplateForm({...storyTemplateForm, link: e.target.value})}
-                        placeholder="e.g., bit.ly/notevix-free"
-                        className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-indigo-500 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2 mb-2 block">Short Description</label>
-                      <textarea 
-                        value={storyTemplateForm.description}
-                        onChange={(e) => setStoryTemplateForm({...storyTemplateForm, description: e.target.value})}
-                        placeholder="Instructions for the user..."
-                        className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-sm h-24 outline-none focus:border-indigo-500 resize-none"
-                      />
-                    </div>
-                    <button 
-                      type="submit"
-                      disabled={loading || isUploading}
-                      className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-indigo-600/30 hover:bg-indigo-500 transition-all flex items-center justify-center gap-2"
-                    >
-                      {loading ? 'Creating...' : <><Save className="w-5 h-5" /> Deploy Template</>}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {storyTemplates.map((template) => (
-                <div key={template.id} className="glass-card overflow-hidden rounded-[2.5rem] bg-white/5 border border-white/10 flex flex-col group">
-                  <div className="aspect-[9/16] relative">
-                    <img src={template.imageUrl} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={template.title} />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60" />
-                    <div className="absolute top-4 right-4 flex gap-2">
-                      <button 
-                        onClick={() => handleToggleStoryTemplate(template.id, template.isActive)}
-                        className={`p-3 rounded-2xl backdrop-blur-md transition-all shadow-xl ${
-                          template.isActive ? 'bg-emerald-500/80 text-white shadow-emerald-500/20' : 'bg-gray-500/80 text-white'
-                        }`}
-                      >
-                        <Zap className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleDeleteStoryTemplate(template.id)}
-                        className="p-3 bg-red-500/80 backdrop-blur-md text-white rounded-2xl shadow-xl shadow-red-500/20 hover:bg-red-500"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <div className="absolute bottom-6 left-6 right-6">
-                      <h4 className="font-bold text-white text-lg line-clamp-1">{template.title}</h4>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">{template.link}</p>
-                    </div>
-                  </div>
-                  <div className="p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${
-                        template.isActive ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/5' : 'border-gray-500/30 text-gray-500 bg-gray-500/5'
-                      }`}>
-                        {template.isActive ? 'ACTIVE' : 'INACTIVE'}
-                      </span>
-                      <span className="text-[10px] text-gray-500 font-bold">{new Date(template.createdAt).toLocaleDateString()}</span>
-                    </div>
-                    <p className="text-xs text-gray-400 line-clamp-2 italic">"{template.description}"</p>
-                  </div>
-                </div>
-              ))}
-              {storyTemplates.length === 0 && !loading && (
-                <div className="md:col-span-2 lg:col-span-3 py-20 text-center glass-card rounded-[2.5rem] bg-white/5 border border-dashed border-white/10">
-                   <Instagram className="w-12 h-12 text-gray-700 mx-auto opacity-20 mb-4" />
-                   <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest italic">No templates deployed yet.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      
-      case 'story_logs':
-        return (
-          <div className="space-y-6 animate-in fade-in duration-500">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="glass-card p-6 rounded-[2rem] bg-white/5 flex flex-col gap-2">
-                <div className="bg-emerald-500/10 w-10 h-10 rounded-2xl flex items-center justify-center">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Total Approved Stories</p>
-                  <p className="text-2xl font-black tabular-nums">{storyLogs.length}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="glass-card overflow-hidden rounded-[2.5rem] bg-white/5 border border-white/10">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-white/5 bg-white/5">
-                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Username</th>
-                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Platform</th>
-                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Resource Unlocked</th>
-                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Time</th>
-                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {storyLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-white/5 transition-colors group">
-                        <td className="px-8 py-6 font-bold text-white tracking-tight">{log.username}</td>
-                        <td className="px-8 py-6">
-                           <div className="flex items-center gap-2">
-                             {log.platform === 'instagram' ? (
-                               <div className="flex items-center gap-2 text-rose-400">
-                                 <Instagram size={14} />
-                                 <span className="text-[10px] font-black uppercase tracking-widest">Insta</span>
-                               </div>
-                             ) : (
-                               <div className="flex items-center gap-2 text-yellow-500">
-                                 <Smartphone size={14} />
-                                 <span className="text-[10px] font-black uppercase tracking-widest">Snap</span>
-                               </div>
-                             )}
-                           </div>
-                        </td>
-                        <td className="px-8 py-6 text-xs text-gray-400 max-w-[200px] truncate">{log.pdf_name}</td>
-                        <td className="px-8 py-6 text-[10px] text-gray-500 font-bold">{new Date(log.created_at).toLocaleString()}</td>
-                        <td className="px-8 py-6">
-                          <span className="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border border-green-500/30 text-green-400 bg-green-500/5">
-                            VERIFIED
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {storyLogs.length === 0 && !loading && (
-                <div className="py-20 text-center">
-                   <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">No story logs recorded yet.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-
       case 'banners':
         return (
           <div className="space-y-6 animate-in fade-in duration-500">
@@ -1828,6 +1472,135 @@ export default function Admin() {
             </div>
           </div>
         );
+      case 'pdf_requests':
+        return (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/5 p-6 rounded-[2.5rem] border border-white/10">
+              <div>
+                <h3 className="text-2xl font-black uppercase tracking-tight italic">
+                  Free PDF <span className="text-emerald-400">Requests</span>
+                </h3>
+                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Manual approval flow for guest/free resources</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/5">
+                  <button 
+                    onClick={() => setShowOnlyPending(true)}
+                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showOnlyPending ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-gray-500 hover:text-gray-300'}`}
+                  >
+                    Pending
+                  </button>
+                  <button 
+                    onClick={() => setShowOnlyPending(false)}
+                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!showOnlyPending ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-gray-500 hover:text-gray-300'}`}
+                  >
+                    All Requests
+                  </button>
+                </div>
+                <button 
+                  onClick={fetchPdfRequests}
+                  className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all active:scale-95"
+                >
+                  <RefreshCw className={`w-4 h-4 text-gray-400 ${loading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+            </div>
+
+            <div className="glass-card overflow-hidden rounded-[2.5rem] bg-white/5 border border-white/10 shadow-2xl">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/5 bg-white/5">
+                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Student Info</th>
+                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Resource</th>
+                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Class</th>
+                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Social Handle</th>
+                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Date/Status</th>
+                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-500 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {pdfRequests.map((req) => (
+                      <tr key={req.id} className="hover:bg-white/[0.02] transition-colors group">
+                        <td className="px-8 py-6">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-white text-sm">{req.full_name}</span>
+                            <span className="text-[10px] text-gray-500 font-bold uppercase mt-1">{req.email}</span>
+                            <span className="text-[10px] text-gray-600 font-bold uppercase mt-0.5">{req.phone_number}</span>
+                          </div>
+                        </td>
+                        <td className="px-8 py-6">
+                           <div className="flex items-center gap-2">
+                             <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                               <FileText className="w-4 h-4 text-indigo-400" />
+                             </div>
+                             <span className="text-xs font-bold text-gray-300">{req.resource_name}</span>
+                           </div>
+                        </td>
+                        <td className="px-8 py-6">
+                           <span className="text-[10px] font-black text-white px-3 py-1 bg-white/5 rounded-full border border-white/5">
+                             CLASS {req.class_level}
+                           </span>
+                        </td>
+                        <td className="px-8 py-6">
+                           <div className="flex items-center gap-2 text-indigo-400">
+                             <Instagram className="w-3.5 h-3.5" />
+                             <span className="text-xs font-bold">{req.social_handle}</span>
+                           </div>
+                        </td>
+                        <td className="px-8 py-6">
+                          <div className="flex flex-col gap-1.5">
+                            <span className="text-[10px] text-gray-500 font-black uppercase">{new Date(req.created_at).toLocaleDateString()}</span>
+                            <span className={`w-fit px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest border ${
+                              req.status === 'approved' ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/5' :
+                              req.status === 'rejected' ? 'border-red-500/30 text-red-400 bg-red-500/5' :
+                              'border-yellow-500/30 text-yellow-400 bg-yellow-500/5 shadow-lg shadow-yellow-500/5 scale-110'
+                            }`}>
+                              {req.status}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-8 py-6 text-right">
+                          {req.status === 'pending' ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <button 
+                                onClick={() => handleApprovePdfRequest(req.id)}
+                                className="p-2.5 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-black rounded-xl transition-all border border-emerald-500/20 active:scale-95"
+                                title="Approve Access"
+                              >
+                                <CheckCircle2 className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => handleRejectPdfRequest(req.id)}
+                                className="p-2.5 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl transition-all border border-red-500/20 active:scale-95"
+                                title="Reject Request"
+                              >
+                                <XCircle className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="text-gray-600 italic text-[10px] font-bold uppercase tracking-widest">
+                               Processed {new Date(req.updated_at || req.created_at).toLocaleDateString()}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {pdfRequests.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-8 py-20 text-center">
+                          <FileText className="w-12 h-12 text-gray-700 mx-auto opacity-20 mb-4" />
+                          <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.3em] italic">No PDF requests found.</p>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        );
+
       case 'valid_payments':
         return (
           <div className="space-y-10 animate-in fade-in duration-500">
@@ -2708,6 +2481,8 @@ export default function Admin() {
                 { label: 'Active (24h)', value: analyticsData.activeToday, icon: UserCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
                 { label: 'Active Now', value: activeUsers, icon: Clock, color: 'text-pink-500', bg: 'bg-pink-500/10' },
                 { label: 'Burned IDs', value: analyticsData.burnedIds, icon: Database, color: 'text-orange-500', bg: 'bg-orange-500/10' },
+                { label: 'Free PDF Req', value: analyticsData.pdfRequestsCount, icon: FileText, color: 'text-indigo-400', bg: 'bg-indigo-400/10' },
+                { label: 'Pending PDF', value: analyticsData.pendingPdfRequests, icon: AlertCircle, color: 'text-amber-400', bg: 'bg-amber-400/10' },
               ].map((stat, i) => (
                 <div key={i} className="glass-card p-6 rounded-[2rem] bg-white/5 flex flex-col gap-4">
                   <div className={`${stat.bg} w-10 h-10 rounded-2xl flex items-center justify-center`}>

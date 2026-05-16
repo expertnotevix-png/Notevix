@@ -1500,288 +1500,102 @@ export const dataBridge = {
   },
 
   /**
-   * Story Unlock System
+   * PDF Request System (New Lightweight Manual Flow)
    */
-  async getStoryTemplates(onlyActive: boolean = true) {
-    const cacheKey = `story_templates_${onlyActive}`;
-    const cached = getCached(cacheKey);
-    if (cached) return cached;
-
-    if (!supabase) return [];
-    try {
-      let query = supabase
-        .from('story_templates')
-        .select('*');
-      
-      if (onlyActive) {
-        query = query.eq('is_active', true);
-      }
-
-      const { data, error } = await query.order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      const mapped = (data || []).map(t => ({
-        id: t.id,
-        title: t.title,
-        description: t.description,
-        imageUrl: t.image_url,
-        link: t.link,
-        isActive: t.is_active,
-        createdAt: t.created_at
-      } as StoryTemplate));
-
-      setCache(cacheKey, mapped);
-      return mapped;
-    } catch (err) {
-      console.error("Fetch templates failed:", err);
-      return [];
-    }
-  },
-
-  async isResourceUnlocked(uid: string, resourceId: string) {
-    if (!supabase || !uid || uid === 'GUEST') return false;
-    try {
-      const { data, error } = await supabase
-        .from('story_unlocks')
-        .select('id')
-        .eq('user_id', uid)
-        .eq('resource_id', resourceId)
-        .maybeSingle();
-      
-      if (error) throw error;
-      return !!data;
-    } catch (err) {
-      console.error("Check unlock failed:", err);
-      return false;
-    }
-  },
-
-  async recordStoryUnlock(uid: string, resourceId: string, templateId: string, aiMetadata: any) {
-    if (!uid || uid === 'GUEST' || uid === 'undefined' || uid === 'null') {
-      console.error("Record unlock failed: Invalid user ID", { uid });
-      return { success: false, error: "Invalid user session" };
-    }
-
-    const errors: string[] = [];
-    let success = false;
-
-    // 1. Try Supabase (Primary)
-    if (supabase) {
-      try {
-        // A. Record the unlock
-        const { error: unlockError } = await supabase
-          .from('story_unlocks')
-          .insert([{
-            user_id: uid,
-            resource_id: resourceId,
-            template_id: templateId,
-            status: 'approved',
-            verified: true,
-            created_at: new Date().toISOString()
-          }]);
-
-        if (unlockError) {
-          console.warn("Supabase story_unlocks insert failed:", unlockError);
-          errors.push(unlockError.message);
-        } else {
-          success = true;
-        }
-
-        // B. Record verification log (Optional, don't crash if fails)
-        try {
-          await supabase.from('verification_logs').insert([{
-            user_id: uid,
-            resource_id: resourceId,
-            confidence_score: aiMetadata.confidence || 0,
-            raw_ai_response: typeof aiMetadata.raw === 'string' ? aiMetadata.raw : JSON.stringify(aiMetadata.raw || {}),
-            created_at: new Date().toISOString()
-          }]);
-        } catch (logErr) {
-          console.warn("Optional verification log failed:", logErr);
-        }
-
-        // C. Update profile in Supabase
-        try {
-          const { data: profile } = await supabase.from('profiles').select('unlocked_resources').eq('id', uid).maybeSingle();
-          const currentUnlocked = profile?.unlocked_resources || [];
-          if (!currentUnlocked.includes(resourceId)) {
-            await supabase.from('profiles').update({
-              unlocked_resources: Array.from(new Set([...currentUnlocked, resourceId])),
-              updated_at: new Date().toISOString()
-            }).eq('id', uid);
-          }
-        } catch (profileErr) {
-          console.warn("Supabase profile update failed during story unlock:", profileErr);
-        }
-      } catch (err: any) {
-        console.error("Supabase recordStoryUnlock operation failed:", err);
-        errors.push(err.message);
-      }
-    }
-
-    // 2. Sync to Firestore (Backup/Fallback)
-    try {
-      // A. Record unlock in Firestore
-      await addDoc(collection(db, 'story_unlocks'), {
-        user_id: uid,
-        resource_id: resourceId,
-        template_id: templateId,
-        verified: true,
-        confidence: aiMetadata.confidence || 0,
-        createdAt: serverTimestamp()
-      });
-      success = true; // If Firestore succeeds, we consider it a success
-
-      // B. Update Firestore user doc
-      try {
-        const userRef = doc(db, 'users', uid);
-        const userDoc = await getDoc(userRef);
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          const unlocked = userData.unlockedResources || [];
-          if (!unlocked.includes(resourceId)) {
-            await firestoreUpdateDoc(userRef, {
-              unlockedResources: Array.from(new Set([...unlocked, resourceId])),
-              updatedAt: serverTimestamp()
-            });
-          }
-        } else {
-          // Create minimal doc if missing
-          await setDoc(userRef, {
-            unlockedResources: [resourceId],
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          });
-        }
-      } catch (fsProfileErr) {
-        console.warn("Firestore profile update failed during story unlock:", fsProfileErr);
-      }
-    } catch (fsErr: any) {
-      console.error("Firestore recordStoryUnlock failed:", fsErr);
-      errors.push(fsErr.message);
-    }
-
-    if (!success) {
-      console.error("All database sync methods failed for recordStoryUnlock:", errors);
-    }
-
-    return { 
-      success: success, 
-      error: !success ? "Failed to record unlock in any database. Please check your connection." : undefined 
-    };
-  },
-
-  /**
-   * Save Story Log (Username collection)
-   */
-  async saveStoryLog(logData: {
-    username: string;
-    platform: string;
-    pdfName: string;
-    userId?: string;
+  async submitPdfRequest(data: {
+    fullName: string,
+    class: string,
+    email: string,
+    phoneNumber: string,
+    socialHandle: string,
+    resourceId: string,
+    resourceName: string,
+    userId?: string
   }) {
     if (!supabase) return { success: false, error: 'No connection' };
     try {
-      const { error } = await supabase.from('free_pdf_story_logs').insert([{
-        user_id: logData.userId || 'GUEST',
-        username: logData.username,
-        platform: logData.platform,
-        pdf_name: logData.pdfName,
-        approved: true,
+      const { error } = await supabase.from('pdf_requests').insert([{
+        full_name: data.fullName,
+        class_level: data.class,
+        email: data.email,
+        phone_number: data.phoneNumber,
+        social_handle: data.socialHandle,
+        resource_id: data.resourceId,
+        resource_name: data.resourceName,
+        user_id: data.userId || 'GUEST',
+        status: 'pending',
         created_at: new Date().toISOString()
       }]);
       if (error) throw error;
       return { success: true };
     } catch (err: any) {
-      console.error("Save story log failed:", err);
+      console.error("PDF Request failed:", err);
       return { success: false, error: err.message };
     }
   },
 
-  /**
-   * Get Story Logs (Admin)
-   */
-  async getStoryLogs(limitCount = 100) {
+  async getPdfRequests(status: string = 'pending') {
     if (!supabase) return [];
     try {
       const { data, error } = await supabase
-        .from('free_pdf_story_logs')
+        .from('pdf_requests')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limitCount);
+        .eq('status', status)
+        .order('created_at', { ascending: false });
       if (error) throw error;
       return data || [];
     } catch (err) {
-      console.error("Fetch story logs failed:", err);
+      console.error("Fetch PDF requests failed:", err);
       return [];
     }
   },
 
-  // Admin Methods for Templates
-  async addStoryTemplate(template: Partial<StoryTemplate>) {
+  async approvePdfRequest(requestId: string) {
     if (!supabase) return { success: false };
     try {
-      const { data, error } = await supabase
-        .from('story_templates')
-        .insert([{
-          title: template.title,
-          description: template.description,
-          image_url: template.imageUrl,
-          link: template.link,
-          is_active: true
-        }])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return { success: true, data };
+      // 1. Fetch request
+      const { data: req, error: fetchErr } = await supabase.from('pdf_requests').select('*').eq('id', requestId).single();
+      if (fetchErr || !req) throw new Error("Request not found");
+
+      // 2. Update status
+      const { error: updateError } = await supabase.from('pdf_requests').update({
+        status: 'approved',
+        updated_at: new Date().toISOString()
+      }).eq('id', requestId);
+      if (updateError) throw updateError;
+
+      // 3. Grant access (Add to profile unlocked_resources)
+      if (req.user_id && req.user_id !== 'GUEST') {
+        const { data: profile } = await supabase.from('profiles').select('unlocked_resources').eq('id', req.user_id).maybeSingle();
+        const current = profile?.unlocked_resources || [];
+        if (!current.includes(req.resource_id)) {
+          const updated = Array.from(new Set([...current, req.resource_id]));
+          await supabase.from('profiles').update({ unlocked_resources: updated }).eq('id', req.user_id);
+          try {
+            await firestoreUpdateDoc(doc(db, 'users', req.user_id), { unlockedResources: updated });
+          } catch (e) {}
+        }
+      }
+
+      return { success: true };
     } catch (err: any) {
-      console.error("Add template failed:", err);
+      console.error("PDF Approval failed:", err);
       return { success: false, error: err.message };
     }
   },
 
-  async updateStoryTemplate(id: string, updates: Partial<StoryTemplate>) {
+  async rejectPdfRequest(requestId: string) {
     if (!supabase) return { success: false };
     try {
-      const { error } = await supabase
-        .from('story_templates')
-        .update({
-          title: updates.title,
-          description: updates.description,
-          image_url: updates.imageUrl,
-          link: updates.link,
-          is_active: updates.isActive
-        })
-        .eq('id', id);
-      
+      const { error } = await supabase.from('pdf_requests').update({
+        status: 'rejected',
+        updated_at: new Date().toISOString()
+      }).eq('id', requestId);
       if (error) throw error;
       return { success: true };
     } catch (err: any) {
-      console.error("Update template failed:", err);
+      console.error("PDF Rejection failed:", err);
       return { success: false, error: err.message };
-    }
-  },
-
-  async deleteStoryTemplate(id: string) {
-    if (!supabase) return false;
-    try {
-      const { error } = await supabase.from('story_templates').delete().eq('id', id);
-      if (error) throw error;
-      return true;
-    } catch (err) {
-      console.error("Delete template failed:", err);
-      return false;
-    }
-  },
-
-  async getStoryUnlocksCount() {
-    if (!supabase) return 0;
-    try {
-      const { count } = await supabase.from('story_unlocks').select('*', { count: 'exact', head: true });
-      return count || 0;
-    } catch (err) {
-       return 0;
     }
   }
 };

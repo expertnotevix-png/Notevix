@@ -185,23 +185,6 @@ export const geminiService = {
     }
   },
 
-  async verifyStoryScreenshot(imageData: string, template: any): Promise<{ isValid: boolean, reason?: string }> {
-    const prompt = `Verify if this screenshot shows an Instagram/Snapchat story with our promo template and link.
-    Template Title: ${template.title}
-    Expected Link: ${template.link}
-    
-    Return ONLY strict JSON: { "isValid": boolean, "reason": "..." }`;
-    
-    try {
-      const optimized = await optimizeImageForAI(imageData, 800, 0.7);
-      const res = await this.callNvidiaAPI(prompt, "Expert Social Media Auditor. Return ONLY JSON.", true, VISION_MODEL_FAST, 30000, optimized);
-      return JSON.parse(res.replace(/```json|```/g, '').trim());
-    } catch (error) {
-      console.warn("Story verification error, failing safe:", error);
-      return { isValid: true }; // Fail safe for free resources
-    }
-  },
-
   async callNvidiaAPI(prompt: string, systemInstruction: string, isJson: boolean = false, model: string = MODEL_POWER, customTimeout: number = 25000, imageData?: string, options: { temperature?: number, max_tokens?: number } = {}) {
     const { nvidiaKey } = getAI();
     console.log(`AI Transition: Attempting NVIDIA call with model ${model}...`);
