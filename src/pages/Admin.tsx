@@ -3055,6 +3055,22 @@ CREATE TABLE IF NOT EXISTS public.verified_payments (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- 4.2 PDF Requests (Manual Flow)
+CREATE TABLE IF NOT EXISTS public.pdf_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    full_name TEXT,
+    class_level TEXT,
+    email TEXT,
+    phone_number TEXT,
+    social_handle TEXT,
+    resource_id TEXT,
+    resource_name TEXT,
+    user_id TEXT,
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- 5. Story Unlock System
 CREATE TABLE IF NOT EXISTS public.story_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -3100,6 +3116,18 @@ CREATE TABLE IF NOT EXISTS public.free_pdf_story_logs (
 ALTER TABLE public.free_resources ALTER COLUMN id SET DEFAULT gen_random_uuid();
 ALTER TABLE public.subject_resources ALTER COLUMN id SET DEFAULT gen_random_uuid();
 ALTER TABLE public.promo_banners ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE public.pdf_requests ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE public.verified_payments ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE public.story_templates ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE public.story_unlocks ALTER COLUMN id SET DEFAULT gen_random_uuid();
+
+-- 6. Grant Permissions (Safety)
+GRANT ALL ON public.verified_payments TO anon, authenticated, service_role;
+GRANT ALL ON public.purchase_requests TO anon, authenticated, service_role;
+GRANT ALL ON public.pdf_requests TO anon, authenticated, service_role;
+GRANT ALL ON public.subject_resources TO anon, authenticated, service_role;
+GRANT ALL ON public.promo_banners TO anon, authenticated, service_role;
+GRANT ALL ON public.free_resources TO anon, authenticated, service_role;
 
 -- 7. RPC Functions
 CREATE OR REPLACE FUNCTION increment_xp(user_id text, amount int)
@@ -3126,44 +3154,52 @@ $$ LANGUAGE plpgsql;
 ALTER TABLE public.verified_payments ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public Insert Verified Payments" ON public.verified_payments;
 CREATE POLICY "Public Insert Verified Payments" ON public.verified_payments FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Owner Select Verified Payments" ON public.verified_payments;
+CREATE POLICY "Owner Select Verified Payments" ON public.verified_payments FOR SELECT USING (auth.uid()::text = user_id);
 DROP POLICY IF EXISTS "Admin All Verified Payments" ON public.verified_payments;
-CREATE POLICY "Admin All Verified Payments" ON public.verified_payments FOR ALL USING (true);
+CREATE POLICY "Admin All Verified Payments" ON public.verified_payments FOR ALL USING (auth.jwt() ->> 'email' IN ('expertraj8@gmail.com', 'expertnotevix@gmail.com'));
 
 ALTER TABLE public.purchase_requests ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public Insert Purchase Requests" ON public.purchase_requests;
 CREATE POLICY "Public Insert Purchase Requests" ON public.purchase_requests FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS "Admin All Purchase Requests" ON public.purchase_requests;
-CREATE POLICY "Admin All Purchase Requests" ON public.purchase_requests FOR ALL USING (true);
+CREATE POLICY "Admin All Purchase Requests" ON public.purchase_requests FOR ALL USING (auth.jwt() ->> 'email' IN ('expertraj8@gmail.com', 'expertnotevix@gmail.com'));
+
+ALTER TABLE public.pdf_requests ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Insert PDF Requests" ON public.pdf_requests;
+CREATE POLICY "Public Insert PDF Requests" ON public.pdf_requests FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Admin All PDF Requests" ON public.pdf_requests;
+CREATE POLICY "Admin All PDF Requests" ON public.pdf_requests FOR ALL USING (auth.jwt() ->> 'email' IN ('expertraj8@gmail.com', 'expertnotevix@gmail.com'));
 
 ALTER TABLE public.promo_banners ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public Read Banners" ON public.promo_banners;
 CREATE POLICY "Public Read Banners" ON public.promo_banners FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Admin All Banners" ON public.promo_banners;
-CREATE POLICY "Admin All Banners" ON public.promo_banners FOR ALL USING (true);
+CREATE POLICY "Admin All Banners" ON public.promo_banners FOR ALL USING (auth.jwt() ->> 'email' IN ('expertraj8@gmail.com', 'expertnotevix@gmail.com'));
 
 ALTER TABLE public.free_resources ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public Read Free" ON public.free_resources;
 CREATE POLICY "Public Read Free" ON public.free_resources FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Admin All Free" ON public.free_resources;
-CREATE POLICY "Admin All Free" ON public.free_resources FOR ALL USING (true);
+CREATE POLICY "Admin All Free" ON public.free_resources FOR ALL USING (auth.jwt() ->> 'email' IN ('expertraj8@gmail.com', 'expertnotevix@gmail.com'));
 
 ALTER TABLE public.subject_resources ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public Read Resources" ON public.subject_resources;
 CREATE POLICY "Public Read Resources" ON public.subject_resources FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Admin All Resources" ON public.subject_resources;
-CREATE POLICY "Admin All Resources" ON public.subject_resources FOR ALL USING (true);
+CREATE POLICY "Admin All Resources" ON public.subject_resources FOR ALL USING (auth.jwt() ->> 'email' IN ('expertraj8@gmail.com', 'expertnotevix@gmail.com'));
 
 ALTER TABLE public.story_templates ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public Read Templates" ON public.story_templates;
 CREATE POLICY "Public Read Templates" ON public.story_templates FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Admin All Templates" ON public.story_templates;
-CREATE POLICY "Admin All Templates" ON public.story_templates FOR ALL USING (true);
+CREATE POLICY "Admin All Templates" ON public.story_templates FOR ALL USING (auth.jwt() ->> 'email' IN ('expertraj8@gmail.com', 'expertnotevix@gmail.com'));
 
 ALTER TABLE public.story_unlocks ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Owner Read Unlocks" ON public.story_unlocks;
 CREATE POLICY "Owner Read Unlocks" ON public.story_unlocks FOR SELECT USING (auth.uid()::text = user_id);
 DROP POLICY IF EXISTS "Admin All Unlocks" ON public.story_unlocks;
-CREATE POLICY "Admin All Unlocks" ON public.story_unlocks FOR ALL USING (true);
+CREATE POLICY "Admin All Unlocks" ON public.story_unlocks FOR ALL USING (auth.jwt() ->> 'email' IN ('expertraj8@gmail.com', 'expertnotevix@gmail.com'));
 
 -- 9. Storage Buckets
 INSERT INTO storage.buckets (id, name, public) 
