@@ -82,15 +82,49 @@ export const dataBridge = {
   /**
    * Resources (subject_resources)
    */
-  async getResources(classLevel?: string) {
+  async getResources(classLevel?: string, isPremium?: boolean) {
     if (!supabase) return [];
     try {
-      const query = supabase.from('subject_resources').select('*').order('created_at', { ascending: false });
-      if (classLevel) query.eq('class', classLevel);
+      let query = supabase.from('subject_resources').select('*').order('created_at', { ascending: false });
+      if (classLevel) query = query.eq('class', classLevel);
+      if (isPremium !== undefined) query = query.eq('is_free', !isPremium);
       const { data } = await query;
       return (data || []).map(d => this.mapResource(d));
     } catch (err) {
       return [];
+    }
+  },
+
+  async addResource(res: any) {
+    if (!supabase) return { success: false };
+    try {
+      const { data, error } = await supabase.from('subject_resources').insert(res).select().single();
+      if (error) throw error;
+      return { success: true, data };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  async updateResource(id: string, res: any) {
+    if (!supabase) return { success: false };
+    try {
+      const { error } = await supabase.from('subject_resources').update(res).eq('id', id);
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  async deleteResource(id: string) {
+    if (!supabase) return { success: false };
+    try {
+      const { error } = await supabase.from('subject_resources').delete().eq('id', id);
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
     }
   },
 
@@ -112,13 +146,49 @@ export const dataBridge = {
   /**
    * Banners (promotional_banners)
    */
-  async getBanners() {
+  async getBanners(location?: string, all = false) {
     if (!supabase) return [];
     try {
-      const { data } = await supabase.from('promotional_banners').select('*').eq('active', true);
+      let query = supabase.from('promotional_banners').select('*').order('created_at', { ascending: false });
+      if (!all) query = query.eq('active', true);
+      if (location) query = query.eq('location', location);
+      const { data } = await query;
       return data || [];
     } catch (err) {
       return [];
+    }
+  },
+
+  async addBanner(banner: any) {
+    if (!supabase) return { success: false };
+    try {
+      const { data, error } = await supabase.from('promotional_banners').insert(banner).select().single();
+      if (error) throw error;
+      return { success: true, data };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  async updateBanner(id: string, banner: any) {
+    if (!supabase) return { success: false };
+    try {
+      const { error } = await supabase.from('promotional_banners').update(banner).eq('id', id);
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  async deleteBanner(id: string) {
+    if (!supabase) return { success: false };
+    try {
+      const { error } = await supabase.from('promotional_banners').delete().eq('id', id);
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
     }
   },
 

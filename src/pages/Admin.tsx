@@ -71,11 +71,17 @@ export default function Admin() {
 
   const fetchAnalytics = async () => {
     const stats = await dataBridge.getAdminStats();
-    // Simplified analytics
+    
+    // Calculate total revenue from approved payments
+    const payments = await dataBridge.getVerifiedPayments(1000);
+    const totalRev = payments
+      .filter(p => p.status === 'approved')
+      .reduce((acc, curr) => acc + (curr.amount || 0), 0);
+
     setAnalyticsData(prev => ({
       ...prev,
       ...stats,
-      totalRevenue: 0, // Mock for now or calculated from approved payments
+      totalRevenue: totalRev,
     }));
   };
 
@@ -85,8 +91,105 @@ export default function Admin() {
   };
 
   const fetchBanners = async () => {
-    const data = await dataBridge.getBanners();
+    const data = await dataBridge.getBanners(undefined, true);
     setBanners(data);
+  };
+
+  // Resource Management
+  const handleSaveResource = async (formData: any) => {
+    setLoading(true);
+    try {
+      const resData = {
+        subject: formData.subject,
+        class: formData.class,
+        price: formData.is_free ? 0 : parseFloat(formData.price || '0'),
+        description: formData.description,
+        cover_url: formData.cover_url,
+        drive_link: formData.drive_link,
+        password: formData.password,
+        is_free: formData.is_free,
+        updated_at: new Date().toISOString()
+      };
+
+      if (editingResource) {
+        const res = await dataBridge.updateResource(editingResource.id, resData);
+        if (res.success) toast.success("Resource updated");
+        else throw new Error(res.error);
+      } else {
+        const res = await dataBridge.addResource({ ...resData, created_at: new Date().toISOString() });
+        if (res.success) toast.success("Resource added");
+        else throw new Error(res.error);
+      }
+      setIsAddingResource(false);
+      setEditingResource(null);
+      fetchSubjectResources();
+    } catch (err: any) {
+      toast.error(err.message || "Operation failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteResource = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this resource?")) return;
+    const res = await dataBridge.deleteResource(id);
+    if (res.success) {
+      toast.success("Resource deleted");
+      fetchSubjectResources();
+    } else {
+      toast.error(res.error || "Delete failed");
+    }
+  };
+
+  const handleFileUpload = async (file: File, bucket: string) => {
+    const res = await dataBridge.uploadImage(file, bucket);
+    if (res.success) {
+      toast.success("File uploaded successfully");
+      return res.url;
+    } else {
+      toast.error(res.error || "Upload failed");
+      return null;
+    }
+  };
+
+  // Banner Management
+  const handleSaveBanner = async (formData: any) => {
+    setLoading(true);
+    try {
+      const bannerData = {
+        image_url: formData.image_url,
+        link: formData.link,
+        location: formData.location,
+        active: formData.active,
+        updated_at: new Date().toISOString()
+      };
+
+      if (editingResource) { // reusing editingResource state for banner editing or use another state
+        const res = await dataBridge.updateBanner(editingResource.id, bannerData);
+        if (res.success) toast.success("Banner updated");
+        else throw new Error(res.error);
+      } else {
+        const res = await dataBridge.addBanner({ ...bannerData, created_at: new Date().toISOString() });
+        if (res.success) toast.success("Banner added");
+        else throw new Error(res.error);
+      }
+      setIsAddingBanner(false);
+      setEditingResource(null);
+      fetchBanners();
+    } catch (err: any) {
+      toast.error(err.message || "Operation failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteBanner = async (id: string) => {
+    if (!confirm("Delete this banner?")) return;
+    const res = await dataBridge.deleteBanner(id);
+    if (res.success) {
+      toast.success("Banner deleted");
+      fetchBanners();
+    }
   };
 
   const fetchVerifiedPayments = async () => {
@@ -243,14 +346,14 @@ export default function Admin() {
         <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
           {activeTab === 'analytics' && (
             <div className="space-y-8 animate-in fade-in duration-500">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
+                  { label: 'Total Revenue', value: `₹${analyticsData.totalRevenue}`, icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
                   { label: 'Total Users', value: analyticsData.totalUsers, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-                  { label: 'Premium Users', value: analyticsData.premiumUsers, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+                  { label: 'Premium Sales', value: analyticsData.premiumUsers, icon: CheckCircle2, color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
                   { label: 'New Today', value: analyticsData.newUsersToday, icon: Zap, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
-                  { label: 'PDF Requests', value: analyticsData.pdfRequestsCount, icon: FileText, color: 'text-purple-500', bg: 'bg-purple-500/10' },
                 ].map((stat, i) => (
-                  <div key={i} className="bg-white/5 border border-white/10 p-6 rounded-[2rem] flex flex-col gap-4">
+                  <div key={i} className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] flex flex-col gap-4">
                     <div className={`${stat.bg} w-12 h-12 rounded-2xl flex items-center justify-center`}>
                       <stat.icon size={24} className={stat.color} />
                     </div>
@@ -260,6 +363,75 @@ export default function Admin() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'resources' && (
+            <div className="space-y-6 animate-in fade-in duration-500">
+              <div className="flex justify-between items-center">
+                <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5">
+                   <button 
+                    onClick={() => setShowOnlyPending(true)} // Reusing showOnlyPending for premium filter for now
+                    className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showOnlyPending ? 'bg-indigo-600 text-white' : 'text-gray-500'}`}
+                   >
+                     Premium Notes
+                   </button>
+                   <button 
+                    onClick={() => setShowOnlyPending(false)}
+                    className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!showOnlyPending ? 'bg-indigo-600 text-white' : 'text-gray-500'}`}
+                   >
+                     Free Materials
+                   </button>
+                </div>
+                <button 
+                  onClick={() => setIsAddingResource(true)}
+                  className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all"
+                >
+                  <Plus size={16} /> New Resource
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                 {subjectResources.filter(r => showOnlyPending ? !r.isFree : r.isFree).map((res) => (
+                    <div key={res.id} className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] overflow-hidden flex flex-col group">
+                      <div className="aspect-[3/4] relative bg-white/5">
+                         {res.coverUrl && <img src={res.coverUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />}
+                         <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-[10px] font-black">
+                            {res.isFree ? 'FREE' : `₹${res.price}`}
+                         </div>
+                      </div>
+                      <div className="p-6 space-y-4">
+                        <div>
+                           <h4 className="font-black text-sm uppercase truncate">{res.subject}</h4>
+                           <p className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.2em] mt-1 space-x-2">
+                             <span>Class {res.class}</span>
+                             <span>•</span>
+                             <span className="text-indigo-400">V{res.id.slice(-4)}</span>
+                           </p>
+                        </div>
+                        <div className="flex gap-2">
+                           <button 
+                            onClick={() => { setEditingResource(res); setIsAddingResource(true); }}
+                            className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-[10px] font-black uppercase transition-all"
+                           >
+                             Edit
+                           </button>
+                           <button 
+                            onClick={() => handleDeleteResource(res.id)}
+                            className="px-3 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl transition-all"
+                           >
+                             <Trash2 size={14} />
+                           </button>
+                        </div>
+                      </div>
+                    </div>
+                 ))}
+                 {subjectResources.filter(r => showOnlyPending ? !r.isFree : r.isFree).length === 0 && (
+                   <div className="col-span-full py-20 text-center text-gray-600 uppercase font-black text-xs tracking-widest border-2 border-dashed border-white/5 rounded-[3rem]">
+                      No resources found in this category
+                   </div>
+                 )}
               </div>
             </div>
           )}
@@ -429,8 +601,216 @@ export default function Admin() {
              </div>
           )}
           
-          {/* Add more tabs content as needed */}
+          {activeTab === 'banners' && (
+            <div className="space-y-6 animate-in fade-in duration-500">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-black uppercase tracking-tight">Active Promotions</h3>
+                <button 
+                  onClick={() => setIsAddingBanner(true)}
+                  className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/20 active:scale-95 transition-all"
+                >
+                  <Plus size={16} /> Add New Banner
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {banners.map((banner) => (
+                  <div key={banner.id} className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] overflow-hidden flex flex-col group">
+                    <div className="aspect-[21/9] relative bg-white/5">
+                      {banner.image_url && <img src={banner.image_url} className="w-full h-full object-cover" />}
+                      <div className="absolute top-4 right-4 flex gap-2">
+                         <div className={`px-2 py-1 rounded-md text-[8px] font-black uppercase ${banner.active ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}>
+                            {banner.active ? 'Active' : 'Paused'}
+                         </div>
+                         <div className="px-2 py-1 rounded-md bg-black/50 text-white text-[8px] font-black uppercase backdrop-blur-md">
+                            {banner.location}
+                         </div>
+                      </div>
+                    </div>
+                    <div className="p-6 flex items-center justify-between border-t border-white/5">
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-gray-500 font-bold uppercase truncate">{banner.link || 'No Link'}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => { setEditingResource(banner); setIsAddingResource(false); setIsAddingBanner(true); }}
+                          className="p-2 bg-white/5 text-gray-400 rounded-lg hover:text-white transition-all"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteBanner(banner.id)}
+                          className="p-2 bg-white/5 text-gray-400 rounded-lg hover:text-red-500 transition-all"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </main>
+      </div>
+      {/* Modals */}
+      {isAddingResource && (
+        <ResourceModal 
+          onClose={() => { setIsAddingResource(false); setEditingResource(null); }} 
+          onSave={handleSaveResource} 
+          resource={editingResource}
+          uploadHandler={handleFileUpload}
+        />
+      )}
+      {isAddingBanner && (
+        <BannerModal 
+          onClose={() => { setIsAddingBanner(false); setEditingResource(null); }} 
+          onSave={handleSaveBanner} 
+          banner={editingResource}
+          uploadHandler={handleFileUpload}
+        />
+      )}
+    </div>
+  );
+}
+
+// Sub-components
+function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
+  const [form, setForm] = useState(resource || {
+    subject: '', class: '10', price: '39', description: '', cover_url: '', drive_link: '', password: '', is_free: false
+  });
+  const [upLoading, setUpLoading] = useState(false);
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-sm">
+      <div className="w-full max-w-xl bg-[#0a0a0a] border border-white/10 rounded-[3rem] p-10 space-y-8 animate-in zoom-in-95 duration-300">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-black uppercase">{resource ? 'Edit' : 'New'} Resource</h2>
+          <button onClick={onClose}><X /></button>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
+           <div className="space-y-1.5">
+              <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Subject</label>
+              <input type="text" value={form.subject} onChange={e => setForm({...form, subject: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none" />
+           </div>
+           <div className="space-y-1.5">
+              <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Class</label>
+              <select value={form.class} onChange={e => setForm({...form, class: e.target.value})} className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 outline-none">
+                 <option value="8">Class 8</option>
+                 <option value="9">Class 9</option>
+                 <option value="10">Class 10</option>
+              </select>
+           </div>
+        </div>
+
+        <div className="space-y-1.5">
+           <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Cover Image</label>
+           <div className="flex gap-4">
+              <input type="text" value={form.cover_url} onChange={e => setForm({...form, cover_url: e.target.value})} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs" placeholder="URL or Upload" />
+              <input type="file" id="cover-up" className="hidden" onChange={async e => {
+                 if (e.target.files?.[0]) {
+                    setUpLoading(true);
+                    const url = await uploadHandler(e.target.files[0], 'covers');
+                    if (url) setForm({...form, cover_url: url});
+                    setUpLoading(false);
+                 }
+              }} />
+              <label htmlFor="cover-up" className="px-4 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase cursor-pointer disabled:opacity-50">
+                 {upLoading ? '...' : 'Upload'}
+              </label>
+           </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+           <div className="space-y-1.5">
+              <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Drive PDF Link</label>
+              <input type="text" value={form.drive_link} onChange={e => setForm({...form, drive_link: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3" />
+           </div>
+           <div className="space-y-1.5">
+              <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Unlock Password</label>
+              <input type="text" value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3" />
+           </div>
+        </div>
+
+        <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
+           <div className="flex items-center gap-3">
+              <input type="checkbox" checked={form.is_free} onChange={e => setForm({...form, is_free: e.target.checked})} className="w-5 h-5 accent-indigo-600" />
+              <span className="text-sm font-bold">Mark as FREE Material</span>
+           </div>
+           {!form.is_free && (
+             <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black">₹</span>
+                <input type="number" value={form.price} onChange={e => setForm({...form, price: e.target.value})} className="w-16 bg-transparent border-b border-indigo-500 text-center outline-none" />
+             </div>
+           )}
+        </div>
+
+        <button onClick={() => onSave(form)} className="w-full py-4 bg-white text-black rounded-2xl font-black text-sm uppercase tracking-widest active:scale-95 transition-all">
+           Save Resource
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function BannerModal({ onClose, onSave, banner, uploadHandler }: any) {
+  const [form, setForm] = useState(banner || { image_url: '', link: '', location: 'home', active: true });
+  const [upLoading, setUpLoading] = useState(false);
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-sm">
+      <div className="w-full max-w-lg bg-[#0a0a0a] border border-white/10 rounded-[3rem] p-10 space-y-8 animate-in slide-in-from-bottom-10 duration-300">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-black uppercase">Banner Manager</h2>
+          <button onClick={onClose}><X /></button>
+        </div>
+
+        <div className="space-y-4">
+           <div className="space-y-1.5">
+              <label className="text-[10px] text-gray-500 font-bold uppercase">Banner Image</label>
+              <div className="flex gap-4">
+                <input type="text" value={form.image_url} onChange={e => setForm({...form, image_url: e.target.value})} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3" />
+                <input type="file" id="banner-up" className="hidden" onChange={async e => {
+                   if (e.target.files?.[0]) {
+                      setUpLoading(true);
+                      const url = await uploadHandler(e.target.files[0], 'banners');
+                      if (url) setForm({...form, image_url: url});
+                      setUpLoading(false);
+                   }
+                }} />
+                <label htmlFor="banner-up" className="px-4 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase cursor-pointer">
+                   {upLoading ? '...' : 'Upload'}
+                </label>
+              </div>
+           </div>
+
+           <div className="space-y-1.5">
+              <label className="text-[10px] text-gray-500 font-bold uppercase">Redirect Link</label>
+              <input type="text" value={form.link} onChange={e => setForm({...form, link: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3" />
+           </div>
+
+           <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                 <label className="text-[10px] text-gray-500 font-bold uppercase">Placement</label>
+                 <select value={form.location} onChange={e => setForm({...form, location: e.target.value})} className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 outline-none">
+                    <option value="home">Homepage</option>
+                    <option value="landing">Landing Page</option>
+                 </select>
+              </div>
+              <div className="space-y-1.5">
+                 <label className="text-[10px] text-gray-500 font-bold uppercase">Status</label>
+                 <div className="flex items-center gap-2 mt-3 ml-2">
+                    <input type="checkbox" checked={form.active} onChange={e => setForm({...form, active: e.target.checked})} className="w-5 h-5 accent-indigo-600" />
+                    <span className="text-xs font-bold">Active Banner</span>
+                 </div>
+              </div>
+           </div>
+        </div>
+
+        <button onClick={() => onSave(form)} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest">
+           Publish Promotion
+        </button>
       </div>
     </div>
   );
