@@ -1,38 +1,25 @@
-export interface UserProfile {
+export interface VerifiedPayment {
+  id: string;
+  phone_number: string;
+  transaction_id: string;
+  amount: number;
+  product_name: string;
+  user_id?: string;
+  status: string;
+  unlock_password?: string;
+  rejection_reason?: string;
+  approved: boolean;
+  created_at: string;
+}
+
+export interface AppUser {
   uid: string;
   email: string;
   displayName: string;
   photoURL: string;
-  phoneNumber?: string;
+  role: 'admin' | 'student';
   class?: string;
-  class_level?: string;
-  role: 'student' | 'admin';
-  savedNotes: string[];
-  isPremium: boolean;
-  unlockedResources?: string[];
-  createdAt: string;
-}
-
-export interface Chapter {
-  id: string;
-  title: string;
-  description: string;
-  pdfUrl: string;
-  isPremium: boolean;
-}
-
-export interface VerifiedPayment {
-  id: string;
-  transactionId: string;
-  userId: string;
-  phoneNumber: string;
-  amount: number;
-  productName: string;
-  unlockPassword?: string;
-  approved: boolean;
-  status: string;
-  rejectionReason?: string;
-  createdAt: string;
+  phone?: string;
 }
 
 export interface PdfRequest {
@@ -43,29 +30,36 @@ export interface PdfRequest {
   phone_number: string;
   instagram_username: string;
   requested_pdf: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: string;
   approved: boolean;
   created_at: string;
-}
-
-export interface PromoBanner {
-  id: string;
-  imageUrl: string;
-  link?: string;
-  location?: 'home' | 'landing';
-  createdAt: string;
 }
 
 export interface SubjectResource {
   id: string;
   title: string;
   subject: string;
-  classLevel: string;
-  price: number;
+  class_level: string;
   description?: string;
-  coverImage?: string;
-  pdfLink?: string;
-  unlockPassword?: string;
-  isPremium: boolean;
-  createdAt?: string;
+  cover_image?: string;
+  pdf_link?: string;
+  price: number;
+  is_premium: boolean;
+  unlock_password?: string;
+  created_at: string;
+}
+
+export interface PromoBanner {
+  id: string;
+  banner_image: string;
+  location: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface AppSetting {
+  id: string;
+  setting_key: string;
+  setting_value: string;
+  created_at: string;
 }

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../components/firebase';
-import { UserProfile } from '../types';
+import { AppUser } from '../types';
 
-export function useModeration(user: UserProfile | null) {
+export function useModeration(user: AppUser | null) {
   const [isBanned, setIsBanned] = useState(false);
   const [banReason, setBanReason] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);

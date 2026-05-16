@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UserProfile } from '../types';
+import { AppUser } from '../types';
 import { LogOut, Shield, ChevronRight, BookOpen, Crown, Settings, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../components/firebase';
@@ -8,8 +8,8 @@ import { supabase } from '../lib/supabase';
 import { dataBridge } from '../services/dataBridge';
 
 interface ProfileProps {
-  user: UserProfile;
-  setUser: (user: UserProfile | null) => void;
+  user: AppUser;
+  setUser: (user: AppUser | null) => void;
 }
 
 export default function Profile({ user, setUser }: ProfileProps) {
@@ -21,7 +21,7 @@ export default function Profile({ user, setUser }: ProfileProps) {
   }, [user]);
 
   const fetchHistory = async () => {
-    const data = await dataBridge.getUserPayments(user.phoneNumber || '');
+    const data = await dataBridge.getUserPayments(user.phone || '');
     setPurchaseHistory(data);
   };
 
@@ -49,7 +49,7 @@ export default function Profile({ user, setUser }: ProfileProps) {
           </div>
           <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.2em]">{user.email}</p>
         </div>
-        {user.isPremium ? (
+        {user.role === 'admin' ? (
           <div className="bg-indigo-600 text-white px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
             <Crown size={12} /> PRO STUDENT
           </div>

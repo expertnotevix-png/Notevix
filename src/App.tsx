@@ -2,7 +2,7 @@ import { useState, useEffect, lazy, Suspense, Component, ErrorInfo, ReactNode } 
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged, browserLocalPersistence, setPersistence } from 'firebase/auth';
 import { auth } from './components/firebase';
-import { UserProfile } from './types';
+import { AppUser } from './types';
 import { dataBridge } from './services/dataBridge';
 import { Toaster } from 'sonner';
 
@@ -52,7 +52,7 @@ function AppLayout({ user, setUser, children }: { user: any, setUser: any, child
 }
 
 export default function App() {
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -65,30 +65,16 @@ export default function App() {
       }
 
       const isAdminEmail = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(firebaseUser.email || '');
-      const basicProfile: UserProfile = {
+      const currentUser: AppUser = {
         uid: firebaseUser.uid,
         email: firebaseUser.email || '',
         displayName: firebaseUser.displayName || 'Student',
         photoURL: firebaseUser.photoURL || '',
         role: isAdminEmail ? 'admin' : 'student',
-        isPremium: isAdminEmail,
-        savedNotes: [],
-        unlockedResources: [],
-        createdAt: new Date().toISOString()
       };
-
-      try {
-        const supabaseProfile = await dataBridge.getProfile(firebaseUser.uid);
-        if (supabaseProfile) {
-          setUser({ ...basicProfile, ...supabaseProfile });
-        } else {
-          setUser(basicProfile);
-        }
-      } catch (err) {
-        setUser(basicProfile);
-      } finally {
-        setLoading(false);
-      }
+      
+      setUser(currentUser);
+      setLoading(false);
     });
     return unsub;
   }, []);

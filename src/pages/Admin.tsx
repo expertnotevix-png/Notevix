@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { dataBridge } from '../services/dataBridge';
-import { UserProfile, VerifiedPayment } from '../types';
+import { AppUser, VerifiedPayment, PdfRequest, SubjectResource, PromoBanner } from '../types';
 import { 
   Plus, Trash2, Edit2, Save, X, 
   Bell, Send, CheckCircle2, Clock, 
@@ -17,16 +17,15 @@ import {
 import { supabase } from '../lib/supabase';
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'banners' | 'resources' | 'verified_payments' | 'pdf_requests' | 'users' | 'notifications' | 'settings'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'banners' | 'resources' | 'verified_payments' | 'pdf_requests' | 'notifications' | 'settings'>('analytics');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [loading, setLoading] = useState(true);
   
   // Data States
-  const [pdfRequests, setPdfRequests] = useState<any[]>([]);
-  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
-  const [subjectResources, setSubjectResources] = useState<any[]>([]);
+  const [pdfRequests, setPdfRequests] = useState<PdfRequest[]>([]);
+  const [subjectResources, setSubjectResources] = useState<SubjectResource[]>([]);
   const [verifiedPayments, setVerifiedPayments] = useState<VerifiedPayment[]>([]);
-  const [banners, setBanners] = useState<any[]>([]);
+  const [banners, setBanners] = useState<PromoBanner[]>([]);
   
   // UI States
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,13 +41,8 @@ export default function Admin() {
 
   const [analyticsData, setAnalyticsData] = useState({
     totalRevenue: 0,
-    salesCount: 0,
-    totalUsers: 0,
-    premiumUsers: 0,
-    newUsersToday: 0,
-    activeToday: 0,
-    pdfRequestsCount: 0,
-    pendingPdfRequests: 0,
+    premiumSales: 0,
+    pendingRequests: 0,
   });
 
   useEffect(() => {
@@ -64,7 +58,6 @@ export default function Admin() {
         case 'banners': await fetchBanners(); break;
         case 'verified_payments': await fetchVerifiedPayments(); break;
         case 'pdf_requests': await fetchPdfRequests(); break;
-        case 'users': await fetchUsers(); break;
       }
     } finally {
       setLoading(false);
@@ -73,17 +66,9 @@ export default function Admin() {
 
   const fetchAnalytics = async () => {
     const stats = await dataBridge.getAdminStats();
-    
-    // Calculate total revenue from approved payments
-    const payments = await dataBridge.getVerifiedPayments(1000);
-    const totalRev = payments
-      .filter(p => p.status === 'approved')
-      .reduce((acc, curr) => acc + (curr.amount || 0), 0);
-
     setAnalyticsData(prev => ({
       ...prev,
       ...stats,
-      totalRevenue: totalRev,
     }));
   };
 
@@ -95,6 +80,16 @@ export default function Admin() {
   const fetchBanners = async () => {
     const data = await dataBridge.getBanners(undefined, true);
     setBanners(data);
+  };
+
+  const fetchVerifiedPayments = async () => {
+    const data = await dataBridge.getVerifiedPayments();
+    setVerifiedPayments(data);
+  };
+
+  const fetchPdfRequests = async () => {
+    const data = await dataBridge.getPdfRequests(showOnlyPending ? 'pending' : 'all');
+    setPdfRequests(data);
   };
 
   // Resource Management
@@ -110,8 +105,7 @@ export default function Admin() {
         cover_image: formData.cover_image,
         pdf_link: formData.pdf_link,
         unlock_password: formData.unlock_password,
-        is_premium: formData.is_premium,
-        updated_at: new Date().toISOString()
+        is_premium: formData.is_premium
       };
 
       if (editingResource) {
@@ -144,7 +138,7 @@ export default function Admin() {
     }
   };
 
-  const handleFileUpload = async (file: File, bucket: string) => {
+  const handleFileUpload = async (file: File, bucket: 'Cover' | 'banners') => {
     const res = await dataBridge.uploadImage(file, bucket);
     if (res.success) {
       toast.success("File uploaded successfully");
@@ -164,8 +158,7 @@ export default function Admin() {
         banner_image: formData.banner_image,
         redirect_link: formData.redirect_link,
         location: formData.location,
-        is_active: formData.is_active,
-        updated_at: new Date().toISOString()
+        is_active: formData.is_active
       };
 
       if (editingResource) { 
@@ -196,21 +189,6 @@ export default function Admin() {
     }
   };
 
-  const fetchVerifiedPayments = async () => {
-    const data = await dataBridge.getVerifiedPayments();
-    setVerifiedPayments(data);
-  };
-
-  const fetchPdfRequests = async () => {
-    const data = await dataBridge.getPdfRequests(showOnlyPending ? 'pending' : 'all');
-    setPdfRequests(data);
-  };
-
-  const fetchUsers = async () => {
-    const users = await dataBridge.getProfiles(200);
-    setAllUsers(users);
-  };
-
   const handleApprovePurchase = async () => {
     if (!approveModal.id || !approveModal.password) {
       toast.error("Please enter a password");
@@ -218,7 +196,6 @@ export default function Admin() {
     }
     setLoading(true);
     try {
-      console.log("Approving purchase:", approveModal.id);
       const res = await dataBridge.approvePurchase(approveModal.id, approveModal.password);
       if (res.success) {
         toast.success("Payment approved!");
@@ -288,15 +265,14 @@ export default function Admin() {
     { id: 'resources', label: 'PDF Library', icon: BookOpen },
     { id: 'verified_payments', label: 'Payments', icon: CreditCard },
     { id: 'pdf_requests', label: 'PDF Requests', icon: FileText },
-    { id: 'users', label: 'Students', icon: Users },
     { id: 'notifications', label: 'Broadcast', icon: Bell },
     { id: 'settings', label: 'Settings', icon: Settings },
   ] as const;
 
   const filteredPayments = useMemo(() => {
     return verifiedPayments.filter(p => {
-      const matchesSearch = p.transactionId.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            p.phoneNumber.includes(searchQuery);
+      const matchesSearch = p.transaction_id.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            p.phone_number.includes(searchQuery);
       if (showOnlyPending) return p.status === 'pending' && matchesSearch;
       return matchesSearch;
     });
@@ -389,12 +365,11 @@ export default function Admin() {
         <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
           {activeTab === 'analytics' && (
             <div className="space-y-8 animate-in fade-in duration-500">
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {[
                   { label: 'Total Revenue', value: `₹${analyticsData.totalRevenue}`, icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-                  { label: 'Total Users', value: analyticsData.totalUsers, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-                  { label: 'Premium Sales', value: analyticsData.premiumUsers, icon: CheckCircle2, color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
-                  { label: 'New Today', value: analyticsData.newUsersToday, icon: Zap, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
+                  { label: 'Premium Sales', value: analyticsData.premiumSales, icon: CheckCircle2, color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
+                  { label: 'Pending PDF Requests', value: analyticsData.pendingRequests, icon: Clock, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
                 ].map((stat, i) => (
                   <div key={i} className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] flex flex-col gap-4">
                     <div className={`${stat.bg} w-12 h-12 rounded-2xl flex items-center justify-center`}>
@@ -415,7 +390,7 @@ export default function Admin() {
               <div className="flex justify-between items-center">
                 <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5">
                    <button 
-                    onClick={() => setShowOnlyPending(true)} // Reusing showOnlyPending for premium filter for now
+                    onClick={() => setShowOnlyPending(true)} 
                     className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showOnlyPending ? 'bg-indigo-600 text-white' : 'text-gray-500'}`}
                    >
                      Premium Notes
@@ -436,19 +411,19 @@ export default function Admin() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                 {subjectResources.filter(r => showOnlyPending ? r.isPremium : !r.isPremium).map((res) => (
+                 {subjectResources.filter(r => showOnlyPending ? r.is_premium : !r.is_premium).map((res) => (
                     <div key={res.id} className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] overflow-hidden flex flex-col group">
                       <div className="aspect-[3/4] relative bg-white/5">
-                         {res.coverImage && <img src={res.coverImage} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />}
+                         {res.cover_image && <img src={res.cover_image} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />}
                          <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-[10px] font-black">
-                            {!res.isPremium ? 'FREE' : `₹${res.price}`}
+                            {!res.is_premium ? 'FREE' : `₹${res.price}`}
                          </div>
                       </div>
                       <div className="p-6 space-y-4">
                         <div>
                            <h4 className="font-black text-sm uppercase truncate">{res.title}</h4>
                            <p className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.2em] mt-1 space-x-2">
-                             <span>Class {res.classLevel}</span>
+                             <span>Class {res.class_level}</span>
                              <span>•</span>
                              <span className="text-indigo-400">V{res.id.slice(-4)}</span>
                            </p>
@@ -456,14 +431,7 @@ export default function Admin() {
                         <div className="flex gap-2">
                            <button 
                             onClick={() => { 
-                              setEditingResource({
-                                ...res,
-                                class_level: res.classLevel,
-                                cover_image: res.coverImage,
-                                pdf_link: res.pdfLink,
-                                unlock_password: res.unlockPassword,
-                                is_premium: res.isPremium
-                              }); 
+                              setEditingResource(res); 
                               setIsAddingResource(true); 
                             }}
                             className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-[10px] font-black uppercase transition-all"
@@ -480,7 +448,7 @@ export default function Admin() {
                       </div>
                     </div>
                  ))}
-                 {subjectResources.filter(r => showOnlyPending ? r.isPremium : !r.isPremium).length === 0 && (
+                 {subjectResources.filter(r => showOnlyPending ? r.is_premium : !r.is_premium).length === 0 && (
                    <div className="col-span-full py-20 text-center text-gray-600 uppercase font-black text-xs tracking-widest border-2 border-dashed border-white/5 rounded-[3rem]">
                       No resources found in this category
                    </div>
@@ -534,13 +502,13 @@ export default function Admin() {
                         <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
                           <td className="p-6">
                             <div>
-                              <p className="text-xs font-black uppercase">{p.productName || 'Unknown Product'}</p>
-                              <p className="text-[10px] text-gray-500 font-bold">{p.phoneNumber}</p>
+                              <p className="text-xs font-black uppercase">{p.product_name || 'Unknown Product'}</p>
+                              <p className="text-[10px] text-gray-500 font-bold">{p.phone_number}</p>
                             </div>
                           </td>
                           <td className="p-6">
                             <div>
-                                <code className="text-[11px] text-indigo-400 font-black px-2 py-0.5 bg-indigo-400/10 rounded">{p.transactionId}</code>
+                                <code className="text-[11px] text-indigo-400 font-black px-2 py-0.5 bg-indigo-400/10 rounded">{p.transaction_id}</code>
                                 <p className="text-[10px] text-gray-500 mt-1">₹{p.amount}</p>
                             </div>
                           </td>
@@ -564,7 +532,7 @@ export default function Admin() {
                                  </button>
                                </div>
                              ) : (
-                               <p className="text-[10px] font-mono text-gray-600">{p.unlockPassword || 'RESOLVED'}</p>
+                               <p className="text-[10px] font-mono text-gray-600">{p.unlock_password || 'RESOLVED'}</p>
                              )}
                           </td>
                         </tr>
@@ -632,27 +600,6 @@ export default function Admin() {
              </div>
           )}
 
-          {activeTab === 'users' && (
-             <div className="space-y-6 animate-in fade-in duration-500">
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {allUsers.map((u) => (
-                  <div key={u.uid} className="bg-white/5 border border-white/10 p-5 rounded-[2rem] flex flex-col gap-4 group">
-                    <div className="flex items-center gap-4">
-                      <img src={u.photoURL} className="w-12 h-12 rounded-2xl object-cover border border-white/10" referrerPolicy="no-referrer" />
-                      <div className="min-w-0">
-                        <p className="text-xs font-black truncate">{u.displayName}</p>
-                        <p className="text-[9px] text-indigo-400 font-bold uppercase tracking-widest">{u.isPremium ? 'PRO STUDENT' : 'FREE STUDENT'}</p>
-                      </div>
-                    </div>
-                    <div className="pt-4 border-t border-white/5 flex items-center justify-between">
-                       <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">CLASS {u.class || 'NA'}</span>
-                       <span className="text-[9px] font-mono text-gray-700">{u.uid.slice(-8)}</span>
-                    </div>
-                  </div>
-                ))}
-               </div>
-             </div>
-          )}
           
           {activeTab === 'banners' && (
             <div className="space-y-6 animate-in fade-in duration-500">
@@ -682,8 +629,8 @@ export default function Admin() {
                     </div>
                     <div className="p-6 flex items-center justify-between border-t border-white/5">
                       <div className="min-w-0">
-                        <p className="text-xs font-black uppercase truncate">{banner.title}</p>
-                        <p className="text-[9px] text-gray-500 font-bold uppercase truncate">{banner.redirect_link || 'No Link'}</p>
+                        <p className="text-xs font-black uppercase truncate">{banner.location} Placement</p>
+                        <p className="text-[9px] text-gray-500 font-bold uppercase truncate">{banner.created_at}</p>
                       </div>
                       <div className="flex gap-2">
                         <button 
@@ -878,7 +825,7 @@ function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
 }
 
 function BannerModal({ onClose, onSave, banner, uploadHandler }: any) {
-  const [form, setForm] = useState(banner || { title: '', banner_image: '', redirect_link: '', location: 'home', is_active: true });
+  const [form, setForm] = useState(banner || { banner_image: '', location: 'home', is_active: true });
   const [upLoading, setUpLoading] = useState(false);
 
   return (
@@ -891,8 +838,11 @@ function BannerModal({ onClose, onSave, banner, uploadHandler }: any) {
 
         <div className="space-y-4">
            <div className="space-y-1.5">
-              <label className="text-[10px] text-gray-500 font-bold uppercase">Banner Title</label>
-              <input type="text" value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3" placeholder="e.g. New Batch Starting!" />
+              <label className="text-[10px] text-gray-500 font-bold uppercase">Placement Location</label>
+              <select value={form.location} onChange={e => setForm({...form, location: e.target.value})} className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3">
+                 <option value="home">Home Carousel</option>
+                 <option value="landing">Landing Header</option>
+              </select>
            </div>
 
            <div className="space-y-1.5">
@@ -914,24 +864,10 @@ function BannerModal({ onClose, onSave, banner, uploadHandler }: any) {
            </div>
 
            <div className="space-y-1.5">
-              <label className="text-[10px] text-gray-500 font-bold uppercase">Redirect Link</label>
-              <input type="text" value={form.redirect_link} onChange={e => setForm({...form, redirect_link: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3" placeholder="Optional" />
-           </div>
-
-           <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                 <label className="text-[10px] text-gray-500 font-bold uppercase">Placement</label>
-                 <select value={form.location} onChange={e => setForm({...form, location: e.target.value})} className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 outline-none">
-                    <option value="home">Homepage</option>
-                    <option value="landing">Landing Page</option>
-                 </select>
-              </div>
-              <div className="space-y-1.5">
-                 <label className="text-[10px] text-gray-500 font-bold uppercase">Status</label>
-                 <div className="flex items-center gap-2 mt-3 ml-2">
-                    <input type="checkbox" checked={form.is_active} onChange={e => setForm({...form, is_active: e.target.checked})} className="w-5 h-5 accent-indigo-600" />
-                    <span className="text-xs font-bold">Active Banner</span>
-                 </div>
+              <label className="text-[10px] text-gray-500 font-bold uppercase">Status</label>
+              <div className="flex items-center gap-2 mt-3 ml-2">
+                 <input type="checkbox" checked={form.is_active} onChange={e => setForm({...form, is_active: e.target.checked})} className="w-5 h-5 accent-indigo-600" />
+                 <span className="text-xs font-bold">Active Banner</span>
               </div>
            </div>
         </div>

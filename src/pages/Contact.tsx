@@ -4,10 +4,10 @@ import { ChevronLeft, Mail, Send, MessageCircle, MapPin, CheckCircle2 } from 'lu
 import { useNavigate } from 'react-router-dom';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../components/firebase';
-import { UserProfile } from '../types';
+import { AppUser } from '../types';
 
 interface ContactProps {
-  user: UserProfile | null;
+  user: AppUser | null;
 }
 
 export default function Contact({ user }: ContactProps) {

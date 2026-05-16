@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { UserProfile } from '../types';
+import { AppUser } from '../types';
 import { BookOpen, Crown, Bell, Zap, ExternalLink, ChevronRight } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { PromoCarousel } from '../components/PromoCarousel';
 import { dataBridge } from '../services/dataBridge';
 
 interface HomeProps {
-  user: UserProfile;
+  user: AppUser;
 }
 
 const CLASSES = ['8', '9', '10'];
@@ -108,14 +108,14 @@ export default function Home({ user }: HomeProps) {
                 className="bg-[#0f0f0f] border border-white/5 rounded-[3rem] overflow-hidden group shadow-2xl relative"
               >
                   <div className="absolute top-6 left-6 z-20">
-                    <div className={`${res.isPremium ? 'bg-indigo-600 text-white' : 'bg-emerald-500 text-black'} px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-600/20`}>
-                      {res.isPremium ? 'PREMIUM' : 'FREE'}
+                    <div className={`${res.is_premium ? 'bg-indigo-600 text-white' : 'bg-emerald-500 text-black'} px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-600/20`}>
+                      {res.is_premium ? 'PREMIUM' : 'FREE'}
                     </div>
                   </div>
 
                   <div className="aspect-[4/5] relative">
-                    {res.coverImage ? (
-                      <img src={res.coverImage} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                    {res.cover_image ? (
+                      <img src={res.cover_image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                     ) : (
                       <div className="w-full h-full bg-indigo-600/10 flex items-center justify-center">
                         <BookOpen className="w-16 h-16 text-indigo-500/20" />
@@ -131,7 +131,7 @@ export default function Home({ user }: HomeProps) {
                       onClick={() => navigate('/premium-notes')}
                       className="flex items-center justify-center gap-3 w-full py-5 rounded-[2rem] bg-indigo-600 text-white font-black text-[12px] uppercase tracking-widest shadow-2xl transition-all active:scale-95"
                     >
-                      {res.isPremium ? (
+                      {res.is_premium ? (
                         <>
                           <Crown className="w-4 h-4" /> GET ACCESS NOW
                         </>

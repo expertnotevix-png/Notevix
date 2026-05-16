@@ -133,8 +133,8 @@ export default function Landing() {
               return (
                 <div key={res.id} className="group bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-2xl transition-all hover:-translate-y-2">
                    <div className="aspect-[3/4] relative">
-                      {res.coverImage ? (
-                        <img src={res.coverImage} className="w-full h-full object-cover" />
+                      {res.cover_image ? (
+                        <img src={res.cover_image} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full bg-indigo-600/10 flex items-center justify-center">
                           <Icon size={40} className="text-indigo-500/20" />
@@ -147,9 +147,9 @@ export default function Landing() {
                    </div>
                    <div className="p-8 space-y-4">
                       <h3 className="text-lg font-black uppercase tracking-tight">{res.title || res.subject}</h3>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Class {res.classLevel} • Topic Pack</p>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Class {res.class_level} • Topic Pack</p>
                       <button 
-                        onClick={() => setSelectedPlan({ subject: res.subject, classLevel: res.classLevel, price: res.price || 39 })}
+                        onClick={() => setSelectedPlan({ subject: res.subject, classLevel: res.class_level, price: res.price || 39 })}
                         className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-500 transition-all shadow-lg active:scale-95"
                       >
                         Buy Now

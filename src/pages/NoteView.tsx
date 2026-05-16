@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { UserProfile, SubjectResource } from '../types';
+import { AppUser, SubjectResource } from '../types';
 import { dataBridge } from '../services/dataBridge';
 import { ChevronLeft, Lock, Download, Crown, Info } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface NoteViewProps {
-  user: UserProfile | null;
-  setUser: (user: UserProfile | null) => void;
+  user: AppUser | null;
+  setUser: (user: AppUser | null) => void;
 }
 
 export default function NoteView({ user }: NoteViewProps) {

@@ -1,84 +1,7 @@
 import { supabase } from '../lib/supabase';
-import { UserProfile, SubjectResource, VerifiedPayment } from '../types';
-
-const CACHE_TIME = 10 * 60 * 1000; // 10 minutes
-const cache: Record<string, { data: any, timestamp: number }> = {};
-
-const getCached = (key: string) => {
-  const item = cache[key];
-  if (item && Date.now() - item.timestamp < CACHE_TIME) {
-    return item.data;
-  }
-  return null;
-};
-
-const setCache = (key: string, data: any) => {
-  cache[key] = { data, timestamp: Date.now() };
-};
+import { SubjectResource, VerifiedPayment, PdfRequest, PromoBanner, AppSetting } from '../types';
 
 export const dataBridge = {
-  /**
-   * Profiles
-   */
-  async getProfile(uid: string) {
-    if (!supabase) return null;
-    try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
-      if (error) throw error;
-      return data;
-    } catch (err) {
-      console.error("Fetch profile failed:", err);
-      return null;
-    }
-  },
-
-  async syncProfile(uid: string, profile: Partial<UserProfile>) {
-    if (!supabase) return;
-    try {
-      await supabase.from('profiles').upsert({
-        id: uid,
-        full_name: profile.displayName,
-        avatar_url: profile.photoURL,
-        email: profile.email,
-        role: profile.role,
-        is_premium: profile.isPremium,
-        unlocked_resources: profile.unlockedResources || [],
-        updated_at: new Date().toISOString()
-      });
-    } catch (err) {}
-  },
-
-  async updateProfile(uid: string, data: any) {
-    if (!supabase) return false;
-    try {
-      const { error } = await supabase.from('profiles').update({
-        ...data,
-        updated_at: new Date().toISOString()
-      }).eq('id', uid);
-      if (error) throw error;
-      return true;
-    } catch (err) {
-      return false;
-    }
-  },
-
-  async getProfiles(limit = 100) {
-    if (!supabase) return [];
-    try {
-      const { data } = await supabase.from('profiles').select('*').limit(limit).order('updated_at', { ascending: false });
-      return (data || []).map(d => ({
-        ...d,
-        uid: d.id,
-        displayName: d.full_name,
-        photoURL: d.avatar_url,
-        class: d.class_level,
-        isPremium: d.is_premium
-      }));
-    } catch (err) {
-      return [];
-    }
-  },
-
   /**
    * Resources (subject_resources)
    */
@@ -89,13 +12,13 @@ export const dataBridge = {
       if (classLevel) query = query.eq('class_level', classLevel);
       if (isPremium !== undefined) query = query.eq('is_premium', isPremium);
       const { data } = await query;
-      return (data || []).map(d => this.mapResource(d));
+      return (data || []) as SubjectResource[];
     } catch (err) {
       return [];
     }
   },
 
-  async addResource(res: any) {
+  async addResource(res: Partial<SubjectResource>) {
     if (!supabase) return { success: false };
     try {
       const { data, error } = await supabase.from('subject_resources').insert(res).select().single();
@@ -106,7 +29,7 @@ export const dataBridge = {
     }
   },
 
-  async updateResource(id: string, res: any) {
+  async updateResource(id: string, res: Partial<SubjectResource>) {
     if (!supabase) return { success: false };
     try {
       const { error } = await supabase.from('subject_resources').update(res).eq('id', id);
@@ -128,22 +51,6 @@ export const dataBridge = {
     }
   },
 
-  mapResource(d: any): SubjectResource {
-    return {
-      id: d.id,
-      title: d.title,
-      subject: d.subject,
-      classLevel: d.class_level,
-      price: d.price || 0,
-      description: d.description,
-      coverImage: d.cover_image,
-      pdfLink: d.pdf_link,
-      unlockPassword: d.unlock_password,
-      isPremium: d.is_premium,
-      createdAt: d.created_at
-    };
-  },
-
   /**
    * Banners (promotional_banners)
    */
@@ -154,13 +61,13 @@ export const dataBridge = {
       if (!all) query = query.eq('is_active', true);
       if (location) query = query.eq('location', location);
       const { data } = await query;
-      return data || [];
+      return (data || []) as PromoBanner[];
     } catch (err) {
       return [];
     }
   },
 
-  async addBanner(banner: any) {
+  async addBanner(banner: Partial<PromoBanner>) {
     if (!supabase) return { success: false };
     try {
       const { data, error } = await supabase.from('promotional_banners').insert(banner).select().single();
@@ -171,7 +78,7 @@ export const dataBridge = {
     }
   },
 
-  async updateBanner(id: string, banner: any) {
+  async updateBanner(id: string, banner: Partial<PromoBanner>) {
     if (!supabase) return { success: false };
     try {
       const { error } = await supabase.from('promotional_banners').update(banner).eq('id', id);
@@ -203,40 +110,13 @@ export const dataBridge = {
         .select('*')
         .order('created_at', { ascending: false })
         .limit(limit);
-      
-      return (data || []).map(d => ({
-        id: d.id,
-        transactionId: d.transaction_id,
-        userId: d.user_id,
-        phoneNumber: d.phone_number,
-        amount: d.amount,
-        productName: d.product_name,
-        status: d.status,
-        unlockPassword: d.unlock_password,
-        approved: d.approved,
-        rejectionReason: d.rejection_reason,
-        createdAt: d.created_at
-      }));
-    } catch (err) {
-      console.error(err);
-      return [];
-    }
-  },
-
-  async getUserPayments(phoneNumber: string) {
-    if (!supabase) return [];
-    try {
-      const { data } = await supabase.from('verified_payments')
-        .select('*')
-        .eq('phone_number', phoneNumber)
-        .order('created_at', { ascending: false });
-      return data || [];
+      return (data || []) as VerifiedPayment[];
     } catch (err) {
       return [];
     }
   },
 
-  async saveVerifiedPayment(payment: any) {
+  async saveVerifiedPayment(payment: Partial<VerifiedPayment>) {
     if (!supabase) return { success: false };
     try {
       const { error } = await supabase.from('verified_payments').insert(payment);
@@ -253,8 +133,7 @@ export const dataBridge = {
       const { error } = await supabase.from('verified_payments').update({
         approved: true,
         status: 'approved',
-        unlock_password: unlockPassword,
-        updated_at: new Date().toISOString()
+        unlock_password: unlockPassword
       }).eq('id', id);
       if (error) throw error;
       return { success: true };
@@ -268,8 +147,7 @@ export const dataBridge = {
     try {
       const { error } = await supabase.from('verified_payments').update({
         status: 'rejected',
-        rejection_reason: reason,
-        updated_at: new Date().toISOString()
+        rejection_reason: reason
       }).eq('id', id);
       if (error) throw error;
       return { success: true };
@@ -284,10 +162,10 @@ export const dataBridge = {
   async getPdfRequests(status: string = 'pending') {
     if (!supabase) return [];
     try {
-      const query = supabase.from('pdf_requests').select('*').order('created_at', { ascending: false });
-      if (status !== 'all') query.eq('status', status);
+      let query = supabase.from('pdf_requests').select('*').order('created_at', { ascending: false });
+      if (status !== 'all') query = query.eq('status', status);
       const { data } = await query;
-      return data || [];
+      return (data || []) as PdfRequest[];
     } catch (err) {
       return [];
     }
@@ -298,8 +176,7 @@ export const dataBridge = {
     try {
       const { error } = await supabase.from('pdf_requests').update({
         status: 'approved',
-        approved: true,
-        updated_at: new Date().toISOString()
+        approved: true
       }).eq('id', id);
       if (error) throw error;
       return { success: true };
@@ -313,7 +190,7 @@ export const dataBridge = {
     try {
       const { error } = await supabase.from('pdf_requests').update({
         status: 'rejected',
-        updated_at: new Date().toISOString()
+        approved: false
       }).eq('id', id);
       if (error) throw error;
       return { success: true };
@@ -323,9 +200,38 @@ export const dataBridge = {
   },
 
   /**
+   * User Specific
+   */
+  async getUserPayments(phone: string) {
+    if (!supabase || !phone) return [];
+    try {
+      const { data } = await supabase.from('verified_payments')
+        .select('*')
+        .eq('phone_number', phone)
+        .order('created_at', { ascending: false });
+      return (data || []) as VerifiedPayment[];
+    } catch (err) {
+      return [];
+    }
+  },
+
+  /**
+   * App Settings
+   */
+  async getSettings() {
+    if (!supabase) return [];
+    try {
+      const { data } = await supabase.from('app_settings').select('*');
+      return (data || []) as AppSetting[];
+    } catch (err) {
+      return [];
+    }
+  },
+
+  /**
    * Storage
    */
-  async uploadImage(file: File, bucket: string = 'resources') {
+  async uploadImage(file: File, bucket: 'Cover' | 'banners') {
     if (!supabase) return { success: false, error: 'Supabase not connected' };
     try {
       const fileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
@@ -339,17 +245,20 @@ export const dataBridge = {
   },
 
   /**
-   * Analytics
+   * Analytics (Basic)
    */
   async getAdminStats() {
-    const stats: any = { totalUsers: 0, premiumUsers: 0, newUsersToday: 0 };
+    const stats: any = { totalRevenue: 0, premiumSales: 0, pendingRequests: 0 };
     if (!supabase) return stats;
     try {
-      const { count: total } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
-      stats.totalUsers = total || 0;
-      const { count: premium } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_premium', true);
-      stats.premiumUsers = premium || 0;
-      return stats;
+        const { data: payments } = await supabase.from('verified_payments').select('amount, status, approved');
+        if (payments) {
+            stats.totalRevenue = payments.filter(p => p.approved).reduce((sum, p) => sum + (p.amount || 0), 0);
+            stats.premiumSales = payments.filter(p => p.approved).length;
+        }
+        const { count } = await supabase.from('pdf_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+        stats.pendingRequests = count || 0;
+        return stats;
     } catch (err) {
       return stats;
     }

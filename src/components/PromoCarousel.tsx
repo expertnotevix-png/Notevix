@@ -13,16 +13,8 @@ export function PromoCarousel({ location = 'home' }: { location?: 'home' | 'land
     const fetchBanners = async () => {
       try {
         const data = await dataBridge.getBanners();
-        
         if (data && data.length > 0) {
-          const formattedBanners = data.map((d: any) => ({
-            id: d.id,
-            imageUrl: d.banner_image,
-            link: d.redirect_link,
-            title: d.title,
-            createdAt: d.created_at
-          }));
-          setBanners(formattedBanners);
+          setBanners(data);
           return;
         }
       } catch (error) {
@@ -33,9 +25,10 @@ export function PromoCarousel({ location = 'home' }: { location?: 'home' | 'land
         const fallbacks: PromoBanner[] = [
           {
             id: 'fallback_1',
-            imageUrl: 'https://images.unsplash.com/photo-1513258496099-48168024aec0?q=80&w=2070&auto=format&fit=crop',
-            link: '/premium-notes',
-            createdAt: new Date().toISOString()
+            banner_image: 'https://images.unsplash.com/photo-1513258496099-48168024aec0?q=80&w=2070&auto=format&fit=crop',
+            location: 'home',
+            is_active: true,
+            created_at: new Date().toISOString()
           }
         ];
         setBanners(fallbacks);
@@ -70,16 +63,14 @@ export function PromoCarousel({ location = 'home' }: { location?: 'home' | 'land
               navigate('/login');
               return;
             }
-            const destination = banners[currentIndex].link || '/premium-notes';
-            if (destination.startsWith('http')) {
-              window.open(destination, '_blank');
-            } else {
-              navigate(destination);
-            }
+            // For now, location field in DB seems to be used for placement, 
+            // if we need a redirect link, we might need to repurpose or add it.
+            // Based on user schema, location IS the only other column besides banner_image.
+            navigate('/premium-notes');
           }}
         >
           <img
-            src={banners[currentIndex].imageUrl}
+            src={banners[currentIndex].banner_image}
             alt="Promotion"
             className="w-full h-full object-cover"
           />

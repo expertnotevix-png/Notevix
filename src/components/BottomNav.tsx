@@ -2,10 +2,10 @@ import { NavLink } from 'react-router-dom';
 import { Home, MessageSquare, Trophy, User, LogIn, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
-import { UserProfile } from '../types';
+import { AppUser } from '../types';
 
 interface BottomNavProps {
-  user: UserProfile | null;
+  user: AppUser | null;
 }
 
 export default function BottomNav({ user }: BottomNavProps) {

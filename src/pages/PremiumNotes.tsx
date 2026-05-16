@@ -5,13 +5,13 @@ import {
   CreditCard, Loader2, Zap, Download,
   FileText, SearchCheck, Info, Clock, XCircle, BookOpen
 } from 'lucide-react';
-import { UserProfile, SubjectResource } from '../types';
+import { AppUser, SubjectResource } from '../types';
 import { toast } from 'sonner';
 import { dataBridge } from '../services/dataBridge';
 import { supabase } from '../lib/supabase';
 
 interface PremiumNotesProps {
-  user: UserProfile | null;
+  user: AppUser | null;
 }
 
 const CLASSES = ['8', '9', '10'];
@@ -63,7 +63,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
   const fetchUserHistory = async () => {
     if (!user) return;
-    const data = await dataBridge.getUserPayments(user.phoneNumber || '');
+    const data = await dataBridge.getUserPayments(user.phone || '');
     setPurchaseHistory(data);
   };
 
@@ -135,14 +135,14 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {resources.map((res) => {
             const history = purchaseHistory.find(h => h.product_name.includes(res.subject));
-            const unlocked = !res.isPremium || history?.status === 'approved' || user?.role === 'admin';
+            const unlocked = !res.is_premium || history?.status === 'approved' || user?.role === 'admin';
             const isPending = history?.status === 'pending';
 
             return (
               <div key={res.id} className="bg-[#0c0c0c] border border-white/5 rounded-[2rem] overflow-hidden flex flex-col group">
                 <div className="aspect-[3/4] relative overflow-hidden">
-                  {res.coverImage ? (
-                    <img src={res.coverImage} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                  {res.cover_image ? (
+                    <img src={res.cover_image} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
                   ) : (
                     <div className="w-full h-full bg-indigo-600/10 flex items-center justify-center">
                       <BookOpen size={40} className="text-indigo-500/20" />
@@ -155,17 +155,17 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                 <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
                   <div>
                     <h3 className="text-sm font-black uppercase truncate">{res.title || res.subject}</h3>
-                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Class {res.classLevel}</p>
+                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Class {res.class_level}</p>
                   </div>
 
                   {unlocked ? (
                     <div className="space-y-2">
                        <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20 text-center">
                           <span className="text-[7px] text-emerald-500 font-bold block">PASSWORD</span>
-                          <code className="text-xs font-black text-white">{history?.unlockPassword || res.unlockPassword || 'APPROVED'}</code>
+                          <code className="text-xs font-black text-white">{history?.unlock_password || res.unlock_password || 'APPROVED'}</code>
                        </div>
                        <a 
-                        href={getDirectDownloadLink(res.pdfLink || '')} 
+                        href={getDirectDownloadLink(res.pdf_link || '')} 
                         target="_blank" 
                         className="w-full py-3 bg-white text-black rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase shadow-lg shadow-white/10"
                        >
@@ -178,7 +178,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                     </div>
                   ) : (
                     <button 
-                      onClick={() => setSelectedPlan({ ...PREMIUM_PLANS[0], subject: res.subject, classLevel: res.classLevel, price: res.price })}
+                      onClick={() => setSelectedPlan({ ...PREMIUM_PLANS[0], subject: res.subject, classLevel: res.class_level, price: res.price })}
                       className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
                     >
                       <Crown size={14} className="inline mr-1" /> Buy Now
