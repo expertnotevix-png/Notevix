@@ -35,6 +35,8 @@ export default function Admin() {
   const [editingResource, setEditingResource] = useState<any | null>(null);
   const [isAddingBanner, setIsAddingBanner] = useState(false);
   const [notifData, setNotifData] = useState({ title: '', message: '', type: 'info' as const });
+  const [approveModal, setApproveModal] = useState<{ id: string, isOpen: boolean, password: string }>({ id: '', isOpen: false, password: '' });
+  const [rejectModal, setRejectModal] = useState<{ id: string, isOpen: boolean, reason: string }>({ id: '', isOpen: false, reason: '' });
 
   const navigate = useNavigate();
 
@@ -207,43 +209,74 @@ export default function Admin() {
     setAllUsers(users);
   };
 
-  const handleApprovePurchase = async (id: string) => {
-    const password = prompt("Enter unlock password for this resource:");
-    if (!password) return;
-    const res = await dataBridge.approvePurchase(id, password);
-    if (res.success) {
-      toast.success("Payment approved!");
-      fetchVerifiedPayments();
-    } else {
-      toast.error(res.error || "Failed to approve");
+  const handleApprovePurchase = async () => {
+    if (!approveModal.id || !approveModal.password) {
+      toast.error("Please enter a password");
+      return;
+    }
+    setLoading(true);
+    try {
+      console.log("Approving purchase:", approveModal.id);
+      const res = await dataBridge.approvePurchase(approveModal.id, approveModal.password);
+      if (res.success) {
+        toast.success("Payment approved!");
+        setApproveModal({ id: '', isOpen: false, password: '' });
+        await fetchVerifiedPayments();
+      } else {
+        toast.error(res.error || "Failed to approve");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "An unexpected error occurred");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleRejectPurchase = async (id: string) => {
-    const reason = prompt("Enter rejection reason:");
-    if (reason === null) return;
-    const res = await dataBridge.rejectPurchase(id, reason);
-    if (res.success) {
-      toast.success("Payment rejected");
-      fetchVerifiedPayments();
-    } else {
-      toast.error(res.error || "Failed to reject");
+  const handleRejectPurchase = async () => {
+    if (!rejectModal.id) return;
+    setLoading(true);
+    try {
+      const res = await dataBridge.rejectPurchase(rejectModal.id, rejectModal.reason);
+      if (res.success) {
+        toast.success("Payment rejected");
+        setRejectModal({ id: '', isOpen: false, reason: '' });
+        await fetchVerifiedPayments();
+      } else {
+        toast.error(res.error || "Failed to reject");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleApprovePdf = async (id: string) => {
-    const res = await dataBridge.approvePdfRequest(id);
-    if (res.success) {
-      toast.success("PDF request approved!");
-      fetchPdfRequests();
+    setLoading(true);
+    try {
+      const res = await dataBridge.approvePdfRequest(id);
+      if (res.success) {
+        toast.success("PDF request approved!");
+        await fetchPdfRequests();
+      } else {
+        toast.error(res.error || "Failed to approve");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleRejectPdf = async (id: string) => {
-    const res = await dataBridge.rejectPdfRequest(id);
-    if (res.success) {
-      toast.success("PDF request rejected");
-      fetchPdfRequests();
+    if (!confirm("Reject this request?")) return;
+    setLoading(true);
+    try {
+      const res = await dataBridge.rejectPdfRequest(id);
+      if (res.success) {
+        toast.success("PDF request rejected");
+        await fetchPdfRequests();
+      } else {
+        toast.error(res.error || "Failed to reject");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -269,6 +302,14 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex">
+      {/* Sidebar Overlay */}
+      {sidebarOpen && (
+        <div 
+          className="lg:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#0a0a0a] border-r border-white/5 transition-transform duration-300 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="h-full flex flex-col relative">
@@ -438,7 +479,7 @@ export default function Admin() {
 
           {activeTab === 'verified_payments' && (
             <div className="space-y-6 animate-in fade-in duration-500">
-               <div className="sticky top-0 z-20 bg-[#050505] -mx-8 px-8 py-4 mb-4 border-b border-white/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+               <div className="sticky top-0 z-[30] bg-[#050505]/80 backdrop-blur-xl -mx-8 px-8 py-6 mb-6 border-b border-white/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-2xl">
                 <div className="relative flex-1 max-w-md">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input 
@@ -503,10 +544,10 @@ export default function Admin() {
                           <td className="p-6 text-right">
                              {p.status === 'pending' ? (
                                <div className="flex justify-end gap-2">
-                                 <button onClick={() => handleApprovePurchase(p.id)} className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-white transition-all">
+                                 <button onClick={() => setApproveModal({ id: p.id, isOpen: true, password: '' })} className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-white transition-all">
                                    <Check size={16} />
                                  </button>
-                                 <button onClick={() => handleRejectPurchase(p.id)} className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all">
+                                 <button onClick={() => setRejectModal({ id: p.id, isOpen: true, reason: '' })} className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all">
                                    <X size={16} />
                                  </button>
                                </div>
@@ -669,6 +710,61 @@ export default function Admin() {
           banner={editingResource}
           uploadHandler={handleFileUpload}
         />
+      )}
+      {approveModal.isOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/90 backdrop-blur-md">
+           <div className="w-full max-w-sm bg-[#0a0a0a] border border-white/10 rounded-[2.5rem] p-10 space-y-6 animate-in zoom-in-95 duration-300">
+              <div className="flex justify-between items-center">
+                 <h3 className="text-xl font-black uppercase">Approve Payment</h3>
+                 <button onClick={() => setApproveModal({ ...approveModal, isOpen: false })} className="text-gray-500 hover:text-white transition-all"><X size={20} /></button>
+              </div>
+              <p className="text-xs text-gray-500 font-bold leading-relaxed uppercase">Enter the password the user will see to unlock their PDF material.</p>
+              <div className="space-y-1.5">
+                 <label className="text-[10px] text-gray-400 font-black uppercase ml-1">Unlock Password</label>
+                 <input 
+                  type="text" 
+                  value={approveModal.password} 
+                  onChange={e => setApproveModal({...approveModal, password: e.target.value})}
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-emerald-500 outline-none transition-all"
+                  placeholder="e.g. EXPN-9283"
+                  autoFocus
+                 />
+              </div>
+              <button 
+                onClick={handleApprovePurchase}
+                className="w-full py-4 bg-emerald-500 text-black rounded-2xl font-black text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-emerald-500/10"
+              >
+                Confirm Approval
+              </button>
+           </div>
+        </div>
+      )}
+      {rejectModal.isOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/90 backdrop-blur-md">
+           <div className="w-full max-w-sm bg-[#0a0a0a] border border-white/10 rounded-[2.5rem] p-10 space-y-6 animate-in zoom-in-95 duration-300">
+              <div className="flex justify-between items-center">
+                 <h3 className="text-xl font-black uppercase">Reject Payment</h3>
+                 <button onClick={() => setRejectModal({ ...rejectModal, isOpen: false })} className="text-gray-500 hover:text-white transition-all"><X size={20} /></button>
+              </div>
+              <p className="text-xs text-gray-500 font-bold leading-relaxed uppercase">Provide a reason for rejection. This will help the user understand why access was denied.</p>
+              <div className="space-y-1.5">
+                 <label className="text-[10px] text-gray-400 font-black uppercase ml-1">Reason (Optional)</label>
+                 <textarea 
+                  value={rejectModal.reason} 
+                  onChange={e => setRejectModal({...rejectModal, reason: e.target.value})}
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-red-500 outline-none transition-all min-h-[100px] resize-none"
+                  placeholder="e.g. Transaction ID not found or mismatched amount."
+                  autoFocus
+                 />
+              </div>
+              <button 
+                onClick={handleRejectPurchase}
+                className="w-full py-4 bg-red-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-red-500/10"
+              >
+                Confirm Rejection
+              </button>
+           </div>
+        </div>
       )}
     </div>
   );
