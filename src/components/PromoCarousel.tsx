@@ -17,8 +17,9 @@ export function PromoCarousel({ location = 'home' }: { location?: 'home' | 'land
         if (data && data.length > 0) {
           const formattedBanners = data.map((d: any) => ({
             id: d.id,
-            imageUrl: d.image_url,
-            link: d.link,
+            imageUrl: d.banner_image,
+            link: d.redirect_link,
+            title: d.title,
             createdAt: d.created_at
           }));
           setBanners(formattedBanners);

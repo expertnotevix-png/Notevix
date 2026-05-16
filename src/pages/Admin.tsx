@@ -102,14 +102,15 @@ export default function Admin() {
     setLoading(true);
     try {
       const resData = {
+        title: formData.title || formData.subject,
         subject: formData.subject,
-        class: formData.class,
-        price: formData.is_free ? 0 : parseFloat(formData.price || '0'),
+        class_level: formData.class_level,
+        price: formData.is_premium ? parseFloat(formData.price || '0') : 0,
         description: formData.description,
-        cover_url: formData.cover_url,
-        drive_link: formData.drive_link,
-        password: formData.password,
-        is_free: formData.is_free,
+        cover_image: formData.cover_image,
+        pdf_link: formData.pdf_link,
+        unlock_password: formData.unlock_password,
+        is_premium: formData.is_premium,
         updated_at: new Date().toISOString()
       };
 
@@ -159,14 +160,15 @@ export default function Admin() {
     setLoading(true);
     try {
       const bannerData = {
-        image_url: formData.image_url,
-        link: formData.link,
+        title: formData.title,
+        banner_image: formData.banner_image,
+        redirect_link: formData.redirect_link,
         location: formData.location,
         is_active: formData.is_active,
         updated_at: new Date().toISOString()
       };
 
-      if (editingResource) { // reusing editingResource state for banner editing or use another state
+      if (editingResource) { 
         const res = await dataBridge.updateBanner(editingResource.id, bannerData);
         if (res.success) toast.success("Banner updated");
         else throw new Error(res.error);
@@ -434,26 +436,36 @@ export default function Admin() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                 {subjectResources.filter(r => showOnlyPending ? !r.isFree : r.isFree).map((res) => (
+                 {subjectResources.filter(r => showOnlyPending ? r.isPremium : !r.isPremium).map((res) => (
                     <div key={res.id} className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] overflow-hidden flex flex-col group">
                       <div className="aspect-[3/4] relative bg-white/5">
-                         {res.coverUrl && <img src={res.coverUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />}
+                         {res.coverImage && <img src={res.coverImage} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />}
                          <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-[10px] font-black">
-                            {res.isFree ? 'FREE' : `₹${res.price}`}
+                            {!res.isPremium ? 'FREE' : `₹${res.price}`}
                          </div>
                       </div>
                       <div className="p-6 space-y-4">
                         <div>
-                           <h4 className="font-black text-sm uppercase truncate">{res.subject}</h4>
+                           <h4 className="font-black text-sm uppercase truncate">{res.title}</h4>
                            <p className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.2em] mt-1 space-x-2">
-                             <span>Class {res.class}</span>
+                             <span>Class {res.classLevel}</span>
                              <span>•</span>
                              <span className="text-indigo-400">V{res.id.slice(-4)}</span>
                            </p>
                         </div>
                         <div className="flex gap-2">
                            <button 
-                            onClick={() => { setEditingResource(res); setIsAddingResource(true); }}
+                            onClick={() => { 
+                              setEditingResource({
+                                ...res,
+                                class_level: res.classLevel,
+                                cover_image: res.coverImage,
+                                pdf_link: res.pdfLink,
+                                unlock_password: res.unlockPassword,
+                                is_premium: res.isPremium
+                              }); 
+                              setIsAddingResource(true); 
+                            }}
                             className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-[10px] font-black uppercase transition-all"
                            >
                              Edit
@@ -468,7 +480,7 @@ export default function Admin() {
                       </div>
                     </div>
                  ))}
-                 {subjectResources.filter(r => showOnlyPending ? !r.isFree : r.isFree).length === 0 && (
+                 {subjectResources.filter(r => showOnlyPending ? r.isPremium : !r.isPremium).length === 0 && (
                    <div className="col-span-full py-20 text-center text-gray-600 uppercase font-black text-xs tracking-widest border-2 border-dashed border-white/5 rounded-[3rem]">
                       No resources found in this category
                    </div>
@@ -534,7 +546,7 @@ export default function Admin() {
                           </td>
                           <td className="p-6">
                             <span className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${
-                              p.status === 'approved' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
+                              p.approved ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
                               p.status === 'rejected' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
                               'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'
                             }`}>
@@ -542,7 +554,7 @@ export default function Admin() {
                             </span>
                           </td>
                           <td className="p-6 text-right">
-                             {p.status === 'pending' ? (
+                             {!p.approved ? (
                                <div className="flex justify-end gap-2">
                                  <button onClick={() => setApproveModal({ id: p.id, isOpen: true, password: '' })} className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-white transition-all">
                                    <Check size={16} />
@@ -552,7 +564,7 @@ export default function Admin() {
                                  </button>
                                </div>
                              ) : (
-                               <p className="text-[10px] font-mono text-gray-600">{p.passwordUnlocked || 'RESOLVED'}</p>
+                               <p className="text-[10px] font-mono text-gray-600">{p.unlockPassword || 'RESOLVED'}</p>
                              )}
                           </td>
                         </tr>
@@ -585,17 +597,17 @@ export default function Admin() {
                         <tr key={req.id} className="hover:bg-white/[0.02] transition-colors">
                           <td className="p-6">
                             <div>
-                                <p className="text-xs font-black">{req.full_name}</p>
-                                <p className="text-[10px] text-gray-500 uppercase">Class {req.class_level} • {req.phone_number}</p>
+                                <p className="text-xs font-black">{req.student_name}</p>
+                                <p className="text-[10px] text-gray-500 uppercase">Class {req.class_name} • {req.phone_number}</p>
                             </div>
                           </td>
                           <td className="p-6">
-                            <span className="text-xs font-bold text-gray-300">{req.resource_name}</span>
+                            <span className="text-xs font-bold text-gray-300">{req.requested_pdf}</span>
                           </td>
                           <td className="p-6">
                             <div className="flex items-center gap-1.5 text-indigo-400">
                               <Instagram size={12} />
-                              <span className="text-[11px] font-bold">{req.social_handle}</span>
+                              <span className="text-[11px] font-bold">{req.instagram_username}</span>
                             </div>
                           </td>
                           <td className="p-6 text-right">
@@ -658,7 +670,7 @@ export default function Admin() {
                 {banners.map((banner) => (
                   <div key={banner.id} className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] overflow-hidden flex flex-col group">
                     <div className="aspect-[21/9] relative bg-white/5">
-                      {banner.image_url && <img src={banner.image_url} className="w-full h-full object-cover" />}
+                      {banner.banner_image && <img src={banner.banner_image} className="w-full h-full object-cover" />}
                       <div className="absolute top-4 right-4 flex gap-2">
                          <div className={`px-2 py-1 rounded-md text-[8px] font-black uppercase ${banner.is_active ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}>
                             {banner.is_active ? 'Active' : 'Paused'}
@@ -670,11 +682,16 @@ export default function Admin() {
                     </div>
                     <div className="p-6 flex items-center justify-between border-t border-white/5">
                       <div className="min-w-0">
-                        <p className="text-[10px] text-gray-500 font-bold uppercase truncate">{banner.link || 'No Link'}</p>
+                        <p className="text-xs font-black uppercase truncate">{banner.title}</p>
+                        <p className="text-[9px] text-gray-500 font-bold uppercase truncate">{banner.redirect_link || 'No Link'}</p>
                       </div>
                       <div className="flex gap-2">
                         <button 
-                          onClick={() => { setEditingResource(banner); setIsAddingResource(false); setIsAddingBanner(true); }}
+                          onClick={() => { 
+                            setEditingResource(banner); 
+                            setIsAddingResource(false); 
+                            setIsAddingBanner(true); 
+                          }}
                           className="p-2 bg-white/5 text-gray-400 rounded-lg hover:text-white transition-all"
                         >
                           <Edit2 size={14} />
@@ -773,26 +790,31 @@ export default function Admin() {
 // Sub-components
 function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
   const [form, setForm] = useState(resource || {
-    subject: '', class: '10', price: '39', description: '', cover_url: '', drive_link: '', password: '', is_free: false
+    title: '', subject: '', class_level: '10', price: '39', description: '', cover_image: '', pdf_link: '', unlock_password: '', is_premium: true
   });
   const [upLoading, setUpLoading] = useState(false);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-sm">
-      <div className="w-full max-w-xl bg-[#0a0a0a] border border-white/10 rounded-[3rem] p-10 space-y-8 animate-in zoom-in-95 duration-300">
+      <div className="w-full max-w-xl bg-[#0a0a0a] border border-white/10 rounded-[3rem] p-10 space-y-8 animate-in zoom-in-95 duration-300 overflow-y-auto max-h-[90vh] custom-scrollbar">
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-black uppercase">{resource ? 'Edit' : 'New'} Resource</h2>
           <button onClick={onClose}><X /></button>
+        </div>
+
+        <div className="space-y-1.5">
+            <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Title</label>
+            <input type="text" value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none" placeholder="e.g. Science Chapter 1 Notes" />
         </div>
         
         <div className="grid grid-cols-2 gap-4">
            <div className="space-y-1.5">
               <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Subject</label>
-              <input type="text" value={form.subject} onChange={e => setForm({...form, subject: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none" />
+              <input type="text" value={form.subject} onChange={e => setForm({...form, subject: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none" placeholder="e.g. Science" />
            </div>
            <div className="space-y-1.5">
               <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Class</label>
-              <select value={form.class} onChange={e => setForm({...form, class: e.target.value})} className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 outline-none">
+              <select value={form.class_level} onChange={e => setForm({...form, class_level: e.target.value})} className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 outline-none">
                  <option value="8">Class 8</option>
                  <option value="9">Class 9</option>
                  <option value="10">Class 10</option>
@@ -801,14 +823,19 @@ function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
         </div>
 
         <div className="space-y-1.5">
+           <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Description</label>
+           <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none min-h-[80px]" placeholder="Brief info about this material" />
+        </div>
+
+        <div className="space-y-1.5">
            <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Cover Image</label>
            <div className="flex gap-4">
-              <input type="text" value={form.cover_url} onChange={e => setForm({...form, cover_url: e.target.value})} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs" placeholder="URL or Upload" />
+              <input type="text" value={form.cover_image} onChange={e => setForm({...form, cover_image: e.target.value})} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs" placeholder="URL or Upload" />
               <input type="file" id="cover-up" className="hidden" onChange={async e => {
                  if (e.target.files?.[0]) {
                     setUpLoading(true);
-                    const url = await uploadHandler(e.target.files[0], 'covers');
-                    if (url) setForm({...form, cover_url: url});
+                    const url = await uploadHandler(e.target.files[0], 'Cover');
+                    if (url) setForm({...form, cover_image: url});
                     setUpLoading(false);
                  }
               }} />
@@ -820,21 +847,21 @@ function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
 
         <div className="grid grid-cols-2 gap-4">
            <div className="space-y-1.5">
-              <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Drive PDF Link</label>
-              <input type="text" value={form.drive_link} onChange={e => setForm({...form, drive_link: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3" />
+              <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">PDF Direct Link</label>
+              <input type="text" value={form.pdf_link} onChange={e => setForm({...form, pdf_link: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3" placeholder="Google Drive URL" />
            </div>
            <div className="space-y-1.5">
               <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Unlock Password</label>
-              <input type="text" value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3" />
+              <input type="text" value={form.unlock_password} onChange={e => setForm({...form, unlock_password: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3" placeholder="For Premium access" />
            </div>
         </div>
 
         <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
            <div className="flex items-center gap-3">
-              <input type="checkbox" checked={form.is_free} onChange={e => setForm({...form, is_free: e.target.checked})} className="w-5 h-5 accent-indigo-600" />
-              <span className="text-sm font-bold">Mark as FREE Material</span>
+              <input type="checkbox" checked={form.is_premium} onChange={e => setForm({...form, is_premium: e.target.checked})} className="w-5 h-5 accent-indigo-600" />
+              <span className="text-sm font-bold">Premium Material</span>
            </div>
-           {!form.is_free && (
+           {form.is_premium && (
              <div className="flex items-center gap-2">
                 <span className="text-[10px] font-black">₹</span>
                 <input type="number" value={form.price} onChange={e => setForm({...form, price: e.target.value})} className="w-16 bg-transparent border-b border-indigo-500 text-center outline-none" />
@@ -851,7 +878,7 @@ function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
 }
 
 function BannerModal({ onClose, onSave, banner, uploadHandler }: any) {
-  const [form, setForm] = useState(banner || { image_url: '', link: '', location: 'home', is_active: true });
+  const [form, setForm] = useState(banner || { title: '', banner_image: '', redirect_link: '', location: 'home', is_active: true });
   const [upLoading, setUpLoading] = useState(false);
 
   return (
@@ -864,14 +891,19 @@ function BannerModal({ onClose, onSave, banner, uploadHandler }: any) {
 
         <div className="space-y-4">
            <div className="space-y-1.5">
+              <label className="text-[10px] text-gray-500 font-bold uppercase">Banner Title</label>
+              <input type="text" value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3" placeholder="e.g. New Batch Starting!" />
+           </div>
+
+           <div className="space-y-1.5">
               <label className="text-[10px] text-gray-500 font-bold uppercase">Banner Image</label>
               <div className="flex gap-4">
-                <input type="text" value={form.image_url} onChange={e => setForm({...form, image_url: e.target.value})} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3" />
+                <input type="text" value={form.banner_image} onChange={e => setForm({...form, banner_image: e.target.value})} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3" placeholder="URL or Upload" />
                 <input type="file" id="banner-up" className="hidden" onChange={async e => {
                    if (e.target.files?.[0]) {
                       setUpLoading(true);
                       const url = await uploadHandler(e.target.files[0], 'banners');
-                      if (url) setForm({...form, image_url: url});
+                      if (url) setForm({...form, banner_image: url});
                       setUpLoading(false);
                    }
                 }} />
@@ -883,7 +915,7 @@ function BannerModal({ onClose, onSave, banner, uploadHandler }: any) {
 
            <div className="space-y-1.5">
               <label className="text-[10px] text-gray-500 font-bold uppercase">Redirect Link</label>
-              <input type="text" value={form.link} onChange={e => setForm({...form, link: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3" />
+              <input type="text" value={form.redirect_link} onChange={e => setForm({...form, redirect_link: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3" placeholder="Optional" />
            </div>
 
            <div className="grid grid-cols-2 gap-4">

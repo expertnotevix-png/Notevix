@@ -86,8 +86,8 @@ export const dataBridge = {
     if (!supabase) return [];
     try {
       let query = supabase.from('subject_resources').select('*').order('created_at', { ascending: false });
-      if (classLevel) query = query.eq('class', classLevel);
-      if (isPremium !== undefined) query = query.eq('is_free', !isPremium);
+      if (classLevel) query = query.eq('class_level', classLevel);
+      if (isPremium !== undefined) query = query.eq('is_premium', isPremium);
       const { data } = await query;
       return (data || []).map(d => this.mapResource(d));
     } catch (err) {
@@ -131,14 +131,15 @@ export const dataBridge = {
   mapResource(d: any): SubjectResource {
     return {
       id: d.id,
+      title: d.title,
       subject: d.subject,
-      class: d.class,
-      price: d.price || 39,
+      classLevel: d.class_level,
+      price: d.price || 0,
       description: d.description,
-      coverUrl: d.cover_url,
-      driveLink: d.drive_link,
-      password: d.password,
-      isFree: d.is_free,
+      coverImage: d.cover_image,
+      pdfLink: d.pdf_link,
+      unlockPassword: d.unlock_password,
+      isPremium: d.is_premium,
       createdAt: d.created_at
     };
   },
@@ -211,8 +212,9 @@ export const dataBridge = {
         amount: d.amount,
         productName: d.product_name,
         status: d.status,
-        passwordUnlocked: d.password_unlocked,
-        verified: d.verified,
+        unlockPassword: d.unlock_password,
+        approved: d.approved,
+        rejectionReason: d.rejection_reason,
         createdAt: d.created_at
       }));
     } catch (err) {
@@ -245,13 +247,13 @@ export const dataBridge = {
     }
   },
 
-  async approvePurchase(id: string, passwordUnlocked: string) {
+  async approvePurchase(id: string, unlockPassword: string) {
     if (!supabase) return { success: false };
     try {
       const { error } = await supabase.from('verified_payments').update({
-        verified: true,
+        approved: true,
         status: 'approved',
-        password_unlocked: passwordUnlocked,
+        unlock_password: unlockPassword,
         updated_at: new Date().toISOString()
       }).eq('id', id);
       if (error) throw error;
@@ -296,6 +298,7 @@ export const dataBridge = {
     try {
       const { error } = await supabase.from('pdf_requests').update({
         status: 'approved',
+        approved: true,
         updated_at: new Date().toISOString()
       }).eq('id', id);
       if (error) throw error;

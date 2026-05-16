@@ -76,13 +76,13 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     setIsSubmitting(true);
     try {
       const res = await dataBridge.saveVerifiedPayment({
-        product_name: selectedPlan.subject ? `${selectedPlan.subject} Notes (Class ${selectedPlan.class})` : selectedPlan.name,
+        product_name: selectedPlan.subject ? `${selectedPlan.subject} Notes (Class ${selectedPlan.classLevel})` : selectedPlan.name,
         amount: parseFloat(amount),
         transaction_id: transactionId,
         phone_number: phoneNumber,
         user_id: user?.uid || 'GUEST',
         status: 'pending',
-        verified: false
+        approved: false
       });
 
       if (!res.success) throw new Error(res.error || "Failed to submit");
@@ -135,37 +135,37 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {resources.map((res) => {
             const history = purchaseHistory.find(h => h.product_name.includes(res.subject));
-            const unlocked = res.isFree || history?.status === 'approved' || user?.role === 'admin';
+            const unlocked = !res.isPremium || history?.status === 'approved' || user?.role === 'admin';
             const isPending = history?.status === 'pending';
 
             return (
               <div key={res.id} className="bg-[#0c0c0c] border border-white/5 rounded-[2rem] overflow-hidden flex flex-col group">
                 <div className="aspect-[3/4] relative overflow-hidden">
-                  {res.coverUrl ? (
-                    <img src={res.coverUrl} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                  {res.coverImage ? (
+                    <img src={res.coverImage} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
                   ) : (
                     <div className="w-full h-full bg-indigo-600/10 flex items-center justify-center">
                       <BookOpen size={40} className="text-indigo-500/20" />
                     </div>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
-                  <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-[10px] font-black text-white">₹39</div>
+                  <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-[10px] font-black text-white">₹{res.price}</div>
                 </div>
 
                 <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
                   <div>
-                    <h3 className="text-sm font-black uppercase truncate">{res.subject} Notes</h3>
-                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Class {res.class}</p>
+                    <h3 className="text-sm font-black uppercase truncate">{res.title || res.subject}</h3>
+                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Class {res.classLevel}</p>
                   </div>
 
                   {unlocked ? (
                     <div className="space-y-2">
                        <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20 text-center">
                           <span className="text-[7px] text-emerald-500 font-bold block">PASSWORD</span>
-                          <code className="text-xs font-black text-white">{history?.password_unlocked || res.password || 'APPROVED'}</code>
+                          <code className="text-xs font-black text-white">{history?.unlockPassword || res.unlockPassword || 'APPROVED'}</code>
                        </div>
                        <a 
-                        href={getDirectDownloadLink(res.driveLink || '')} 
+                        href={getDirectDownloadLink(res.pdfLink || '')} 
                         target="_blank" 
                         className="w-full py-3 bg-white text-black rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase shadow-lg shadow-white/10"
                        >
@@ -178,7 +178,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                     </div>
                   ) : (
                     <button 
-                      onClick={() => setSelectedPlan({ ...PREMIUM_PLANS[0], subject: res.subject, class: res.class })}
+                      onClick={() => setSelectedPlan({ ...PREMIUM_PLANS[0], subject: res.subject, classLevel: res.classLevel, price: res.price })}
                       className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
                     >
                       <Crown size={14} className="inline mr-1" /> Buy Now

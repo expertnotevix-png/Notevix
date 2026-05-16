@@ -28,23 +28,23 @@ export interface VerifiedPayment {
   phoneNumber: string;
   amount: number;
   productName: string;
-  passwordUnlocked?: string;
-  verified: boolean;
+  unlockPassword?: string;
+  approved: boolean;
   status: string;
+  rejectionReason?: string;
   createdAt: string;
 }
 
 export interface PdfRequest {
   id: string;
-  full_name: string;
-  class_level: string;
+  student_name: string;
+  class_name: string;
   email: string;
   phone_number: string;
-  social_handle: string;
-  resource_id: string;
-  resource_name: string;
-  user_id: string;
+  instagram_username: string;
+  requested_pdf: string;
   status: 'pending' | 'approved' | 'rejected';
+  approved: boolean;
   created_at: string;
 }
 
@@ -58,18 +58,14 @@ export interface PromoBanner {
 
 export interface SubjectResource {
   id: string;
-  class: string;
+  title: string;
   subject: string;
-  onePageNotesUrl?: string;
-  fullNotesUrl?: string;
-  importantQuestionsUrl?: string;
-  examOrientedQuestionsUrl?: string;
-  coverUrl?: string;
-  driveLink?: string;
-  price?: number;
+  classLevel: string;
+  price: number;
   description?: string;
-  features?: string[];
-  isFree?: boolean;
-  password?: string;
+  coverImage?: string;
+  pdfLink?: string;
+  unlockPassword?: string;
+  isPremium: boolean;
   createdAt?: string;
 }

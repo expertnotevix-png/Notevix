@@ -107,17 +107,17 @@ export default function Home({ user }: HomeProps) {
                 whileHover={{ y: -5 }}
                 className="bg-[#0f0f0f] border border-white/5 rounded-[3rem] overflow-hidden group shadow-2xl relative"
               >
-                 <div className="absolute top-6 left-6 z-20">
-                    <div className="bg-emerald-500 text-black px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20">
-                      PREMIUM
+                  <div className="absolute top-6 left-6 z-20">
+                    <div className={`${res.isPremium ? 'bg-indigo-600 text-white' : 'bg-emerald-500 text-black'} px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-600/20`}>
+                      {res.isPremium ? 'PREMIUM' : 'FREE'}
                     </div>
                   </div>
 
                   <div className="aspect-[4/5] relative">
-                    {res.coverUrl ? (
-                      <img src={res.coverUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                    {res.coverImage ? (
+                      <img src={res.coverImage} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                     ) : (
-                      <div className="w-full h-full bg-indigo-500/10 flex items-center justify-center">
+                      <div className="w-full h-full bg-indigo-600/10 flex items-center justify-center">
                         <BookOpen className="w-16 h-16 text-indigo-500/20" />
                       </div>
                     )}
@@ -125,13 +125,21 @@ export default function Home({ user }: HomeProps) {
                   </div>
 
                   <div className="p-8 pt-6 space-y-4">
-                    <h4 className="text-xl font-black uppercase text-white truncate">{res.subject} Notes</h4>
+                    <h4 className="text-xl font-black uppercase text-white truncate">{res.title || res.subject}</h4>
                     
                     <button 
                       onClick={() => navigate('/premium-notes')}
                       className="flex items-center justify-center gap-3 w-full py-5 rounded-[2rem] bg-indigo-600 text-white font-black text-[12px] uppercase tracking-widest shadow-2xl transition-all active:scale-95"
                     >
-                      <Crown className="w-4 h-4" /> GET ACCESS NOW
+                      {res.isPremium ? (
+                        <>
+                          <Crown className="w-4 h-4" /> GET ACCESS NOW
+                        </>
+                      ) : (
+                        <>
+                          <BookOpen className="w-4 h-4" /> OPEN NOTES
+                        </>
+                      )}
                     </button>
                     
                     <p className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.2em] text-center italic">
