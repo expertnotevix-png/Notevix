@@ -9,7 +9,7 @@ import {
   MessageSquare, Bell, Send, CheckCircle2, Clock, ShieldCheck,
   Shield, RefreshCw, CreditCard, Check, XCircle, Users, 
   Instagram, LayoutDashboard, BarChart3, Settings, Menu, LogOut, Search, TrendingUp, DollarSign, UserCheck,
-  BookOpen, Zap, AlertCircle, AlertTriangle, Smartphone
+  BookOpen, Zap, AlertCircle, AlertTriangle, Smartphone, FileText
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
