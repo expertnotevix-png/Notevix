@@ -4,7 +4,6 @@ export interface VerifiedPayment {
   transaction_id: string;
   amount: number;
   product_name: string;
-  user_id?: string;
   status: string;
   unlock_password?: string;
   rejection_reason?: string;
@@ -37,21 +36,22 @@ export interface PdfRequest {
 
 export interface SubjectResource {
   id: string;
-  title: string;
   subject: string;
   class_level: string;
   description?: string;
   cover_image?: string;
-  pdf_link?: string;
+  drive_link?: string;
   price: number;
   is_premium: boolean;
-  unlock_password?: string;
+  pdf_password?: string;
   created_at: string;
 }
 
 export interface PromoBanner {
   id: string;
+  title: string;
   banner_image: string;
+  redirect_link: string;
   location: string;
   is_active: boolean;
   created_at: string;

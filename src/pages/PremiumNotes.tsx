@@ -80,7 +80,6 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         amount: parseFloat(amount),
         transaction_id: transactionId,
         phone_number: phoneNumber,
-        user_id: user?.uid || 'GUEST',
         status: 'pending',
         approved: false
       });
@@ -154,7 +153,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
                 <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
                   <div>
-                    <h3 className="text-sm font-black uppercase truncate">{res.title || res.subject}</h3>
+                    <h3 className="text-sm font-black uppercase truncate">{res.subject}</h3>
                     <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Class {res.class_level}</p>
                   </div>
 
@@ -162,10 +161,10 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                     <div className="space-y-2">
                        <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20 text-center">
                           <span className="text-[7px] text-emerald-500 font-bold block">PASSWORD</span>
-                          <code className="text-xs font-black text-white">{history?.unlock_password || res.unlock_password || 'APPROVED'}</code>
+                          <code className="text-xs font-black text-white">{history?.unlock_password || res.pdf_password || 'APPROVED'}</code>
                        </div>
                        <a 
-                        href={getDirectDownloadLink(res.pdf_link || '')} 
+                        href={getDirectDownloadLink(res.drive_link || '')} 
                         target="_blank" 
                         className="w-full py-3 bg-white text-black rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase shadow-lg shadow-white/10"
                        >

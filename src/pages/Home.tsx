@@ -125,7 +125,7 @@ export default function Home({ user }: HomeProps) {
                   </div>
 
                   <div className="p-8 pt-6 space-y-4">
-                    <h4 className="text-xl font-black uppercase text-white truncate">{res.title || res.subject}</h4>
+                    <h4 className="text-xl font-black uppercase text-white truncate">{res.subject}</h4>
                     
                     <button 
                       onClick={() => navigate('/premium-notes')}

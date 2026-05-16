@@ -41,104 +41,56 @@ export const supabase = (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUr
  * END;
  * $$ LANGUAGE plpgsql;
  * 
- * -- 1. Profiles Table (Uses TEXT for Firebase UIDs)
- * CREATE TABLE IF NOT EXISTS public.profiles (
- *   id TEXT PRIMARY KEY, -- Firebase UID
- *   full_name TEXT,
- *   email TEXT,
- *   avatar_url TEXT,
- *   class_level TEXT DEFAULT '10',
- *   xp INTEGER DEFAULT 0,
- *   streak INTEGER DEFAULT 0,
+ * -- 1. Subject Resources Table
+ * CREATE TABLE IF NOT EXISTS public.subject_resources (
+ *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ *   subject TEXT NOT NULL,
+ *   class_level TEXT NOT NULL,
+ *   description TEXT,
+ *   drive_link TEXT,
+ *   cover_image TEXT,
+ *   price FLOAT DEFAULT 0,
+ *   pdf_password TEXT,
  *   is_premium BOOLEAN DEFAULT false,
- *   plan_type TEXT,
- *   unlocked_resources TEXT[] DEFAULT '{}',
- *   unlocked_classes TEXT[] DEFAULT '{}',
- *   saved_notes TEXT[] DEFAULT '{}',
- *   created_at TIMESTAMPTZ DEFAULT NOW(),
- *   updated_at TIMESTAMPTZ DEFAULT NOW()
+ *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
  * 
- * -- 2. User Points Table (user_id is TEXT)
- * CREATE TABLE IF NOT EXISTS public.user_points (
- *   user_id TEXT PRIMARY KEY, -- Firebase UID
- *   total_points INTEGER DEFAULT 0,
- *   total_minutes INTEGER DEFAULT 0,
- *   streak_days INTEGER DEFAULT 0,
- *   last_visit_date BIGINT, 
- *   last_updated TIMESTAMPTZ DEFAULT NOW()
- * );
- * 
- * -- 3. Posts (author_id is TEXT)
- * CREATE TABLE IF NOT EXISTS public.posts (
+ * -- 2. Promotional Banners Table
+ * CREATE TABLE IF NOT EXISTS public.promotional_banners (
  *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
- *   author_id TEXT NOT NULL,
  *   title TEXT,
- *   content TEXT,
- *   subject TEXT,
- *   upvotes INTEGER DEFAULT 0,
- *   downvotes INTEGER DEFAULT 0,
+ *   banner_image TEXT NOT NULL,
+ *   redirect_link TEXT,
+ *   location TEXT,
+ *   is_active BOOLEAN DEFAULT true,
  *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
  * 
- * -- 4. Replies (author_id is TEXT)
- * CREATE TABLE IF NOT EXISTS public.replies (
+ * -- 3. Verified Payments Table
+ * CREATE TABLE IF NOT EXISTS public.verified_payments (
  *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
- *   post_id UUID REFERENCES public.posts(id),
- *   author_id TEXT NOT NULL,
- *   content TEXT,
- *   created_at TIMESTAMPTZ DEFAULT NOW()
- * );
- * 
- * -- 5. Community Chat (user_id is TEXT)
- * CREATE TABLE IF NOT EXISTS public.community_chat (
- *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
- *   user_id TEXT NOT NULL,
- *   user_name TEXT,
- *   message TEXT NOT NULL,
- *   created_at TIMESTAMPTZ DEFAULT NOW()
- * );
- * 
- * -- 6. Story Unlocks (user_id is TEXT)
- * CREATE TABLE IF NOT EXISTS public.story_unlocks (
- *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
- *   user_id TEXT NOT NULL,
- *   resource_id TEXT,
- *   template_id UUID,
+ *   phone_number TEXT NOT NULL,
+ *   transaction_id TEXT NOT NULL,
+ *   amount FLOAT NOT NULL,
+ *   product_name TEXT,
  *   status TEXT DEFAULT 'pending',
+ *   unlock_password TEXT,
+ *   rejection_reason TEXT,
+ *   approved BOOLEAN DEFAULT false,
  *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
  * 
- * -- 7. Schedules (user_id is TEXT)
- * CREATE TABLE IF NOT EXISTS public.schedules (
+ * -- 4. PDF Requests Table
+ * CREATE TABLE IF NOT EXISTS public.pdf_requests (
  *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
- *   user_id TEXT NOT NULL,
- *   title TEXT,
- *   subject TEXT,
- *   date TEXT,
- *   time TEXT,
- *   completed BOOLEAN DEFAULT false,
+ *   student_name TEXT NOT NULL,
+ *   class_name TEXT NOT NULL,
+ *   email TEXT,
+ *   phone_number TEXT,
+ *   instagram_username TEXT,
+ *   requested_pdf TEXT,
+ *   status TEXT DEFAULT 'pending',
+ *   approved BOOLEAN DEFAULT false,
  *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
- * 
- * -- 8. RPC Functions (Updated for TEXT uids)
- * CREATE OR REPLACE FUNCTION increment_xp(user_id TEXT, amount INT)
- * RETURNS void AS $$
- * BEGIN
- *   UPDATE public.profiles
- *   SET xp = COALESCE(xp, 0) + amount,
- *       updated_at = NOW()
- *   WHERE id = user_id;
- * END;
- * $$ LANGUAGE plpgsql;
- * 
- * CREATE OR REPLACE FUNCTION increment_focus_minutes(user_id TEXT, amount INT)
- * RETURNS void AS $$
- * BEGIN
- *   UPDATE public.user_points
- *   SET total_minutes = COALESCE(total_minutes, 0) + amount,
- *       last_updated = NOW()
- *   WHERE user_id = user_id;
- * END;
- * $$ LANGUAGE plpgsql;
  */

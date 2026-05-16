@@ -97,14 +97,13 @@ export default function Admin() {
     setLoading(true);
     try {
       const resData = {
-        title: formData.title || formData.subject,
         subject: formData.subject,
         class_level: formData.class_level,
         price: formData.is_premium ? parseFloat(formData.price || '0') : 0,
         description: formData.description,
         cover_image: formData.cover_image,
-        pdf_link: formData.pdf_link,
-        unlock_password: formData.unlock_password,
+        drive_link: formData.drive_link,
+        pdf_password: formData.pdf_password,
         is_premium: formData.is_premium
       };
 
@@ -156,7 +155,7 @@ export default function Admin() {
       const bannerData = {
         title: formData.title,
         banner_image: formData.banner_image,
-        redirect_link: formData.redirect_link,
+        redirect_link: formData.redirect_link || '/premium-notes',
         location: formData.location,
         is_active: formData.is_active
       };
@@ -421,7 +420,7 @@ export default function Admin() {
                       </div>
                       <div className="p-6 space-y-4">
                         <div>
-                           <h4 className="font-black text-sm uppercase truncate">{res.title}</h4>
+                           <h4 className="font-black text-sm uppercase truncate">{res.subject}</h4>
                            <p className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.2em] mt-1 space-x-2">
                              <span>Class {res.class_level}</span>
                              <span>•</span>
@@ -737,7 +736,7 @@ export default function Admin() {
 // Sub-components
 function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
   const [form, setForm] = useState(resource || {
-    title: '', subject: '', class_level: '10', price: '39', description: '', cover_image: '', pdf_link: '', unlock_password: '', is_premium: true
+    subject: '', class_level: '10', price: '39', description: '', cover_image: '', drive_link: '', pdf_password: '', is_premium: true
   });
   const [upLoading, setUpLoading] = useState(false);
 
@@ -749,17 +748,12 @@ function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
           <button onClick={onClose}><X /></button>
         </div>
 
-        <div className="space-y-1.5">
-            <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Title</label>
-            <input type="text" value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none" placeholder="e.g. Science Chapter 1 Notes" />
-        </div>
-        
         <div className="grid grid-cols-2 gap-4">
-           <div className="space-y-1.5">
-              <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Subject</label>
-              <input type="text" value={form.subject} onChange={e => setForm({...form, subject: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none" placeholder="e.g. Science" />
+           <div className="space-y-1.5 col-span-2">
+              <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Subject / Material Name</label>
+              <input type="text" value={form.subject} onChange={e => setForm({...form, subject: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none" placeholder="e.g. Science Chapter 1" />
            </div>
-           <div className="space-y-1.5">
+           <div className="space-y-1.5 col-span-2">
               <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Class</label>
               <select value={form.class_level} onChange={e => setForm({...form, class_level: e.target.value})} className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 outline-none">
                  <option value="8">Class 8</option>
@@ -794,12 +788,12 @@ function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
 
         <div className="grid grid-cols-2 gap-4">
            <div className="space-y-1.5">
-              <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">PDF Direct Link</label>
-              <input type="text" value={form.pdf_link} onChange={e => setForm({...form, pdf_link: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3" placeholder="Google Drive URL" />
+              <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Drive Link</label>
+              <input type="text" value={form.drive_link} onChange={e => setForm({...form, drive_link: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3" placeholder="Google Drive URL" />
            </div>
            <div className="space-y-1.5">
-              <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Unlock Password</label>
-              <input type="text" value={form.unlock_password} onChange={e => setForm({...form, unlock_password: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3" placeholder="For Premium access" />
+              <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">PDF Password</label>
+              <input type="text" value={form.pdf_password} onChange={e => setForm({...form, pdf_password: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3" placeholder="For Premium access" />
            </div>
         </div>
 
@@ -825,7 +819,7 @@ function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
 }
 
 function BannerModal({ onClose, onSave, banner, uploadHandler }: any) {
-  const [form, setForm] = useState(banner || { banner_image: '', location: 'home', is_active: true });
+  const [form, setForm] = useState(banner || { title: '', banner_image: '', redirect_link: '', location: 'home', is_active: true });
   const [upLoading, setUpLoading] = useState(false);
 
   return (
@@ -837,6 +831,11 @@ function BannerModal({ onClose, onSave, banner, uploadHandler }: any) {
         </div>
 
         <div className="space-y-4">
+           <div className="space-y-1.5">
+              <label className="text-[10px] text-gray-500 font-bold uppercase">Banner Title</label>
+              <input type="text" value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none" placeholder="e.g. New Year Offer" />
+           </div>
+
            <div className="space-y-1.5">
               <label className="text-[10px] text-gray-500 font-bold uppercase">Placement Location</label>
               <select value={form.location} onChange={e => setForm({...form, location: e.target.value})} className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3">
@@ -861,6 +860,11 @@ function BannerModal({ onClose, onSave, banner, uploadHandler }: any) {
                    {upLoading ? '...' : 'Upload'}
                 </label>
               </div>
+           </div>
+
+           <div className="space-y-1.5">
+              <label className="text-[10px] text-gray-500 font-bold uppercase">Redirect Link</label>
+              <input type="text" value={form.redirect_link} onChange={e => setForm({...form, redirect_link: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none" placeholder="e.g. /premium-notes" />
            </div>
 
            <div className="space-y-1.5">

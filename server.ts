@@ -196,7 +196,7 @@ async function startServer() {
     if (req.method === 'GET') return res.json({ message: "Activation active." });
     if (req.method !== 'POST') return res.status(405).json({ error: "Method Not Allowed" });
 
-    const { transactionId, userId, planId, planName, amount, whatsappNumber, planType, targetClass, screenshotUrl } = req.body;
+    const { transactionId, planName, amount, whatsappNumber, planType, targetClass } = req.body;
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -210,15 +210,11 @@ async function startServer() {
       const decodedToken = await adminAuth.verifyIdToken(idToken);
       const authenticatedUserId = decodedToken.uid;
 
-      if (authenticatedUserId !== userId) {
-        return res.status(403).json({ error: "Identity verify failed" });
-      }
-
       if (!transactionId) {
         return res.status(400).json({ error: "Transaction ID missing" });
       }
 
-      console.log(`[Webhook][${correlationId}] Processing Tx: ${transactionId} for User: ${userId}`);
+      console.log(`[Webhook][${correlationId}] Processing Tx: ${transactionId}`);
       
       // 1. Transaction Dead-lock Check (Prevent multi-use)
       const existingTx = await dbAdmin.collection("purchase_requests")
@@ -232,29 +228,18 @@ async function startServer() {
         return res.status(409).json({ error: "This transaction ID has already been used for activation." });
       }
 
-      // 2. User Check
-      const userRef = dbAdmin.collection("users").doc(userId);
-      const userSnap = await userRef.get();
-
-      if (!userSnap.exists) {
-        return res.status(404).json({ error: "User profile not found. Please sign in again." });
-      }
-
-      const userData = userSnap.data();
+      // 2. Doc
       const batch = dbAdmin.batch();
       const requestRef = dbAdmin.collection("purchase_requests").doc();
 
       // 3. Update Doc
       batch.set(requestRef, {
-        userId,
-        planId,
         planName,
         amount,
         transactionId,
         whatsappNumber,
         planType,
         targetClass: targetClass || null,
-        screenshotUrl: screenshotUrl || null,
         status: 'approved',
         verifiedAt: new Date().toISOString(),
         verifiedBy: 'ai_system',
@@ -262,36 +247,8 @@ async function startServer() {
         correlationId
       });
 
-      // 4. Upgrade Logic
-      const updates: any = { 
-        isPremium: true,
-        premiumActivatedAt: new Date().toISOString()
-      };
-
-      if (planType === 'subscription') {
-        updates.subscriptionExpiry = new Date(Date.now() + 32 * 24 * 60 * 60 * 1000).toISOString(); // 32 days grace
-      } else if (planType === 'one-time' && targetClass) {
-        const currentUnlocked = (userData?.unlockedClasses || []) as string[];
-        if (!currentUnlocked.includes(targetClass)) {
-          updates.unlockedClasses = [...currentUnlocked, targetClass];
-        }
-      }
-
-      batch.update(userRef, updates);
-
-      // 5. Notification
-      const notificationRef = dbAdmin.collection("notifications").doc();
-      batch.set(notificationRef, {
-        userId: userId,
-        title: 'Premium Unlocked! ⚡',
-        message: `Your ${planName} is now active. AI has verified Tx: ${transactionId}.`,
-        type: 'rank',
-        read: false,
-        timestamp: new Date().toISOString()
-      });
-
       await batch.commit();
-      console.log(`[Webhook][${correlationId}] SUCCESS: Access granted to ${userId}`);
+      console.log(`[Webhook][${correlationId}] SUCCESS: Access granted for Tx: ${transactionId}`);
       res.json({ success: true, message: "Activated!" });
     } catch (error: any) {
       console.error(`[Webhook][${correlationId}] FATAL:`, error);

@@ -25,7 +25,9 @@ export function PromoCarousel({ location = 'home' }: { location?: 'home' | 'land
         const fallbacks: PromoBanner[] = [
           {
             id: 'fallback_1',
+            title: 'Premium Notes Available',
             banner_image: 'https://images.unsplash.com/photo-1513258496099-48168024aec0?q=80&w=2070&auto=format&fit=crop',
+            redirect_link: '/premium-notes',
             location: 'home',
             is_active: true,
             created_at: new Date().toISOString()
@@ -59,19 +61,24 @@ export function PromoCarousel({ location = 'home' }: { location?: 'home' | 'land
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           className="w-full h-full cursor-pointer"
           onClick={() => {
+            if (banners[currentIndex].redirect_link) {
+              if (banners[currentIndex].redirect_link.startsWith('http')) {
+                window.open(banners[currentIndex].redirect_link, '_blank');
+              } else {
+                navigate(banners[currentIndex].redirect_link);
+              }
+              return;
+            }
             if (location === 'landing') {
               navigate('/login');
               return;
             }
-            // For now, location field in DB seems to be used for placement, 
-            // if we need a redirect link, we might need to repurpose or add it.
-            // Based on user schema, location IS the only other column besides banner_image.
             navigate('/premium-notes');
           }}
         >
           <img
             src={banners[currentIndex].banner_image}
-            alt="Promotion"
+            alt={banners[currentIndex].title || "Promotion"}
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
