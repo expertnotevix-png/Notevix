@@ -162,7 +162,7 @@ export default function Admin() {
         image_url: formData.image_url,
         link: formData.link,
         location: formData.location,
-        active: formData.active,
+        is_active: formData.is_active,
         updated_at: new Date().toISOString()
       };
 
@@ -660,8 +660,8 @@ export default function Admin() {
                     <div className="aspect-[21/9] relative bg-white/5">
                       {banner.image_url && <img src={banner.image_url} className="w-full h-full object-cover" />}
                       <div className="absolute top-4 right-4 flex gap-2">
-                         <div className={`px-2 py-1 rounded-md text-[8px] font-black uppercase ${banner.active ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}>
-                            {banner.active ? 'Active' : 'Paused'}
+                         <div className={`px-2 py-1 rounded-md text-[8px] font-black uppercase ${banner.is_active ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}>
+                            {banner.is_active ? 'Active' : 'Paused'}
                          </div>
                          <div className="px-2 py-1 rounded-md bg-black/50 text-white text-[8px] font-black uppercase backdrop-blur-md">
                             {banner.location}
@@ -851,7 +851,7 @@ function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
 }
 
 function BannerModal({ onClose, onSave, banner, uploadHandler }: any) {
-  const [form, setForm] = useState(banner || { image_url: '', link: '', location: 'home', active: true });
+  const [form, setForm] = useState(banner || { image_url: '', link: '', location: 'home', is_active: true });
   const [upLoading, setUpLoading] = useState(false);
 
   return (
@@ -897,7 +897,7 @@ function BannerModal({ onClose, onSave, banner, uploadHandler }: any) {
               <div className="space-y-1.5">
                  <label className="text-[10px] text-gray-500 font-bold uppercase">Status</label>
                  <div className="flex items-center gap-2 mt-3 ml-2">
-                    <input type="checkbox" checked={form.active} onChange={e => setForm({...form, active: e.target.checked})} className="w-5 h-5 accent-indigo-600" />
+                    <input type="checkbox" checked={form.is_active} onChange={e => setForm({...form, is_active: e.target.checked})} className="w-5 h-5 accent-indigo-600" />
                     <span className="text-xs font-bold">Active Banner</span>
                  </div>
               </div>

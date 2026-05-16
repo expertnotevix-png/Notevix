@@ -150,7 +150,7 @@ export const dataBridge = {
     if (!supabase) return [];
     try {
       let query = supabase.from('promotional_banners').select('*').order('created_at', { ascending: false });
-      if (!all) query = query.eq('active', true);
+      if (!all) query = query.eq('is_active', true);
       if (location) query = query.eq('location', location);
       const { data } = await query;
       return data || [];
