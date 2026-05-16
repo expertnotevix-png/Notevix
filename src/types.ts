@@ -17,7 +17,6 @@ export interface AppUser {
   displayName: string;
   photoURL: string;
   role: 'admin' | 'student';
-  class?: string;
   phone?: string;
 }
 

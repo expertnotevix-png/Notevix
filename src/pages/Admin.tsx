@@ -31,7 +31,7 @@ export default function Admin() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showOnlyPending, setShowOnlyPending] = useState(true);
   const [isAddingResource, setIsAddingResource] = useState(false);
-  const [editingResource, setEditingResource] = useState<any | null>(null);
+  const [editingItem, setEditingItem] = useState<any | null>(null);
   const [isAddingBanner, setIsAddingBanner] = useState(false);
   const [notifData, setNotifData] = useState({ title: '', message: '', type: 'info' as const });
   const [approveModal, setApproveModal] = useState<{ id: string, isOpen: boolean, password: string }>({ id: '', isOpen: false, password: '' });
@@ -107,8 +107,8 @@ export default function Admin() {
         is_premium: formData.is_premium
       };
 
-      if (editingResource) {
-        const res = await dataBridge.updateResource(editingResource.id, resData);
+      if (editingItem) {
+        const res = await dataBridge.updateResource(editingItem.id, resData);
         if (res.success) toast.success("Resource updated");
         else throw new Error(res.error);
       } else {
@@ -117,7 +117,7 @@ export default function Admin() {
         else throw new Error(res.error);
       }
       setIsAddingResource(false);
-      setEditingResource(null);
+      setEditingItem(null);
       fetchSubjectResources();
     } catch (err: any) {
       toast.error(err.message || "Operation failed");
@@ -160,8 +160,8 @@ export default function Admin() {
         is_active: formData.is_active
       };
 
-      if (editingResource) { 
-        const res = await dataBridge.updateBanner(editingResource.id, bannerData);
+      if (editingItem) { 
+        const res = await dataBridge.updateBanner(editingItem.id, bannerData);
         if (res.success) toast.success("Banner updated");
         else throw new Error(res.error);
       } else {
@@ -170,7 +170,7 @@ export default function Admin() {
         else throw new Error(res.error);
       }
       setIsAddingBanner(false);
-      setEditingResource(null);
+      setEditingItem(null);
       fetchBanners();
     } catch (err: any) {
       toast.error(err.message || "Operation failed");
@@ -430,7 +430,7 @@ export default function Admin() {
                         <div className="flex gap-2">
                            <button 
                             onClick={() => { 
-                              setEditingResource(res); 
+                              setEditingItem(res); 
                               setIsAddingResource(true); 
                             }}
                             className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-[10px] font-black uppercase transition-all"
@@ -449,7 +449,7 @@ export default function Admin() {
                  ))}
                  {subjectResources.filter(r => showOnlyPending ? r.is_premium : !r.is_premium).length === 0 && (
                    <div className="col-span-full py-20 text-center text-gray-600 uppercase font-black text-xs tracking-widest border-2 border-dashed border-white/5 rounded-[3rem]">
-                      No resources found in this category
+                      No resources found
                    </div>
                  )}
               </div>
@@ -634,7 +634,7 @@ export default function Admin() {
                       <div className="flex gap-2">
                         <button 
                           onClick={() => { 
-                            setEditingResource(banner); 
+                            setEditingItem(banner); 
                             setIsAddingResource(false); 
                             setIsAddingBanner(true); 
                           }}
@@ -660,17 +660,17 @@ export default function Admin() {
       {/* Modals */}
       {isAddingResource && (
         <ResourceModal 
-          onClose={() => { setIsAddingResource(false); setEditingResource(null); }} 
+          onClose={() => { setIsAddingResource(false); setEditingItem(null); }} 
           onSave={handleSaveResource} 
-          resource={editingResource}
+          resource={editingItem}
           uploadHandler={handleFileUpload}
         />
       )}
       {isAddingBanner && (
         <BannerModal 
-          onClose={() => { setIsAddingBanner(false); setEditingResource(null); }} 
+          onClose={() => { setIsAddingBanner(false); setEditingItem(null); }} 
           onSave={handleSaveBanner} 
-          banner={editingResource}
+          banner={editingItem}
           uploadHandler={handleFileUpload}
         />
       )}

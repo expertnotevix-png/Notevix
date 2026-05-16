@@ -32,16 +32,7 @@ export const supabase = (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUr
 /**
  * Supabase Table Schema - FULL MIGRATION (Run this in Supabase SQL Editor):
  * 
- * -- 0. Helper for timestamps
- * CREATE OR REPLACE FUNCTION trigger_set_timestamp()
- * RETURNS TRIGGER AS $$
- * BEGIN
- *   NEW.updated_at = NOW();
- *   RETURN NEW;
- * END;
- * $$ LANGUAGE plpgsql;
- * 
- * -- 1. Subject Resources Table
+ * -- 0. Subject Resources Table
  * CREATE TABLE IF NOT EXISTS public.subject_resources (
  *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  *   subject TEXT NOT NULL,

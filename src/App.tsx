@@ -71,6 +71,7 @@ export default function App() {
         displayName: firebaseUser.displayName || 'Student',
         photoURL: firebaseUser.photoURL || '',
         role: isAdminEmail ? 'admin' : 'student',
+        phone: firebaseUser.phoneNumber || undefined,
       };
       
       setUser(currentUser);

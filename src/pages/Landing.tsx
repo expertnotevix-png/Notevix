@@ -146,7 +146,7 @@ export default function Landing() {
                       </div>
                    </div>
                    <div className="p-8 space-y-4">
-                      <h3 className="text-lg font-black uppercase tracking-tight">{res.title || res.subject}</h3>
+                      <h3 className="text-lg font-black uppercase tracking-tight">{res.subject}</h3>
                       <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Class {res.class_level} • Topic Pack</p>
                       <button 
                         onClick={() => setSelectedPlan({ subject: res.subject, classLevel: res.class_level, price: res.price || 39 })}
