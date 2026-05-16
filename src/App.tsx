@@ -34,6 +34,23 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 }
 
+import { useLocation } from 'react-router-dom';
+
+function AppLayout({ user, setUser, children }: { user: any, setUser: any, children: ReactNode }) {
+  const location = useLocation();
+  const isAdmin = location.pathname.startsWith('/admin');
+
+  return (
+    <div className={`min-h-screen bg-black text-white ${isAdmin ? '' : 'pb-20'}`}>
+      <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-gray-500 uppercase tracking-widest text-[10px]">Loading...</div>}>
+        {children}
+      </Suspense>
+      {!isAdmin && <BottomNav user={user} />}
+      <Toaster position="top-center" richColors theme="dark" />
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,14 +64,14 @@ export default function App() {
         return;
       }
 
-      const isAdmin = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(firebaseUser.email || '');
+      const isAdminEmail = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'].includes(firebaseUser.email || '');
       const basicProfile: UserProfile = {
         uid: firebaseUser.uid,
         email: firebaseUser.email || '',
         displayName: firebaseUser.displayName || 'Student',
         photoURL: firebaseUser.photoURL || '',
-        role: isAdmin ? 'admin' : 'student',
-        isPremium: isAdmin,
+        role: isAdminEmail ? 'admin' : 'student',
+        isPremium: isAdminEmail,
         savedNotes: [],
         unlockedResources: [],
         createdAt: new Date().toISOString()
@@ -83,30 +100,26 @@ export default function App() {
   return (
     <Router>
       <ErrorBoundary>
-        <div className="min-h-screen bg-black text-white pb-20">
-          <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-gray-500 uppercase tracking-widest text-[10px]">Loading...</div>}>
-            <Routes>
-              <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
-              <Route path="/" element={user ? <Home user={user} /> : <Landing />} />
-              <Route path="/profile" element={user ? <Profile user={user} setUser={setUser} /> : <Navigate to="/login" />} />
-              <Route path="/class/:classId/:subjectId" element={<ChapterList />} />
-              <Route path="/note/:noteId" element={<NoteView user={user} setUser={setUser} />} />
-              <Route path="/premium-notes" element={<PremiumNotes user={user} />} />
-              <Route path="/admin" element={user?.role === 'admin' ? <Admin /> : <Navigate to="/" />} />
-              
-              {/* Informational Pages */}
-              <Route path="/privacy" element={<PrivacyPolicy />} />
-              <Route path="/about" element={<AboutUs />} />
-              <Route path="/contact" element={<Contact user={user} />} />
-              <Route path="/terms" element={<TermsOfService />} />
-              <Route path="/disclaimer" element={<Disclaimer />} />
-              
-              <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
-          </Suspense>
-          <BottomNav user={user} />
-          <Toaster position="top-center" richColors theme="dark" />
-        </div>
+        <AppLayout user={user} setUser={setUser}>
+          <Routes>
+            <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
+            <Route path="/" element={user ? <Home user={user} /> : <Landing />} />
+            <Route path="/profile" element={user ? <Profile user={user} setUser={setUser} /> : <Navigate to="/login" />} />
+            <Route path="/class/:classId/:subjectId" element={<ChapterList />} />
+            <Route path="/note/:noteId" element={<NoteView user={user} setUser={setUser} />} />
+            <Route path="/premium-notes" element={<PremiumNotes user={user} />} />
+            <Route path="/admin" element={user?.role === 'admin' ? <Admin /> : <Navigate to="/" />} />
+            
+            {/* Informational Pages */}
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/about" element={<AboutUs />} />
+            <Route path="/contact" element={<Contact user={user} />} />
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/disclaimer" element={<Disclaimer />} />
+            
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </AppLayout>
       </ErrorBoundary>
     </Router>
   );

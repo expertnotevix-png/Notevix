@@ -167,8 +167,14 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-[#050505] text-white flex">
       {/* Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#0a0a0a] border-r border-white/5 transition-transform duration-300 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-0`}>
-        <div className="h-full flex flex-col">
+      <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#0a0a0a] border-r border-white/5 transition-transform duration-300 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="h-full flex flex-col relative">
+          <button 
+            onClick={() => setSidebarOpen(false)}
+            className="absolute top-6 right-4 p-2 text-gray-500 hover:text-white"
+          >
+            <X size={20} />
+          </button>
           <div className="p-6 flex items-center gap-3">
             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20">
               <Shield className="w-6 h-6 text-white" />
@@ -179,7 +185,7 @@ export default function Admin() {
             </div>
           </div>
 
-          <nav className="flex-1 px-4 py-6 space-y-2">
+          <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto custom-scrollbar scrollbar-hide">
             {menuItems.map((item) => (
               <button
                 key={item.id}
@@ -208,9 +214,15 @@ export default function Admin() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className={`flex-1 flex flex-col min-w-0 overflow-hidden transition-all duration-300 ${sidebarOpen ? 'lg:pl-64' : 'pl-0'}`}>
         <header className="h-20 bg-[#0a0a0a]/50 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-8">
           <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 hover:bg-white/5 rounded-xl transition-all text-gray-400 hover:text-white"
+            >
+              <LayoutDashboard size={20} />
+            </button>
             <h2 className="text-xl font-black uppercase tracking-tight">{activeTab.replace('_', ' ')}</h2>
             <button 
               onClick={() => fetchTabSpecificData()}
@@ -254,7 +266,7 @@ export default function Admin() {
 
           {activeTab === 'verified_payments' && (
             <div className="space-y-6 animate-in fade-in duration-500">
-               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+               <div className="sticky top-0 z-20 bg-[#050505] -mx-8 px-8 py-4 mb-4 border-b border-white/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="relative flex-1 max-w-md">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input 
