@@ -506,7 +506,8 @@ export const dataBridge = {
           payment_app: paymentData.paymentApp || 'Unknown',
           password_unlocked: paymentData.passwordUnlocked || '',
           verification_reason: paymentData.reason || 'AI Verified',
-          verified: paymentData.verified ?? true,
+          status: paymentData.verified ? 'approved' : 'pending',
+          verified: paymentData.verified || false,
           created_at: new Date().toISOString()
         }]);
         if (error) throw error;
