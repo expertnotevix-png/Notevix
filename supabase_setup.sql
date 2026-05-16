@@ -109,6 +109,20 @@ CREATE TABLE IF NOT EXISTS public.verified_payments (
 );
 
 -- RLS for Payments
+-- 4.1 Verified Payments (Simple Schema)
+CREATE TABLE IF NOT EXISTS public.verified_payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_name TEXT,
+  amount NUMERIC,
+  transaction_id TEXT UNIQUE NOT NULL,
+  phone_number TEXT,
+  verified BOOLEAN DEFAULT false,
+  status TEXT DEFAULT 'pending',
+  password_unlocked TEXT,
+  user_id TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 ALTER TABLE public.verified_payments ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public Insert Verified Payments" ON public.verified_payments;
 CREATE POLICY "Public Insert Verified Payments" ON public.verified_payments FOR INSERT WITH CHECK (true);

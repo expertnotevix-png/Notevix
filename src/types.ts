@@ -128,6 +128,7 @@ export interface VerifiedPayment {
   passwordUnlocked?: string;
   verificationReason?: string;
   verified: boolean;
+  status: string;
   createdAt: string;
 }
 

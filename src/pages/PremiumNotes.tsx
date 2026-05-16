@@ -125,11 +125,9 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           
           const statuses: {[key: string]: any} = {};
           history.forEach((h: any) => {
-            if (h.resource_id) {
-              statuses[`res_${h.resource_id}`] = h;
-            }
-            if (h.plan_id) {
-              statuses[h.plan_id] = h;
+            // Match by product name for simplified schema compatibility
+            if (h.product_name) {
+              statuses[h.product_name] = h;
             }
           });
           setPurchaseStatuses(statuses);
@@ -360,7 +358,8 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
             ) : resources.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-8">
                 {resources.map((res, idx) => {
-                  const status = purchaseStatuses[`res_${res.id}`];
+                  const productName = `${res.subject} Premium`;
+                  const status = purchaseStatuses[productName];
                   const unlocked = isUnlocked(res) || status?.status === 'approved';
                   const isPending = status?.status === 'pending';
                   const isRejected = status?.status === 'rejected';
@@ -467,10 +466,10 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
                             {unlocked && !res.isFree ? (
                               <div className="space-y-2">
-                                <div className="flex items-center justify-between bg-white/5 p-2 rounded-xl border border-white/10">
+                                <div className="flex items-center justify-between bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20">
                                   <div className="overflow-hidden">
                                     <span className="text-[7px] font-black uppercase text-emerald-400 block mb-0.5">PASSWORD</span>
-                                    <code className="text-[8px] font-black text-white tracking-widest break-all block">
+                                    <code className="text-[11px] font-black text-white tracking-widest break-all block">
                                       {unlockedPassword || "SEE_ADMIN"}
                                     </code>
                                   </div>
@@ -486,7 +485,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                                 </div>
                                 <div className="flex gap-2">
                                   <span className="flex-1 h-10 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl flex items-center justify-center font-black text-[8px] uppercase tracking-widest cursor-default">
-                                    Already Purchased
+                                    Approved
                                   </span>
                                   <a 
                                     href={getDirectDownloadLink(res.driveLink || res.fullNotesUrl || '')} 
@@ -502,19 +501,16 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                               <div className="space-y-2">
                                 <div className="w-full h-10 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest cursor-default">
                                   <Clock className="w-4 h-4 animate-pulse" />
-                                  Pending Approval
+                                  Pending
                                 </div>
-                                <p className="text-[8px] text-gray-500 text-center font-bold uppercase tracking-tight">Admin is verifying your payment</p>
+                                <p className="text-[8px] text-gray-500 text-center font-bold uppercase tracking-tight">Admin is verifying payment</p>
                               </div>
                             ) : isRejected ? (
                               <div className="space-y-2">
                                 <div className="w-full h-10 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest cursor-default">
                                   <XCircle className="w-4 h-4" />
-                                  Payment Rejected
+                                  Rejected
                                 </div>
-                                {status.rejection_reason && (
-                                  <p className="text-[8px] text-red-400 text-center font-bold uppercase tracking-tight px-2">{status.rejection_reason}</p>
-                                )}
                                 <button 
                                   onClick={() => setSelectedPlan({
                                     id: `res_${res.id}`,
@@ -528,24 +524,22 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                                   Retry Purchase
                                 </button>
                               </div>
+                            ) : res.isFree ? (
+                               <div className="space-y-3">
+                                 <a 
+                                   href={getDirectDownloadLink(res.driveLink || res.fullNotesUrl || '')} 
+                                   target="_blank" 
+                                   rel="noopener noreferrer"
+                                   className="w-full h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest hover:bg-indigo-500 transition-all shadow-xl"
+                                 >
+                                   <Download className="w-3.5 h-3.5" />
+                                   Download Free
+                                 </a>
+                               </div>
                             ) : (
                               <div className="space-y-3">
-                                {/* Drive Link Button (Always available for preview/direct access) */}
-                                <a 
-                                  href={getDirectDownloadLink(res.driveLink || res.fullNotesUrl || '')} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="w-full h-10 bg-white/5 text-gray-400 border border-white/10 rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest hover:bg-white/10 transition-all shadow-xl"
-                                >
-                                  <ExternalLink className="w-3.5 h-3.5" />
-                                  DRIVE LINK
-                                </a>
-
                                 <button 
                                   onClick={() => {
-                                    if (unlocked) {
-                                      window.open(getDirectDownloadLink(res.driveLink || res.fullNotesUrl || ''), '_blank');
-                                    } else {
                                       setSelectedPlan({
                                         id: `res_${res.id}`,
                                         name: `${res.subject} Premium`,
@@ -553,19 +547,10 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                                         resourceId: res.id,
                                         type: 'one-time'
                                       });
-                                    }
                                   }}
-                                  className={`w-full h-10 rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest active:scale-95 transition-all shadow-xl ${
-                                    unlocked 
-                                      ? 'bg-white text-black hover:bg-gray-100' 
-                                      : 'bg-indigo-600 text-white hover:bg-indigo-500'
-                                  }`}
+                                  className="w-full h-10 bg-indigo-600 text-white hover:bg-indigo-500 rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest active:scale-95 transition-all shadow-xl"
                                 >
-                                  {unlocked ? (
-                                    <><Download className="w-3.5 h-3.5" /> DOWNLOAD</>
-                                  ) : (
-                                    <><Crown className="w-3.5 h-3.5" /> BUY NOW</>
-                                  )}
+                                  <Crown className="w-3.5 h-3.5" /> BUY NOW
                                 </button>
                               </div>
                             )}

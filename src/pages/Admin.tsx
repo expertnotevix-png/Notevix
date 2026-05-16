@@ -161,10 +161,9 @@ export default function Admin() {
             phoneNumber: d.phone_number,
             amount: d.amount,
             productName: d.product_name || 'Unknown',
-            paymentApp: d.payment_app,
+            status: d.status || 'pending',
             passwordUnlocked: d.password_unlocked,
-            verificationReason: d.verification_reason,
-            verified: d.verified ?? true,
+            verified: d.verified ?? false,
             createdAt: d.created_at
           })));
           return;
@@ -194,15 +193,15 @@ export default function Admin() {
         phoneNumber: manualPaymentData.phoneNumber.trim(),
         amount: Number(manualPaymentData.amount),
         productName: manualPaymentData.subject.trim(),
-        verified: true,
-        reason: 'ADMIN_MANUAL'
+        userId: 'ADMIN_MANUAL',
+        verified: false,
+        status: 'pending'
       });
       if (res.success) {
-        toast.success("Manual Payment Recorded!");
+        toast.success("Pending payment recorded in ledger");
         setIsAddingManualPayment(false);
         setManualPaymentData({ transactionId: '', phoneNumber: '', amount: '39', subject: '' });
         fetchVerifiedPayments();
-        fetchAnalytics();
       } else {
         toast.error(res.error || "Failed to record payment");
       }
@@ -1261,21 +1260,51 @@ export default function Admin() {
 
   const menuItems = [
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'banners', label: 'Promotion Banners', icon: LayoutDashboard },
-    { id: 'resources', label: 'Digital Library', icon: BookOpen },
+    { id: 'banners', label: 'Promotions', icon: LayoutDashboard },
+    { id: 'resources', label: 'PDF Library', icon: BookOpen },
     { id: 'free_notes', label: 'Free Notes', icon: Zap },
-    { id: 'valid_payments', label: 'Verify Keys', icon: ShieldCheck },
-    { id: 'verified_payments', label: 'Payment Ledger', icon: CreditCard },
-    { id: 'chapters', label: 'Flashcards', icon: Database },
-    { id: 'messages', label: 'Support', icon: MessageSquare },
-    { id: 'payments', label: 'Premium Requests', icon: ShieldCheck },
-    { id: 'pdf_requests', label: 'Free PDF Requests', icon: FileText },
-    { id: 'registry', label: 'Registry', icon: Database },
+    { id: 'verified_payments', label: 'Payments', icon: CreditCard },
+    { id: 'pdf_requests', label: 'PDF Requests', icon: FileText },
     { id: 'users', label: 'Students', icon: Users },
     { id: 'notifications', label: 'Broadcast', icon: Bell },
     { id: 'settings', label: 'Danger Zone', icon: Settings },
-    { id: 'moderation', label: 'Moderation', icon: Shield },
   ];
+
+  const [moderationFilter, setModerationFilter] = useState('pending');
+
+  const handleModeration = async (id: string, action: 'approved' | 'rejected', password?: string) => {
+    setLoading(true);
+    try {
+      if (action === 'approved') {
+        const res = await dataBridge.approvePurchase(id, password);
+        if (res.success) toast.success("Payment Approved & Access Granted!");
+        else toast.error(res.error || "Approval failed");
+      } else {
+        const reason = prompt("Enter rejection reason:");
+        if (reason === null) return;
+        const res = await dataBridge.rejectPurchase(id, reason);
+        if (res.success) toast.success("Payment rejected");
+        else toast.error(res.error || "Rejection failed");
+      }
+      fetchVerifiedPayments();
+    } catch (err) {
+      toast.error("Moderation error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const paymentModerate = useMemo(() => {
+    let filtered = verifiedPayments;
+    if (moderationFilter !== 'all') {
+      filtered = filtered.filter(p => p.status === moderationFilter);
+    }
+    if (searchQuery) {
+      const q = searchQuery.toUpperCase();
+      filtered = filtered.filter(p => p.transactionId.toUpperCase().includes(q) || p.phoneNumber.includes(q));
+    }
+    return filtered;
+  }, [verifiedPayments, moderationFilter, searchQuery]);
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -1601,109 +1630,35 @@ export default function Admin() {
           </div>
         );
 
-      case 'valid_payments':
-        return (
-          <div className="space-y-10 animate-in fade-in duration-500">
-             <div className="flex justify-between items-center bg-white/5 p-6 rounded-[2rem] border border-white/10">
-              <div>
-                <h3 className="text-xl font-black">AI Auto-Audit Ledger</h3>
-                <p className="text-xs text-gray-400">Live feed of payments verified by Gemini AI</p>
-              </div>
-              <div className="flex gap-4">
-                <button 
-                  onClick={fetchTransactionLedger}
-                  className="bg-white/5 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-white/10"
-                >
-                  <RefreshCw className="w-4 h-4" /> Refresh
-                </button>
-                <button 
-                  onClick={addValidPayment}
-                  className="bg-indigo-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-indigo-600/20"
-                >
-                  <Plus className="w-4 h-4" /> Manual Entry
-                </button>
-              </div>
-            </div>
-
-            {/* AI AUTO LOGS */}
-            <div className="space-y-4">
-              <h5 className="text-[10px] font-black uppercase text-gray-500 tracking-[0.3em] ml-2">Recent AI Verifications</h5>
-              <div className="grid grid-cols-1 gap-4">
-                {transactionLedger.map((tx) => (
-                  <div key={tx.id} className="glass-card p-6 rounded-3xl bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between">
-                    <div className="flex items-center gap-6">
-                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
-                        <Zap className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-3">
-                           <h4 className="font-black text-white uppercase tracking-wider">{tx.transactionId}</h4>
-                           <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-[8px] font-black rounded uppercase">AI Verified</span>
-                        </div>
-                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">
-                          WhatsApp: {tx.whatsapp} • Amt: ₹{tx.amount} • User: {tx.userId.slice(0, 8)}...
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                       <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest">{new Date(tx.timestamp).toLocaleString()}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* MANUAL WHITELIST (FOR EMERGENCY) */}
-            <div className="space-y-4 border-t border-white/5 pt-10">
-              <h5 className="text-[10px] font-black uppercase text-gray-500 tracking-[0.3em] ml-2">Legacy Manual Whitelist</h5>
-              <div className="grid grid-cols-1 gap-4">
-                {validPayments.map((pay) => (
-                  <div key={pay.id} className="glass-card p-6 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-between opacity-60">
-                    <div className="flex items-center gap-6">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${pay.isUsed ? 'bg-emerald-500/10 text-emerald-500' : 'bg-gray-500/10 text-gray-500'}`}>
-                        {pay.isUsed ? <CheckCircle2 className="w-6 h-6" /> : <Clock className="w-6 h-6" />}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-3">
-                           <h4 className="font-black text-white uppercase tracking-wider">{pay.transactionId}</h4>
-                           {pay.isUsed && <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-500 text-[8px] font-black rounded uppercase">Used</span>}
-                        </div>
-                        <p className="text-[10px] text-gray-500 font-bold mt-1 uppercase tracking-widest">
-                          WhatsApp: {pay.whatsapp} • Amount: ₹{pay.amount}
-                        </p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={async () => {
-                        if(window.confirm("Remove this entry?")) {
-                          await deleteDoc(doc(db, 'valid_payments', pay.id));
-                          fetchValidPayments();
-                        }
-                      }}
-                      className="p-3 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
       case 'verified_payments':
         return (
           <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white/5 p-6 rounded-[2rem] border border-white/10">
               <div>
-                <h3 className="text-2xl font-black uppercase tracking-tight">AI Verified Payments</h3>
-                <p className="text-xs text-gray-500 font-bold mt-1 uppercase tracking-widest">Master Ledger of all confirmed transactions</p>
+                <h3 className="text-2xl font-black uppercase tracking-tight">Payment Ledger</h3>
+                <p className="text-xs text-gray-500 font-bold mt-1 uppercase tracking-widest">Verify and approve student purchases</p>
               </div>
-              <button 
-                onClick={() => setIsAddingManualPayment(true)}
-                className="bg-emerald-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-xl active:scale-95"
-              >
-                <Plus className="w-4 h-4" /> Add Manual Entry
-              </button>
+              <div className="flex items-center gap-3">
+                <div className="flex bg-white/5 p-1 rounded-xl border border-white/5">
+                  {['pending', 'approved', 'rejected', 'all'].map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setModerationFilter(s)}
+                      className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                        moderationFilter === s ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/40' : 'text-gray-500 hover:text-gray-300'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                <button 
+                  onClick={() => setIsAddingManualPayment(true)}
+                  className="bg-emerald-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-xl active:scale-95"
+                >
+                  <Plus className="w-4 h-4" /> Add Manual
+                </button>
+              </div>
             </div>
 
             {isAddingManualPayment && (
@@ -1718,7 +1673,7 @@ export default function Admin() {
                   
                   <div className="space-y-2">
                     <h4 className="text-xl font-black uppercase tracking-tight">Manual Payment Entry</h4>
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Use this to fix missing or failed AI verifications</p>
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Manually record a payment and mark as verified</p>
                   </div>
 
                   <form onSubmit={handleManualPaymentSubmit} className="space-y-4">
@@ -1736,7 +1691,7 @@ export default function Admin() {
                       <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-2">Phone Number</label>
                       <input 
                         type="text"
-                        placeholder="Customer WhatsApp"
+                        placeholder="WhatsApp Number"
                         className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm focus:border-indigo-500 outline-none"
                         value={manualPaymentData.phoneNumber}
                         onChange={(e) => setManualPaymentData({...manualPaymentData, phoneNumber: e.target.value})}
@@ -1750,15 +1705,15 @@ export default function Admin() {
                           value={manualPaymentData.amount}
                           onChange={(e) => setManualPaymentData({...manualPaymentData, amount: e.target.value})}
                         >
-                          <option value="39">₹39 (Single)</option>
-                          <option value="99">₹99 (Combo)</option>
+                          <option value="39">₹39 Single</option>
+                          <option value="99">₹99 Combo</option>
                         </select>
                       </div>
                       <div className="space-y-2">
-                        <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-2">Subject</label>
+                        <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-2">Product Name</label>
                         <input 
                           type="text"
-                          placeholder="Ex: Maths / Combo"
+                          placeholder="NoteVix Plus"
                           className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm focus:border-indigo-500 outline-none"
                           value={manualPaymentData.subject}
                           onChange={(e) => setManualPaymentData({...manualPaymentData, subject: e.target.value})}
@@ -1783,54 +1738,109 @@ export default function Admin() {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input 
                 type="text"
-                placeholder="Search by TxID or Phone..."
+                placeholder="Search TxID or Phone..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 py-3 text-sm focus:border-purple-500 focus:outline-none"
+                className="w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 py-3 text-sm focus:border-indigo-500 focus:outline-none"
               />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {verifiedPayments.filter(p => p.transactionId.toUpperCase().includes(searchQuery.toUpperCase()) || p.phoneNumber.includes(searchQuery)).map((p) => (
-                <div key={p.id} className="glass-card p-6 rounded-[2rem] bg-white/5 border border-emerald-500/10 space-y-4">
-                  <div className="flex justify-between items-start">
-                    <div className="bg-emerald-500/10 text-emerald-500 text-[8px] font-black px-2 py-1 rounded uppercase tracking-widest">
-                      Verified
-                    </div>
-                    <span className="text-[10px] text-gray-500 font-bold">{new Date(p.createdAt).toLocaleDateString()}</span>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Phone Number</p>
-                    <p className="text-lg font-black">{p.phoneNumber}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Transaction ID</p>
-                    <p className="text-xs font-mono text-emerald-400 break-all">{p.transactionId}</p>
-                  </div>
-                  <div className="flex justify-between items-end pt-4 border-t border-white/5">
-                    <div>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Product</p>
-                      <p className="text-xs font-bold text-white uppercase">{p.productName}</p>
-                      {p.paymentApp && <p className="text-[9px] text-indigo-400 font-bold mt-1 uppercase tracking-widest">{p.paymentApp}</p>}
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Amount</p>
-                      <p className="text-xl font-black text-emerald-500">₹{p.amount}</p>
-                    </div>
-                  </div>
-                  {p.passwordUnlocked && (
-                    <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                       <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest mb-1">Pass Unlocked</p>
-                       <p className="text-xs font-mono text-indigo-300">{p.passwordUnlocked}</p>
-                    </div>
-                  )}
+
+            <div className="bg-[#0a0a0a] rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/5 bg-white/5">
+                        <th className="p-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Product / User</th>
+                        <th className="p-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Transaction Details</th>
+                        <th className="p-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Status</th>
+                        <th className="p-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Password</th>
+                        <th className="p-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] text-right">Moderation</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {paymentModerate.map((req) => (
+                        <tr key={req.id} className="group hover:bg-white/[0.02] transition-colors">
+                          <td className="p-6">
+                            <div className="space-y-1">
+                              <p className="text-xs font-black text-white uppercase tracking-tight">{req.productName}</p>
+                              <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">UID: {req.userId?.substring(0, 8)}</p>
+                            </div>
+                          </td>
+                          <td className="p-6">
+                            <div className="space-y-1">
+                              <code className="text-[10px] font-black text-indigo-400 bg-white/5 px-2 py-0.5 rounded border border-white/10">{req.transactionId}</code>
+                              <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">{req.phoneNumber} • ₹{req.amount}</p>
+                            </div>
+                          </td>
+                          <td className="p-6">
+                            <div className={`px-3 py-1 rounded-full border w-fit inline-flex items-center gap-2 ${
+                              req.status === 'approved' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+                              req.status === 'rejected' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' :
+                              'bg-yellow-500/10 border-yellow-500/20 text-yellow-500'
+                            }`}>
+                              <span className="text-[8px] font-black uppercase tracking-widest">{req.status}</span>
+                            </div>
+                          </td>
+                          <td className="p-6">
+                            {req.passwordUnlocked ? (
+                              <code className="text-[10px] font-black text-emerald-500 uppercase tracking-widest bg-emerald-500/5 px-2 py-1 rounded border border-emerald-500/10">{req.passwordUnlocked}</code>
+                            ) : (
+                              <span className="text-[10px] text-gray-700 italic">No Key</span>
+                            )}
+                          </td>
+                          <td className="p-6 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {req.status === 'pending' ? (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      const pass = prompt("Enter unlock password for this product:");
+                                      if (pass) handleModeration(req.id, 'approved', pass);
+                                    }}
+                                    className="p-2.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-xl border border-emerald-500/20 transition-all active:scale-95"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleModeration(req.id, 'rejected')}
+                                    className="p-2.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white rounded-xl border border-rose-500/20 transition-all active:scale-95"
+                                  >
+                                    <XCircle className="w-4 h-4" />
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={async () => {
+                                    if(window.confirm("Restore to pending?")) {
+                                      setLoading(true);
+                                      await supabase.from('verified_payments').update({ status: 'pending', verified: false }).eq('id', req.id);
+                                      fetchVerifiedPayments();
+                                      setLoading(false);
+                                    }
+                                  }}
+                                  className="text-[10px] font-black uppercase tracking-widest text-gray-600 hover:text-white"
+                                >
+                                  Reset
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {paymentModerate.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="p-24 text-center">
+                            <div className="flex flex-col items-center gap-4 opacity-30">
+                              <Smartphone className="w-12 h-12" />
+                              <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500 italic">No payments found in ledger</p>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
-              {verifiedPayments.length === 0 && (
-                <div className="col-span-full py-12 text-center text-gray-500 uppercase tracking-widest text-xs font-bold">
-                  No verified payments yet.
-                </div>
-              )}
-            </div>
+              </div>
           </div>
         );
       case 'resources':
@@ -3035,24 +3045,18 @@ CREATE TABLE IF NOT EXISTS public.purchase_requests (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 4.1 Verified Payments (Strict Schema)
+-- 4.1 Verified Payments (Simple Schema)
 CREATE TABLE IF NOT EXISTS public.verified_payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_name TEXT,
+  amount NUMERIC,
   transaction_id TEXT UNIQUE NOT NULL,
   phone_number TEXT,
-  amount NUMERIC,
-  product_name TEXT,
-  password_unlocked TEXT,
-  resource_id TEXT,
-  plan_id TEXT,
-  status TEXT DEFAULT 'pending',
-  rejection_reason TEXT,
   verified BOOLEAN DEFAULT false,
+  status TEXT DEFAULT 'pending',
+  password_unlocked TEXT,
   user_id TEXT,
-  payment_app TEXT,
-  verification_reason TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- 4.2 PDF Requests (Manual Flow)
