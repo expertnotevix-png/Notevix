@@ -1,149 +1,78 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../components/firebase';
-import { SubjectResource } from '../types';
-import { motion } from 'motion/react';
-import { ChevronLeft, FileText, Book, HelpCircle, Calculator, History, ChevronRight, RefreshCw } from 'lucide-react';
-import { MotivationalCarousel } from '../components/MotivationalCarousel';
+import { ChevronLeft, BookOpen, Crown, ChevronRight, Zap } from 'lucide-react';
+import { dataBridge } from '../services/dataBridge';
 
 export default function ChapterList() {
   const { classId, subjectId } = useParams();
   const navigate = useNavigate();
-  const [resources, setResources] = useState<SubjectResource[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      // Fetch from static JSON to save Firestore reads
-      const response = await fetch('/data/resources.json');
-      const json = await response.json();
-      const allResources: SubjectResource[] = json.resources;
-
-      let filtered;
-      if (subjectId === 'all') {
-        filtered = allResources.filter(r => r.class === classId);
-      } else {
-        filtered = allResources.filter(r => r.class === classId && r.subject === subjectId);
-      }
-
-      setResources(filtered);
-      localStorage.setItem(`notevix_resources_${classId}_${subjectId}`, JSON.stringify(filtered));
-    } catch (error) {
-      console.error("Error fetching static resources:", error);
-      const cached = localStorage.getItem(`notevix_resources_${classId}_${subjectId}`);
-      if (cached) setResources(JSON.parse(cached));
-    }
-    setLoading(false);
-  };
+  const [resources, setResources] = useState<any[]>([]);
 
   useEffect(() => {
-    fetchData();
-    
-    // Save to recently viewed
-    if (classId && subjectId) {
-      const recentlyViewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
-      const newItem = { classId, subjectId, timestamp: Date.now() };
-      
-      // Filter out duplicates and keep only last 3
-      const updated = [newItem, ...recentlyViewed.filter((item: any) => 
-        !(item.classId === classId && item.subjectId === subjectId)
-      )].slice(0, 3);
-      
-      localStorage.setItem('recentlyViewed', JSON.stringify(updated));
-    }
+    dataBridge.getResources(classId).then(data => {
+      setResources(data || []);
+      setLoading(false);
+    });
   }, [classId, subjectId]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
   return (
-    <div className="p-6 space-y-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-[#050505] text-white">
+      <header className="fixed top-0 inset-x-0 h-20 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/5 z-50 flex items-center px-6 justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="p-2 glass-card rounded-xl active:scale-95 transition-transform">
-            <ChevronLeft className="w-6 h-6" />
-          </button>
-          <h1 className="text-xl font-bold">Select Content Type</h1>
-        </div>
-        <button 
-          onClick={fetchData} 
-          className="p-2 glass-card rounded-xl active:scale-95 transition-transform"
-          disabled={loading}
-        >
-          <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-        </button>
-      </div>
-
-      <MotivationalCarousel />
-
-      <div className="w-full h-px bg-white/10" />
-
-      {/* Content */}
-      <div className="space-y-8">
-        {resources.length > 0 ? (
-          resources.map((res) => (
-            <div key={res.id} className="space-y-4">
-              {resources.length > 1 && (
-                <div className="flex items-center gap-2 pl-2">
-                  <span className="text-[10px] font-black text-purple-500 uppercase tracking-[0.3em]">{res.subject}</span>
-                  <div className="h-px flex-1 bg-white/5" />
-                </div>
-              )}
-              <div className="space-y-3">
-                {[
-                  { label: 'One Page Notes', url: res.onePageNotesUrl, icon: FileText },
-                  { label: 'Full Notes', url: res.fullNotesUrl, icon: Book },
-                  { label: 'Important Questions', url: res.importantQuestionsUrl, icon: HelpCircle },
-                  { label: 'Exam Oriented Questions', url: res.examOrientedQuestionsUrl, icon: History },
-                ].map((item, index) => (
-                  <motion.button
-                    key={item.label + res.id}
-                    onClick={() => {
-                      if (item.url && item.url !== '#') {
-                        window.open(item.url, '_blank');
-                      }
-                    }}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: index * 0.05 }}
-                    className={`w-full p-4 rounded-2xl flex items-center justify-between transition-all active:scale-[0.98] border border-white/5 shadow-xl ${
-                      item.url && item.url !== '#' 
-                        ? 'bg-[#1a1635] hover:border-purple-500/50' 
-                        : 'bg-white/5 opacity-50 cursor-not-allowed'
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center">
-                        <item.icon className="w-5 h-5 text-purple-400" />
-                      </div>
-                      <span className="text-sm font-bold text-white/90">{item.label}</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-purple-400/50" />
-                  </motion.button>
-                ))}
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="text-center py-20 space-y-4">
-            <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto">
-              <FileText className="w-10 h-10 text-gray-600" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-white font-bold">No High-Yield PDFs yet</h3>
-              <p className="text-gray-500 text-xs">Our team is uploading resources for Class {classId}. Check back soon!</p>
-            </div>
+          <button onClick={() => navigate(-1)} className="p-2 hover:bg-white/5 rounded-xl transition-colors"><ChevronLeft /></button>
+          <div>
+            <h1 className="text-xl font-black uppercase tracking-tighter">{subjectId}</h1>
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Class {classId} Resources</p>
           </div>
-        )}
-      </div>
+        </div>
+      </header>
+
+      <main className="pt-28 pb-12 px-6 max-w-2xl mx-auto space-y-8">
+        <div className="bg-indigo-600/5 border border-indigo-600/20 p-8 rounded-[2.5rem] flex items-center justify-between group overflow-hidden relative shadow-2xl">
+           <div className="space-y-2 relative z-10">
+              <h2 className="text-xl font-black uppercase text-white tracking-tight">Master Combo Pack</h2>
+              <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">Unlock All {subjectId} Chapters at once</p>
+           </div>
+           <button 
+            onClick={() => navigate('/premium-notes')}
+            className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl relative z-10 active:scale-95 transition-all"
+           >
+             ₹99 ONLY
+           </button>
+           <Crown className="absolute -right-4 -bottom-4 w-24 h-24 text-indigo-600/10 group-hover:scale-110 transition-transform" />
+        </div>
+
+        <div className="space-y-4">
+           {loading ? (
+             [1,2,3].map(i => <div key={i} className="h-20 bg-white/5 rounded-2xl animate-pulse" />)
+           ) : resources.length > 0 ? (
+             resources.map((res, i) => (
+                <button
+                  key={i}
+                  onClick={() => navigate(`/note/${res.id}`)}
+                  className="w-full bg-[#0a0a0a] border border-white/5 p-6 rounded-[2rem] flex items-center justify-between hover:border-indigo-500/30 transition-all group shadow-lg"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-indigo-500 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                      <BookOpen size={20} />
+                    </div>
+                    <div className="text-left">
+                       <h3 className="font-bold text-sm uppercase">{res.subject} Premium Notes</h3>
+                       <p className="text-[10px] text-gray-500 font-bold">Comprehensive Study Material</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                     <span className="text-[10px] font-black text-indigo-500 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">₹39</span>
+                     <ChevronRight size={18} className="text-gray-700" />
+                  </div>
+                </button>
+             ))
+           ) : (
+             <div className="text-center py-20 text-gray-600 uppercase font-black text-xs tracking-widest">No chapters found</div>
+           )}
+        </div>
+      </main>
     </div>
   );
 }

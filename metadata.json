@@ -1,5 +1,6 @@
 {
   "name": "NoteVix",
-  "description": "Premium one-page notes for CBSE students (Class 6-10). Features include chapter summaries, important questions, and an AI doubt solver.",
-  "requestFramePermissions": ["camera", "microphone"]
+  "description": "High-yield one-page notes and study resources for CBSE Students (Class 8-10). Simplified master packs and topic-wise PDF library.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

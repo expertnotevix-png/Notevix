@@ -11,8 +11,7 @@ interface BottomNavProps {
 export default function BottomNav({ user }: BottomNavProps) {
   const navItems = [
     { icon: Home, label: 'Home', path: '/' },
-    { icon: MessageSquare, label: 'Connect', path: '/community' },
-    { icon: Sparkles, label: 'Plus', path: '/premium-notes' },
+    { icon: Sparkles, label: 'Premium', path: '/premium-notes' },
     { icon: user ? User : LogIn, label: user ? 'Profile' : 'Login', path: user ? '/profile' : '/login' },
   ];
 

@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, query, orderBy, getDocs, limit } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType, getCachedData, setCachedData, checkQuotaLock } from './firebase';
 import { PromoBanner } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { dataBridge } from '../services/dataBridge';
@@ -13,20 +11,17 @@ export function PromoCarousel({ location = 'home' }: { location?: 'home' | 'land
 
   useEffect(() => {
     const fetchBanners = async () => {
-      const cacheKey = `promo_banners_${location}`;
-      const cached = getCachedData<PromoBanner[]>(cacheKey);
-      
-      if (cached) {
-        setBanners(cached);
-        return;
-      }
-
       try {
-        const data = await dataBridge.getPromoBanners(5, location);
+        const data = await dataBridge.getBanners();
         
         if (data && data.length > 0) {
-          setBanners(data);
-          setCachedData(cacheKey, data, 60); // Cache for 60 mins
+          const formattedBanners = data.map((d: any) => ({
+            id: d.id,
+            imageUrl: d.image_url,
+            link: d.link,
+            createdAt: d.created_at
+          }));
+          setBanners(formattedBanners);
           return;
         }
       } catch (error) {

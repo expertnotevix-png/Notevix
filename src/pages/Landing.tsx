@@ -1,64 +1,14 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, FlaskConical, Globe, Languages, Shield, Zap, Trophy, ChevronRight, Crown, Upload, QrCode, ShieldCheck, Copy, AlertCircle, Info } from 'lucide-react';
+import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Zap, QrCode, Shield, Copy, Info } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { PromoCarousel } from '../components/PromoCarousel';
-import { useState, useEffect, useRef } from 'react';
-import { db } from '../components/firebase';
-import { collection, addDoc, doc, setDoc, getDocs, query, orderBy, onSnapshot, where } from 'firebase/firestore';
-import { toast } from 'sonner';
-import { geminiService } from '../services/geminiService';
-import { SUBJECT_PASSWORDS, PAYMENT_GUIDELINES } from '../constants';
-
+import { useState, useEffect } from 'react';
 import { dataBridge } from '../services/dataBridge';
+import { toast } from 'sonner';
+import { supabase } from '../lib/supabase';
 
 const CLASSES = ['8', '9', '10'];
-
-const PREMIUM_PLANS = [
-  {
-    id: 'individual_subject',
-    name: 'Individual Subject',
-    price: 39,
-    description: 'Single Subject PDF Note',
-    features: ['Chapter-wise One Page Notes', 'Important Questions PDF', 'Topic-wise AI Solver'],
-    color: 'from-blue-600 to-indigo-600',
-    type: 'one-time'
-  },
-  {
-    id: 'class_8_master',
-    name: 'Class 8 Master Pack',
-    class: '8',
-    price: 99,
-    features: ['All Class 8 Subjects', 'Full Notes & PYQs', '24/7 AI Tutor Access'],
-    color: 'from-cyan-600 to-blue-600',
-    type: 'one-time'
-  },
-  {
-    id: 'class_9_master',
-    name: 'Class 9 Master Pack',
-    class: '9',
-    price: 99,
-    features: ['All Class 9 Subjects', 'Full Notes & PYQs', '24/7 AI Tutor Access'],
-    color: 'from-emerald-600 to-teal-600',
-    type: 'one-time'
-  },
-  {
-    id: 'class_10_master',
-    name: 'Class 10 Master Pack',
-    class: '10',
-    price: 99,
-    features: ['All Class 10 Subjects', 'Full Notes & PYQs', '24/7 AI Tutor Access'],
-    color: 'from-orange-600 to-pink-600',
-    type: 'one-time'
-  }
-];
-
-const SUBJECT_COLORS: Record<string, string> = {
-  science: 'bg-emerald-500',
-  maths: 'bg-blue-500',
-  sst: 'bg-orange-500',
-  english: 'bg-purple-500'
-};
 
 const SUBJECT_ICONS: Record<string, any> = {
   science: FlaskConical,
@@ -74,12 +24,11 @@ export default function Landing() {
   const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
   
   // Purchase Form State
-  const [whatsapp, setWhatsapp] = useState('');
-  const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [transactionId, setTransactionId] = useState('');
-  const [paidAmount, setPaidAmount] = useState('');
+  const [amount, setAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [purchaseSuccess, setPurchaseSuccess] = useState<{ password: string; subject: string } | null>(null);
+  const [purchaseSuccess, setPurchaseSuccess] = useState(false);
 
   useEffect(() => {
     const fetchResources = async () => {
@@ -87,50 +36,31 @@ export default function Landing() {
       setResources(data);
     };
     fetchResources();
-    
-    // PER USER REQUEST: Reduced API usage - Removed realtime listeners
-    return () => {};
   }, [activeClass]);
 
-  const handleGuestPurchase = async () => {
-    if (isSubmitting || !whatsapp || !email || !transactionId || !paidAmount) {
-      toast.error('Please provide Email, WhatsApp, Amount, and Transaction ID.');
+  const handleSubmitPayment = async () => {
+    if (!phoneNumber || !transactionId || !amount) {
+      toast.error('Please fill all fields');
       return;
     }
 
+    setIsSubmitting(true);
     try {
-      setIsSubmitting(true);
-      
-      const targetSubject = (selectedPlan?.subject || selectedPlan?.name || '').toLowerCase().split(' ')[0] || '';
-      
-      // Save manual request for admin approval
-      await dataBridge.savePurchaseRequest({
-        userId: 'GUEST',
-        email,
-        whatsapp,
-        planId: selectedPlan?.id || 'guest_individual',
-        planName: selectedPlan?.name || 'Individual Notes',
-        amount: parseFloat(paidAmount),
-        transactionId: transactionId,
+      const res = await dataBridge.saveVerifiedPayment({
+        product_name: selectedPlan.subject ? `${selectedPlan.subject} Notes (Class ${selectedPlan.class})` : 'Master Pack',
+        amount: parseFloat(amount),
+        transaction_id: transactionId,
+        phone_number: phoneNumber,
         status: 'pending',
-        isGuest: true
+        verified: false
       });
 
-      toast.success("Payment details sent! Admin will verify and email you the password.", {
-        duration: 8000
-      });
-      
-      setPurchaseSuccess({
-        subject: selectedPlan?.name || 'Purchase',
-        password: 'Admin will email password once verified.'
-      });
+      if (!res.success) throw new Error(res.error || "Failed to submit");
 
-      setWhatsapp('');
-      setEmail('');
-      setTransactionId('');
-      setPaidAmount('');
+      setPurchaseSuccess(true);
+      toast.success("Details submitted! Admin will verify your payment.");
     } catch (error: any) {
-      toast.error(error.message || "Failed");
+      toast.error(error.message || "Failed to submit");
     } finally {
       setIsSubmitting(false);
     }
@@ -138,103 +68,56 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white selection:bg-indigo-500/30 font-sans">
-      {/* Hero Header */}
       <header className="relative pt-16 pb-24 px-6 overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-6xl h-[500px] bg-indigo-600/5 blur-[120px] -z-10 rounded-full" />
         
-        <nav className="max-w-7xl mx-auto flex items-center justify-between mb-24">
+        <nav className="max-w-7xl mx-auto flex items-center justify-between mb-16">
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20">
               <Logo className="w-6 h-6 text-white" />
             </div>
-            <span className="text-xl font-black tracking-tighter">NOTEVIX</span>
+            <span className="text-xl font-black tracking-tighter uppercase">NoteVix</span>
           </div>
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => navigate('/premium-notes')}
-              className="px-5 py-2.5 rounded-xl text-xs font-black bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 transition-all flex items-center gap-2"
-            >
-              <Crown size={14} /> PREMIUM
-            </button>
-            <button 
-              onClick={() => navigate('/login')}
-              className="px-6 py-2.5 rounded-xl text-sm font-bold bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
-            >
-              Login
-            </button>
-          </div>
+          <button 
+            onClick={() => navigate('/login')}
+            className="px-6 py-2.5 rounded-xl text-sm font-bold bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
+          >
+            Sign In
+          </button>
         </nav>
 
-        {/* Promo Banner Section */}
         <div className="max-w-6xl mx-auto mb-16">
-          <PromoCarousel location="landing" />
+          <PromoCarousel />
         </div>
 
-        <div className="max-w-5xl mx-auto text-center space-y-10">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-gray-400 text-[10px] font-black uppercase tracking-[0.2em]"
-          >
-            🔥 Trusted by 10k+ CBSE Students
-          </motion.div>
-
-          <motion.h1 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-6xl md:text-8xl font-black tracking-tighter leading-[0.9] uppercase"
-          >
-            Digital <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
-              Library
-            </span>
-          </motion.h1>
-
-          <motion.p 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto font-medium"
-          >
-            Access high-yield one-page notes and master packs for Class 8-10. No signup required for premium notes.
-          </motion.p>
-
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4"
-          >
+        <div className="max-w-4xl mx-auto text-center space-y-8">
+          <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-none uppercase">
+            Master Your Boards with <span className="text-indigo-500">Premium Notes</span>
+          </h1>
+          <p className="text-gray-400 text-lg max-w-2xl mx-auto font-medium">
+            Simplified one-page notes for Class 8-10. Get instant access to the most effective study material.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button 
-              onClick={() => document.getElementById('digital-library')?.scrollIntoView({ behavior: 'smooth' })}
-              className="w-full sm:w-auto px-12 py-5 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-2xl shadow-indigo-600/40 hover:scale-105 transition-all"
+              onClick={() => document.getElementById('library')?.scrollIntoView({ behavior: 'smooth' })}
+              className="w-full sm:w-auto px-10 py-5 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-indigo-600/30 hover:scale-105 transition-all uppercase tracking-widest"
             >
-              Get Premium Notes 📔
+              Explore Library 📔
             </button>
-            <button 
-              onClick={() => navigate('/login')}
-              className="w-full sm:w-auto px-12 py-5 bg-white/5 text-white border border-white/10 rounded-2xl font-bold text-lg hover:bg-white/10 transition-colors"
-            >
-              Sign Up Free
-            </button>
-          </motion.div>
+          </div>
         </div>
       </header>
 
-      {/* Digital Library Section */}
-      <section id="digital-library" className="py-24 px-6">
+      <section id="library" className="py-24 px-6 border-t border-white/5">
         <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col items-center text-center mb-16">
-            <h2 className="text-4xl md:text-6xl font-black mb-8 uppercase tracking-tighter">
-              CHOOSE YOUR <span className="text-indigo-500">CLASS</span>
-            </h2>
-            
+          <div className="flex flex-col items-center text-center mb-16 space-y-8">
+            <h2 className="text-3xl font-black uppercase tracking-tighter">Choose Your <span className="text-indigo-500">Class</span></h2>
             <div className="p-1.5 rounded-3xl bg-white/5 border border-white/10 flex gap-2">
               {CLASSES.map(cls => (
                 <button
                   key={cls}
                   onClick={() => setActiveClass(cls as any)}
-                  className={`px-10 py-5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
+                  className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
                     activeClass === cls ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-gray-500 hover:text-white'
                   }`}
                 >
@@ -247,161 +130,43 @@ export default function Landing() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
             {resources.map((res: any) => {
               const Icon = SUBJECT_ICONS[res.subject.toLowerCase()] || BookOpen;
-              const masterPlan = PREMIUM_PLANS.find(p => p.class === res.class);
-              const subjectPlan = PREMIUM_PLANS.find(p => p.id === 'individual_subject');
-              
               return (
-                <motion.div
-                  key={res.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  className="group relative"
-                >
-                  {/* Book Design Card */}
-                  <div className="aspect-[3/4.5] rounded-[32px] overflow-hidden relative shadow-2xl transition-all duration-500 group-hover:-translate-y-4 border border-white/10 bg-[#0A0A0B]">
-                    {res.coverUrl ? (
-                      <img src={res.coverUrl} className="absolute inset-0 w-full h-full object-cover" />
-                    ) : (
-                      <div className={`absolute inset-0 ${SUBJECT_COLORS[res.subject.toLowerCase()] || 'bg-indigo-600'}`} />
-                    )}
-                    
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
-                    
-                    {/* Book Spine Detail */}
-                    <div className="absolute inset-y-0 left-0 w-4 bg-black/30 backdrop-blur-md border-r border-white/5 shadow-2xl" />
-                    
-                    <div className="absolute top-8 right-8 w-12 h-12 rounded-full bg-black/20 backdrop-blur-xl border border-white/20 flex items-center justify-center">
-                      <Crown size={20} className="text-indigo-400" />
-                    </div>
-
-                    <div className="absolute inset-0 p-8 flex flex-col justify-end">
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-2">
-                           <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-md">
-                             <Icon size={14} className="text-white" />
-                           </div>
-                           <span className="px-3 py-1 rounded-full bg-white/10 text-white text-[9px] font-black uppercase tracking-widest backdrop-blur-md border border-white/10">
-                            {res.subject}
-                          </span>
+                <div key={res.id} className="group bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-2xl transition-all hover:-translate-y-2">
+                   <div className="aspect-[3/4] relative">
+                      {res.coverUrl ? (
+                        <img src={res.coverUrl} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-indigo-600/10 flex items-center justify-center">
+                          <Icon size={40} className="text-indigo-500/20" />
                         </div>
-                        
-                        <div>
-                          <h3 className="text-2xl font-black text-white leading-none tracking-tighter uppercase mb-1">
-                            {res.subject === 'maths' ? 'MATHS' : res.subject.toUpperCase()} NOTES
-                          </h3>
-                          <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest">
-                            Class {res.class} • Topic Pack
-                          </p>
-                        </div>
-                        
-                        <div className="flex flex-col gap-2 pt-4">
-                          <button 
-                            onClick={() => toast.info("PDF is locked. Please purchase the password to open.")}
-                            className="w-full py-3.5 rounded-xl bg-white/10 text-white font-black text-[10px] uppercase tracking-widest hover:bg-white/20 transition-all active:scale-95 border border-white/10"
-                          >
-                            OPEN PDF (LOCKED)
-                          </button>
-                          <button 
-                            onClick={() => setSelectedPlan({ ...subjectPlan, subject: res.subject, class: res.class, resourceId: res.id })}
-                            className="w-full py-3.5 rounded-xl bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl active:scale-95"
-                          >
-                            GET PASSWORD ₹39
-                          </button>
-                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+                      <div className="absolute top-6 right-6">
+                         <div className="w-10 h-10 bg-black/50 backdrop-blur-md rounded-full border border-white/10 flex items-center justify-center font-black text-indigo-400 text-xs">₹39</div>
                       </div>
-                    </div>
-                    
-                    {/* Glossy Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent pointer-events-none" />
-                  </div>
-                </motion.div>
+                   </div>
+                   <div className="p-8 space-y-4">
+                      <h3 className="text-lg font-black uppercase tracking-tight">{res.subject} Notes</h3>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Class {res.class} • Topic Pack</p>
+                      <button 
+                        onClick={() => setSelectedPlan({ subject: res.subject, class: res.class, price: 39 })}
+                        className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-500 transition-all shadow-lg active:scale-95"
+                      >
+                        Buy Now
+                      </button>
+                   </div>
+                </div>
               );
             })}
           </div>
         </div>
       </section>
 
-      {/* Guest Modal */}
-      <AnimatePresence>
-        {purchaseSuccess && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/95 backdrop-blur-3xl">
-             <motion.div
-               initial={{ opacity: 0, scale: 0.9, y: 30 }}
-               animate={{ opacity: 1, scale: 1, y: 0 }}
-               className="w-full max-w-md bg-[#0a0a0a] border border-emerald-500/30 rounded-[3rem] p-10 text-center space-y-8 relative overflow-hidden"
-             >
-                <div className="absolute -top-24 -left-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-[80px]" />
-                
-                <div className="flex flex-col items-center gap-6">
-                   <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20">
-                     <ShieldCheck className="w-10 h-10 text-emerald-400" />
-                   </div>
-                   <div className="space-y-2">
-                     <h2 className="text-3xl font-black text-white uppercase tracking-tighter">AI VERIFIED</h2>
-                     <p className="text-emerald-400 text-xs font-black uppercase tracking-widest leading-none">{purchaseSuccess.subject} UNLOCKED</p>
-                   </div>
-                </div>
-
-                <div className="space-y-4">
-                   <div className="flex flex-col gap-1 text-center">
-                     <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest animate-pulse">
-                       ⚠️ Critical Warning
-                     </span>
-                     <p className="text-[9px] text-rose-400 font-bold uppercase tracking-wider px-4">
-                       Remember the password without this you cant able to open the {purchaseSuccess.subject} PDF notes.
-                     </p>
-                   </div>
-
-                   <div className="p-8 rounded-3xl bg-white/5 border border-white/10 space-y-4">
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">YOUR PDF PASSWORD</p>
-                      <div className="flex flex-col items-center gap-4">
-                         <div className="w-full py-2 text-center">
-                           <code className="text-[10px] sm:text-xs font-black text-white tracking-[0.1em] text-left inline-block bg-white/5 p-6 rounded-2xl border border-white/10 select-all whitespace-pre-line leading-relaxed">
-                             {purchaseSuccess.password}
-                           </code>
-                         </div>
-                         <button 
-                           onClick={() => {
-                             navigator.clipboard.writeText(purchaseSuccess.password);
-                             toast.success("Password Copied!");
-                           }}
-                           className="flex items-center gap-2 px-6 py-3 bg-indigo-500/10 rounded-2xl hover:bg-indigo-500/20 transition-all border border-indigo-500/20 text-indigo-400 group"
-                         >
-                           <Copy className="w-4 h-4" />
-                           <span className="text-[10px] font-black uppercase tracking-widest">Copy Password</span>
-                         </button>
-                      </div>
-                   </div>
-                </div>
-
-                <div className="space-y-6">
-                   <div className="flex items-start gap-3 bg-white/5 p-4 rounded-2xl text-left">
-                     <AlertCircle className="w-4 h-4 text-emerald-400 mt-1 flex-shrink-0" />
-                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
-                       This password works for the PDF link we have provided. Ensure all letters are <span className="text-white">CAPITAL</span>.
-                     </p>
-                   </div>
-                   
-                   <button 
-                    onClick={() => {
-                      setPurchaseSuccess(null);
-                      setSelectedPlan(null);
-                    }}
-                    className="w-full h-16 bg-white text-black rounded-3xl font-black text-sm uppercase tracking-[0.3em] active:scale-95 transition-all shadow-2xl"
-                   >
-                     CLOSE
-                   </button>
-                </div>
-             </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
+      {/* Payment Modal */}
       <AnimatePresence>
         {selectedPlan && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl">
-            <motion.div 
+             <motion.div 
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
@@ -409,161 +174,106 @@ export default function Landing() {
             >
               <div className="absolute top-0 inset-x-0 h-1.5 bg-indigo-600" />
               
-              {isSubmitting && (
-                <div className="absolute inset-0 bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center z-[200] rounded-[40px] border border-white/10">
-                  <div className="w-16 h-16 relative">
-                    <div className="absolute inset-0 border-4 border-indigo-500/20 rounded-full" />
-                    <div className="absolute inset-0 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                  </div>
-                  <div className="mt-8 text-center px-6">
-                    <p className="text-white font-black text-xs uppercase tracking-[0.2em] mb-2 animate-pulse">Sending Details...</p>
-                    <p className="text-white/40 text-[7px] font-bold uppercase tracking-widest leading-relaxed">
-                      Please wait while we record your transaction ID.
-                    </p>
-                  </div>
+              {purchaseSuccess ? (
+                <div className="space-y-8 text-center py-10">
+                   <div className="w-20 h-20 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto">
+                      <Zap className="text-emerald-500" size={32} />
+                   </div>
+                   <div className="space-y-4">
+                      <h2 className="text-3xl font-black uppercase">Request Sent</h2>
+                      <p className="text-gray-400 text-sm font-medium leading-relaxed">
+                        Admin will verify your payment of ₹{amount} for the {selectedPlan.subject} notes. 
+                        Once approved, your password will be available.
+                      </p>
+                   </div>
+                   <button 
+                    onClick={() => setSelectedPlan(null)}
+                    className="w-full h-16 bg-white text-black rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl"
+                   >
+                     CLOSE
+                   </button>
                 </div>
-              )}
-              
-              <div className="flex justify-between items-center mb-8 flex-shrink-0">
-                <div className="space-y-1">
-                  <h2 className="text-3xl font-black">{selectedPlan.name}</h2>
-                  {selectedPlan.subject && (
-                    <p className="text-xs font-bold text-indigo-400 capitalize tracking-wider">
-                      Subject: {selectedPlan.subject} (Class {selectedPlan.class})
-                    </p>
-                  )}
-                </div>
-                <button onClick={() => setSelectedPlan(null)} className="text-gray-500 hover:text-white transition-colors">
-                  <ChevronRight size={28} className="rotate-90" />
-                </button>
-              </div>
+              ) : (
+                <>
+                  <div className="flex justify-between items-center mb-8">
+                    <h2 className="text-2xl font-black uppercase">Unlock Notes</h2>
+                    <button onClick={() => setSelectedPlan(null)} className="text-gray-500 hover:text-white transition-colors">
+                      <ChevronRight size={28} className="rotate-90" />
+                    </button>
+                  </div>
 
-              <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 -mr-2 space-y-8 pb-4">
-                <div className="p-6 rounded-3xl bg-indigo-500/5 border border-indigo-500/10 flex flex-col items-center gap-6">
-                  <div className="w-full flex items-center gap-5">
-                    <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-600/30">
-                      <QrCode className="text-white" size={28} />
+                  <div className="flex-1 overflow-y-auto space-y-8 pr-2 -mr-2 custom-scrollbar">
+                    <div className="p-8 rounded-3xl bg-indigo-600/5 border border-indigo-600/10 flex flex-col items-center gap-6">
+                       <div className="p-4 bg-white rounded-3xl shrink-0">
+                          <img 
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=9236489649@mbk&pn=NoteVix&am=${selectedPlan.price}&cu=INR`}
+                            alt="UPI QR"
+                            className="w-32 h-32"
+                          />
+                       </div>
+                       <div className="text-center">
+                          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">UPI ID</p>
+                          <code className="text-lg font-black text-white">9236489649@mbk</code>
+                       </div>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none mb-1">Pay with UPI</p>
-                      <p className="text-lg font-black text-white">9236489649@mbk</p>
-                      <p className="text-[8px] font-bold text-gray-500 mt-1 uppercase tracking-wider">Pay ₹39 for this subject OR ₹99 for all subjects</p>
-                    </div>
-                    <div className="ml-auto text-2xl font-black text-white">₹{selectedPlan.price}</div>
-                  </div>
-                  
-                  <div className="p-4 bg-white rounded-3xl">
-                    <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=9236489649@mbk&pn=NoteVix&am=${selectedPlan.price}&cu=INR`}
-                      alt="Scan to Pay"
-                      className="w-32 h-32"
-                    />
-                  </div>
-                  <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Scan or Pay to the ID above</p>
-                </div>
 
-                <div className="space-y-4">
-                  <input 
-                    type="email" 
-                    placeholder="Delivery Email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
-                  />
-                  <input 
-                    type="text" 
-                    placeholder="WhatsApp Number"
-                    value={whatsapp}
-                    onChange={e => setWhatsapp(e.target.value)}
-                    className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
-                  />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <input 
-                      type="number" 
-                      placeholder="Amount Paid"
-                      value={paidAmount}
-                      onChange={e => setPaidAmount(e.target.value)}
-                      className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
-                    />
-                    <input 
-                      type="text" 
-                      placeholder="Transaction ID"
-                      value={transactionId}
-                      onChange={e => setTransactionId(e.target.value)}
-                      className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
-                    />
-                  </div>
-                  
-                  <div className="p-5 bg-indigo-500/5 rounded-3xl border border-indigo-500/10 space-y-4">
-                    <div className="flex items-start gap-3 text-left">
-                      <Info className="w-5 h-5 text-indigo-400 mt-0.5" />
-                      <div className="space-y-2 flex-1">
-                        <p className="text-[11px] font-black text-white uppercase tracking-widest">How it works</p>
-                        <div className="space-y-1.5">
-                          {PAYMENT_GUIDELINES.map((guide, i) => (
-                            <div key={i} className="flex gap-2 text-[8px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
-                              <span>•</span>
-                              <span>{guide}</span>
-                            </div>
-                          ))}
+                    <div className="space-y-4">
+                       <input 
+                        type="text" 
+                        placeholder="WhatsApp Number" 
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
+                       />
+                       <div className="grid grid-cols-2 gap-4">
+                          <input 
+                            type="number" 
+                            placeholder="Amount Paid (₹)" 
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
+                          />
+                          <input 
+                            type="text" 
+                            placeholder="Transaction ID" 
+                            value={transactionId}
+                            onChange={(e) => setTransactionId(e.target.value)}
+                            className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
+                          />
+                       </div>
+                    </div>
+
+                    <div className="p-6 bg-white/5 rounded-3xl border border-white/5 space-y-4">
+                        <div className="flex items-start gap-3">
+                           <Info className="w-5 h-5 text-indigo-400 shrink-0" />
+                           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
+                             Submit details after paying. Admin will verify manually. 
+                             Contact @9236489649 for help.
+                           </p>
                         </div>
-                      </div>
-                    </div>
-                    <div className="pt-3 border-t border-indigo-500/10 text-center space-y-1">
-                      <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
-                        Payment Stuck? Contact Admin
-                      </p>
-                      <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest leading-relaxed">
-                        WhatsApp: 9236489649 <br/> Gmail: expertnotevix@gmail.com
-                      </p>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              <div className="mt-8 pt-6 border-t border-white/5 flex-shrink-0">
-                <button 
-                  onClick={handleGuestPurchase}
-                  disabled={isSubmitting}
-                  className="w-full h-16 bg-white text-black rounded-3xl font-black text-sm uppercase tracking-[0.3em] active:scale-95 transition-all shadow-xl shadow-white/10 disabled:opacity-50"
-                >
-                  {isSubmitting ? 'PROCESSING...' : `SUBMIT DETAILS`}
-                </button>
-                <button 
-                  onClick={() => setSelectedPlan(null)}
-                  className="w-full h-12 text-gray-500 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors mt-4"
-                >
-                  GO BACK
-                </button>
-              </div>
+                  <div className="mt-8">
+                     <button 
+                      onClick={handleSubmitPayment}
+                      disabled={isSubmitting}
+                      className="w-full h-16 bg-white text-black rounded-3xl font-black text-sm uppercase tracking-widest shadow-xl active:scale-95 transition-all disabled:opacity-50"
+                     >
+                       {isSubmitting ? 'PROCESSING...' : 'SUBMIT DETAILS'}
+                     </button>
+                  </div>
+                </>
+              )}
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* Features */}
-      <section className="py-24 px-6 border-t border-white/5">
-        <div className="max-w-7xl mx-auto grid md:grid-cols-3 gap-12">
-          {[
-            { icon: Zap, title: "One Page Notes", desc: "Scientific summaries that cover 100% of the syllabus." },
-            { icon: Trophy, title: "Exam Tested", desc: "Used by thousands of toppers to score 95%+" },
-            { icon: Shield, title: "AI Tutor", desc: "Instant doubt solving with local exam context." }
-          ].map((f, i) => (
-            <div key={i} className="p-10 rounded-[40px] bg-white/[0.02] border border-white/5 space-y-6">
-              <div className="w-14 h-14 bg-indigo-500/10 rounded-2xl flex items-center justify-center">
-                <f.icon className="w-7 h-7 text-indigo-500" />
-              </div>
-              <h3 className="text-2xl font-black">{f.title}</h3>
-              <p className="text-gray-400 leading-relaxed font-medium">{f.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="py-12 px-6 border-t border-white/5 text-center">
-        <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">
-          © 2026 NoteVix Academy • All Rights Reserved
+      <footer className="py-24 px-6 border-t border-white/5 text-center">
+        <Logo className="w-12 h-12 mx-auto mb-8 opacity-20" />
+        <p className="text-gray-600 text-[10px] font-black uppercase tracking-widest">
+           © 2026 NoteVix Academy • Powering India's Students
         </p>
       </footer>
     </div>

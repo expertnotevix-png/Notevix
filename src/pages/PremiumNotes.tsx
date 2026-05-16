@@ -1,21 +1,14 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Crown, Check, ShieldCheck, Copy, ExternalLink, X, 
-  CreditCard, Loader2, Zap, BookOpen, Lock, Download,
-  ChevronRight, FileText, Upload, Image as ImageIcon,
-  SearchCheck, FilePlus, AlertCircle, Key, Info, Clock, XCircle
+  Crown, Check, ShieldCheck, Copy, X, 
+  CreditCard, Loader2, Zap, Download,
+  FileText, SearchCheck, Info, Clock, XCircle, BookOpen
 } from 'lucide-react';
-import { UserProfile, SubjectResource, ValidPayment } from '../types';
-import { db, handleFirestoreError, OperationType } from '../components/firebase';
-import { collection, query, where, getDocs, updateDoc, doc, addDoc, getDoc, setDoc, orderBy, onSnapshot } from 'firebase/firestore';
+import { UserProfile, SubjectResource } from '../types';
 import { toast } from 'sonner';
-import { GoogleGenAI } from "@google/genai";
-import { useRef } from 'react';
-import { geminiService } from '../services/geminiService';
-import { SUBJECT_PASSWORDS, PAYMENT_GUIDELINES } from '../constants';
-
 import { dataBridge } from '../services/dataBridge';
+import { supabase } from '../lib/supabase';
 
 interface PremiumNotesProps {
   user: UserProfile | null;
@@ -26,47 +19,17 @@ const CLASSES = ['8', '9', '10'];
 const PREMIUM_PLANS = [
   {
     id: 'individual_subject',
-    name: 'Single PDF Notes',
+    name: 'Individual Subject',
     price: 39,
-    features: ['Instant Download', 'Topic Coverage', 'One-time Payment'],
-    color: 'from-gray-600 to-gray-800',
+    features: ['Chapter-wise One Page Notes', 'Important Questions PDF'],
     type: 'one-time'
   },
   {
-    id: 'class_8_one_time',
-    name: 'Class 8 Master Pack',
-    class: '8',
+    id: 'master_pack',
+    name: 'Class Master Pack',
     price: 99,
-    features: ['All Class 8 Subjects', 'Lifetime Access', 'Bonus PDFs'],
-    color: 'from-blue-600 to-cyan-600',
+    features: ['All Subjects All Chapters', 'Full Notes & PYQs'],
     type: 'one-time'
-  },
-  {
-    id: 'class_9_one_time',
-    name: 'Class 9 Master Pack',
-    class: '9',
-    price: 99,
-    features: ['All Class 9 Subjects', 'Lifetime Access', 'Bonus PDFs'],
-    color: 'from-emerald-600 to-teal-600',
-    type: 'one-time'
-  },
-  {
-    id: 'class_10_one_time',
-    name: 'Class 10 Master Pack',
-    class: '10',
-    price: 99,
-    features: ['All Class 10 Subjects', 'Lifetime Access', 'Bonus PDFs'],
-    color: 'from-orange-600 to-pink-600',
-    type: 'one-time'
-  },
-  {
-    id: 'plus_sub',
-    name: 'NoteVix Plus',
-    price: 199,
-    description: 'Billed monthly',
-    features: ['Classes 8-12 Full Access', 'Unlimited AI Doubt Solver', 'Exclusive Exam Packs', 'Priority Chat Support'],
-    color: 'from-indigo-600 to-purple-600',
-    type: 'subscription'
   }
 ];
 
@@ -75,772 +38,199 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
   const [resources, setResources] = useState<SubjectResource[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingError, setLoadingError] = useState<string | null>(null);
+  
+  // Purchase Form State
   const [phoneNumber, setPhoneNumber] = useState('');
   const [amount, setAmount] = useState('');
   const [transactionId, setTransactionId] = useState('');
-  const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [purchaseSuccess, setPurchaseSuccess] = useState<{ password: string; subject: string } | null>(null);
-  const lastAttemptRef = useRef<number>(0);
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const upiId = (import.meta as any).env?.VITE_UPI_ID || '9236489649@mbk';
-
-  const [purchaseStatuses, setPurchaseStatuses] = useState<{[key: string]: any}>({});
   const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
 
-  // Real-time listener removed to avoid Firestore quota, using Bridge (Supabase)
   useEffect(() => {
-    let isMounted = true;
-    const timeout = setTimeout(() => {
-      if (loading && isMounted) {
-        setLoadingError("Connection timed out. Please check your internet or try refreshing.");
-        setLoading(false);
-      }
-    }, 10000);
+    fetchResources();
+    if (user) fetchUserHistory();
+  }, [activeClass, user]);
 
-    const fetchResources = async () => {
-      if (!isMounted) return;
-      setLoading(true);
-      setLoadingError(null);
-      try {
-        console.log("PremiumNotes: Fetching resources for class:", activeClass);
-        // 1. Fetch Premium Resources
-        const premiumData = await dataBridge.getResources(activeClass);
-        
-        if (!isMounted) return;
-        
-        const transformedPremium = (premiumData || []).map((p: any) => ({
-          ...p,
-          isFree: false // Ensure we mark them specifically
-        }));
-
-        setResources(transformedPremium);
-
-        // 3. Fetch user purchase history if logged in
-        if (user) {
-          const history = await dataBridge.getUserPurchaseHistory(user.uid);
-          setPurchaseHistory(history);
-          
-          const statuses: {[key: string]: any} = {};
-          history.forEach((h: any) => {
-            // Match by product name for simplified schema compatibility
-            if (h.product_name) {
-              statuses[h.product_name] = h;
-            }
-          });
-          setPurchaseStatuses(statuses);
-        }
-      } catch (err) {
-        console.error("PremiumNotes: Fetch error:", err);
-        if (isMounted) setLoadingError("Failed to synchronize library. Please try again.");
-        setResources([]);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-          clearTimeout(timeout);
-        }
-      }
-    };
-
-    // Small delay to ensure component is fully mounted and route transition finished
-    const startFetch = setTimeout(fetchResources, 100);
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timeout);
-      clearTimeout(startFetch);
-    };
-  }, [activeClass]);
-
-  const getDirectDownloadLink = (link: string) => {
-    if (!link) return '';
-    if (link.includes('drive.google.com')) {
-      const match = link.match(/[-\w]{25,}/);
-      if (match) {
-        return `https://drive.google.com/uc?export=download&id=${match[0]}`;
-      }
+  const fetchResources = async () => {
+    setLoading(true);
+    try {
+      const data = await dataBridge.getResources(activeClass);
+      setResources(data || []);
+    } finally {
+      setLoading(false);
     }
-    return link;
   };
 
-  const isUnlocked = (res: SubjectResource) => {
-    // 0. Free resources are always unlocked
-    // Use strict check: must be explicitly true
-    if (res.isFree === true) return true;
-
-    if (!user) return false;
-    
-    // 1. Admin Overrides - Use absolute email check as backup
-    const adminEmails = ['expertraj8@gmail.com', 'expertnotevix@gmail.com'];
-    const userEmail = user.email?.toLowerCase();
-    const isAdmin = adminEmails.includes(userEmail);
-    if (user.role === 'admin' || isAdmin) return true;
-    
-    // 2. Subscription Check (Master access)
-    // Only grant blanket access if the user is premium AND has a recurring plan type (not just a single purchase)
-    if (user.isPremium && (user.planType === 'monthly_sub' || user.planType === 'plus_sub')) {
-      return true;
-    }
-    
-    // 3. Class-wide Master Pack Check
-    const unlockedClasses = user.unlockedClasses || [];
-    const resClass = String(res.class);
-    if (unlockedClasses.some(c => String(c) === resClass)) return true;
-    
-    // 4. Individual Resource Check
-    const unlockedResources = user.unlockedResources || [];
-    const resId = String(res.id);
-    if (unlockedResources.some(id => String(id) === resId)) return true;
-    
-    return false;
+  const fetchUserHistory = async () => {
+    if (!user) return;
+    const data = await dataBridge.getUserPayments(user.phoneNumber || '');
+    setPurchaseHistory(data);
   };
 
   const handlePurchase = async () => {
-    if (isSubmitting || !phoneNumber || !amount || !transactionId || (!user && !email)) {
-      toast.error('Please fill all fields: Phone Number, Amount, and Transaction ID.');
+    if (!phoneNumber || !amount || !transactionId) {
+      toast.error('Please fill all fields');
       return;
     }
-
-    if (transactionId.length < 6) {
-      toast.error('Please enter a valid Transaction ID / UTR number.');
-      return;
-    }
-
-    const paidAmount = parseFloat(amount);
-    if (isNaN(paidAmount) || paidAmount <= 0) {
-      toast.error('Please enter a valid payment amount.');
-      return;
-    }
-
-    // Amount match check
-    if (paidAmount < (selectedPlan?.price || 0)) {
-      toast.error(`Amount mismatch. This plan costs ₹${selectedPlan?.price}. You entered ₹${paidAmount}.`);
-      return;
-    }
-
-    // RATE LIMITING PROTECTION
-    const now = Date.now();
-    if (now - lastAttemptRef.current < 5000) {
-       toast.error("Please wait a few seconds before retrying.");
-       return;
-    }
-    lastAttemptRef.current = now;
 
     setIsSubmitting(true);
-
     try {
-      const finalTxId = transactionId.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-      
-      // DOUBLE-SPEND PROTECTION using bridge
-      const isRedeemed = await dataBridge.isTransactionRedeemed(finalTxId);
-      if (isRedeemed) {
-        throw new Error("Transaction ID already used. Duplicate payments are not allowed.");
-      }
-      
-      const purchaseData = {
-        phoneNumber,
-        transactionId: finalTxId,
-        amount: paidAmount,
-        planId: selectedPlan?.id,
-        planName: selectedPlan?.name,
-        class: selectedPlan?.class || activeClass,
-        resourceId: selectedPlan?.resourceId || null,
-        productName: selectedPlan?.name,
-        isGuest: !user,
-        status: 'pending' // Manual review flow
-      };
+      const res = await dataBridge.saveVerifiedPayment({
+        product_name: selectedPlan.subject ? `${selectedPlan.subject} Notes (Class ${selectedPlan.class})` : selectedPlan.name,
+        amount: parseFloat(amount),
+        transaction_id: transactionId,
+        phone_number: phoneNumber,
+        user_id: user?.uid || 'GUEST',
+        status: 'pending',
+        verified: false
+      });
 
-      let saveResult;
-      if (user) {
-        saveResult = await dataBridge.savePurchaseRequest({
-          ...purchaseData,
-          userId: user.uid,
-          email: user.email
-        });
-      } else {
-        saveResult = await dataBridge.savePurchaseRequest({
-          ...purchaseData,
-          email: email,
-          userId: 'GUEST'
-        });
-      }
+      if (!res.success) throw new Error(res.error || "Failed to submit");
 
-      if (saveResult.success) {
-        toast.success("Request submitted successfully! Admin will verify and grant access within 1-2 hours.", {
-          duration: 10000
-        });
-        setSelectedPlan(null);
-        setTransactionId('');
-        setAmount('');
-        // Clean up UI
-        return;
-      }
-
-      throw new Error(saveResult?.error || "Submission failed. Please try again or contact admin.");
-      
+      toast.success("Details submitted! Admin will verify and grant access.");
+      setSelectedPlan(null);
+      setTransactionId('');
+      setAmount('');
+      fetchUserHistory();
     } catch (error: any) {
-      console.error("Submission Error:", error);
-      toast.error(error.message || "Something went wrong.");
+      toast.error(error.message || "Failed to submit");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 pb-32">
-      {/* Header Section */}
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16 border-b border-white/5 pb-12"
-      >
-        <div className="space-y-4">
-          <h1 className="text-5xl font-black tracking-tighter text-white uppercase flex flex-col">
-            Digital 
-            <span className="text-indigo-500">Library</span>
-          </h1>
-          <p className="text-gray-500 text-sm font-medium max-w-md leading-relaxed uppercase tracking-widest">
-            High-yield chapter notes, previous year questions, and AI-powered study guides.
-          </p>
-        </div>
+  const getDirectDownloadLink = (link: string) => {
+    if (!link) return '';
+    if (link.includes('drive.google.com')) {
+      const match = link.match(/[-\w]{25,}/);
+      if (match) return `https://drive.google.com/uc?export=download&id=${match[0]}`;
+    }
+    return link;
+  };
 
-        {/* Class Selector Tabs */}
-        <div className="flex bg-white/5 p-2 rounded-[2rem] border border-white/5 backdrop-blur-xl shadow-2xl">
+  return (
+    <div className="max-w-7xl mx-auto px-6 py-12 pb-32 space-y-12">
+      <header className="space-y-4">
+        <h1 className="text-5xl font-black tracking-tighter uppercase">Digital <span className="text-indigo-500">Library</span></h1>
+        <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">Premium one-page notes for Class 8-10.</p>
+        
+        <div className="flex bg-white/5 p-1.5 rounded-2xl border border-white/5 w-fit">
           {CLASSES.map((cls) => (
             <button
               key={cls}
               onClick={() => setActiveClass(cls as any)}
-              className={`px-10 py-4 rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${
-                activeClass === cls 
-                  ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/40 scale-105' 
-                  : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+              className={`px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                activeClass === cls ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'
               }`}
             >
               Class {cls}
             </button>
           ))}
         </div>
-      </motion.div>
+      </header>
 
-      <div className="space-y-12 mb-20">
-        {/* Recommended Section Heading */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-black text-white uppercase tracking-tight">Recommended For You</h2>
-          <div className="h-px flex-1 bg-white/5 mx-6 hidden sm:block" />
-          <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest hidden sm:block">BASED ON YOUR CLASS</span>
-        </div>
+      {loading ? (
+        <div className="h-64 bg-white/5 rounded-[40px] flex items-center justify-center animate-pulse" />
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {resources.map((res) => {
+            const history = purchaseHistory.find(h => h.product_name.includes(res.subject));
+            const unlocked = res.isFree || history?.status === 'approved' || user?.role === 'admin';
+            const isPending = history?.status === 'pending';
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
-          {/* Main Content: The Library Grid */}
-          <div className="lg:col-span-3">
-            {loading ? (
-              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-8">
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="aspect-[3/4] bg-white/5 animate-pulse rounded-3xl" />
-                ))}
-              </div>
-            ) : loadingError ? (
-              <div className="flex flex-col items-center justify-center py-32 text-center bg-white/5 rounded-[4rem] border border-white/5 p-10">
-                <AlertCircle className="w-16 h-16 text-rose-500 mb-6" />
-                <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2">Sync Failed</h3>
-                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest max-w-xs mb-8">
-                  {loadingError}
-                </p>
-                <button 
-                  onClick={() => window.location.reload()}
-                  className="px-10 py-4 bg-indigo-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/40 active:scale-95 transition-transform"
-                >
-                  Retry Synchronization
-                </button>
-              </div>
-            ) : resources.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-8">
-                {resources.map((res, idx) => {
-                  const productName = `${res.subject} Premium`;
-                  const status = purchaseStatuses[productName];
-                  const unlocked = isUnlocked(res) || status?.status === 'approved';
-                  const isPending = status?.status === 'pending';
-                  const isRejected = status?.status === 'rejected';
-                  const unlockedPassword = status?.password_unlocked || res.password || SUBJECT_PASSWORDS[res.subject.toLowerCase()];
-                  const originalPrice = Math.round((res.price || 49) * 1.5);
-                  const discount = Math.round(((originalPrice - (res.price || 49)) / originalPrice) * 100);
-                  const rating = (4.7 + Math.random() * 0.3).toFixed(1);
-                  const isBestSeller = idx === 0 || idx === 2;
-
-                  return (
-                    <motion.div
-                      key={res.id}
-                      layout
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.05 }}
-                      className="group flex flex-col h-full"
-                    >
-                      {/* Product Card Container */}
-                      <div className="relative bg-[#0c0c0c] border border-white/5 hover:border-indigo-500/30 rounded-[2rem] overflow-hidden transition-all duration-500 flex flex-col h-full shadow-lg group-hover:shadow-indigo-500/10">
-                        {/* Top Labels */}
-                        <div className="absolute top-3 left-3 z-10 flex flex-col gap-2">
-                          {isBestSeller && (
-                            <div className="px-2 py-1 bg-yellow-400 text-black text-[7px] font-black uppercase tracking-tighter rounded-md shadow-lg">
-                              Best Seller
-                            </div>
-                          )}
-                          {res.isFree ? (
-                            <div className="px-2 py-1 bg-emerald-500 text-black text-[7px] font-black uppercase tracking-tighter rounded-md">
-                              Free
-                            </div>
-                          ) : (
-                            <div className="px-2 py-1 bg-indigo-600 text-white text-[7px] font-black uppercase tracking-tighter rounded-md">
-                              Premium
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Image Container */}
-                        <div 
-                          className="relative aspect-[3/4] bg-black/40 overflow-hidden cursor-pointer"
-                          onClick={() => {
-                            if (unlocked) {
-                              window.open(getDirectDownloadLink(res.driveLink || res.fullNotesUrl || ''), '_blank');
-                            } else {
-                              setSelectedPlan({
-                                id: `res_${res.id}`,
-                                name: `${res.subject} Premium`,
-                                price: res.price || 49,
-                                resourceId: res.id,
-                                type: 'one-time'
-                              });
-                            }
-                          }}
-                        >
-                          {res.coverUrl ? (
-                            <img 
-                              src={res.coverUrl} 
-                              alt={res.subject} 
-                              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-indigo-900/20 to-black flex items-center justify-center p-6 text-center">
-                              <FileText className="w-12 h-12 text-white/10 group-hover:scale-110 transition-transform" />
-                              <span className="absolute bottom-4 left-4 right-4 text-[10px] font-black uppercase text-white/40 tracking-widest">{res.subject}</span>
-                            </div>
-                          )}
-                          
-                          {/* Hover Overlay */}
-                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                            <div className="w-12 h-12 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white scale-75 group-hover:scale-100 transition-transform">
-                              <SearchCheck className="w-6 h-6" />
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Product Info */}
-                        <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1">
-                              <div className="flex items-center text-yellow-400">
-                                <span className="text-[10px] font-bold">★</span>
-                                <span className="text-[10px] font-black ml-0.5">{rating}</span>
-                              </div>
-                              <span className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">(1.2k+ Sold)</span>
-                            </div>
-                            <h3 className="text-sm font-black text-white uppercase tracking-tight line-clamp-1 group-hover:text-indigo-400 transition-colors">
-                              {res.subject} {unlocked ? '(UNLOCKED)' : isPending ? '(PENDING)' : isRejected ? '(REJECTED)' : ''}
-                            </h3>
-                          </div>
-
-                          <div className="pt-2 border-t border-white/5 space-y-3">
-                            <div className="flex items-baseline gap-2">
-                              {res.isFree ? (
-                                <span className="text-lg font-black text-emerald-400 uppercase tracking-tighter">GRATIS</span>
-                              ) : (
-                                <>
-                                  <span className="text-lg font-black text-white">₹{res.price || 49}</span>
-                                  <span className="text-[10px] text-gray-500 line-through font-bold">₹{originalPrice}</span>
-                                  <span className="text-[9px] text-emerald-500 font-black uppercase">-{discount}% OFF</span>
-                                </>
-                              )}
-                            </div>
-
-                            {unlocked && !res.isFree ? (
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20">
-                                  <div className="overflow-hidden">
-                                    <span className="text-[7px] font-black uppercase text-emerald-400 block mb-0.5">PASSWORD</span>
-                                    <code className="text-[11px] font-black text-white tracking-widest break-all block">
-                                      {unlockedPassword || "SEE_ADMIN"}
-                                    </code>
-                                  </div>
-                                  <button 
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(unlockedPassword || "");
-                                      toast.success("Copied!");
-                                    }}
-                                    className="p-1.5 hover:bg-emerald-500/20 rounded-lg transition-colors text-emerald-400"
-                                  >
-                                    <Copy className="w-3 h-3" />
-                                  </button>
-                                </div>
-                                <div className="flex gap-2">
-                                  <span className="flex-1 h-10 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl flex items-center justify-center font-black text-[8px] uppercase tracking-widest cursor-default">
-                                    Approved
-                                  </span>
-                                  <a 
-                                    href={getDirectDownloadLink(res.driveLink || res.fullNotesUrl || '')} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="px-4 h-10 bg-white text-black rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest active:scale-95 transition-all shadow-xl"
-                                  >
-                                    <Download className="w-3.5 h-3.5" />
-                                  </a>
-                                </div>
-                              </div>
-                            ) : isPending ? (
-                              <div className="space-y-2">
-                                <div className="w-full h-10 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest cursor-default">
-                                  <Clock className="w-4 h-4 animate-pulse" />
-                                  Pending
-                                </div>
-                                <p className="text-[8px] text-gray-500 text-center font-bold uppercase tracking-tight">Admin is verifying payment</p>
-                              </div>
-                            ) : isRejected ? (
-                              <div className="space-y-2">
-                                <div className="w-full h-10 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest cursor-default">
-                                  <XCircle className="w-4 h-4" />
-                                  Rejected
-                                </div>
-                                <button 
-                                  onClick={() => setSelectedPlan({
-                                    id: `res_${res.id}`,
-                                    name: `${res.subject} Premium`,
-                                    price: res.price || 49,
-                                    resourceId: res.id,
-                                    type: 'one-time'
-                                  })}
-                                  className="w-full h-8 bg-white/5 text-gray-400 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-white/10 transition-all border border-white/5"
-                                >
-                                  Retry Purchase
-                                </button>
-                              </div>
-                            ) : res.isFree ? (
-                               <div className="space-y-3">
-                                 <a 
-                                   href={getDirectDownloadLink(res.driveLink || res.fullNotesUrl || '')} 
-                                   target="_blank" 
-                                   rel="noopener noreferrer"
-                                   className="w-full h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest hover:bg-indigo-500 transition-all shadow-xl"
-                                 >
-                                   <Download className="w-3.5 h-3.5" />
-                                   Download Free
-                                 </a>
-                               </div>
-                            ) : (
-                              <div className="space-y-3">
-                                <button 
-                                  onClick={() => {
-                                      setSelectedPlan({
-                                        id: `res_${res.id}`,
-                                        name: `${res.subject} Premium`,
-                                        price: res.price || 49,
-                                        resourceId: res.id,
-                                        type: 'one-time'
-                                      });
-                                  }}
-                                  className="w-full h-10 bg-indigo-600 text-white hover:bg-indigo-500 rounded-xl flex items-center justify-center gap-2 font-black text-[9px] uppercase tracking-widest active:scale-95 transition-all shadow-xl"
-                                >
-                                  <Crown className="w-3.5 h-3.5" /> BUY NOW
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-40 glass-card rounded-[4rem] bg-white/5 flex flex-col items-center justify-center space-y-8 border border-white/5">
-                <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center border border-white/10 relative">
-                  <div className="absolute inset-0 bg-indigo-500/10 rounded-full animate-ping" />
-                  <BookOpen className="w-10 h-10 text-gray-700" />
-                </div>
-                <div className="space-y-3">
-                  <h3 className="text-2xl font-black text-white uppercase tracking-tight">Curating Resources</h3>
-                  <p className="text-gray-500 text-xs font-medium uppercase tracking-[0.3em]">Class {activeClass} Premium Hub arriving shortly.</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-        {/* Sidebar: Plans & Subscriptions */}
-        <div className="space-y-10">
-           <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="p-10 glass-card rounded-[3.5rem] border-indigo-500/20 bg-gradient-to-br from-indigo-500/10 to-transparent space-y-8 shadow-2xl relative overflow-hidden group"
-           >
-              <div className="absolute -top-10 -right-10 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl group-hover:bg-indigo-500/40 transition-all" />
-              
-              <div className="flex items-center gap-4 relative z-10">
-                <div className="w-14 h-14 bg-indigo-600 rounded-[1.5rem] flex items-center justify-center shadow-2xl shadow-indigo-600/40">
-                  <Crown className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <h5 className="font-black text-lg text-white uppercase tracking-tighter">NoteVix <span className="text-indigo-400">Plus</span></h5>
-                  <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-[0.2em]">The Master Access</p>
-                </div>
-              </div>
-              
-              <div className="space-y-6 relative z-10">
-                <p className="text-xs text-gray-400 leading-relaxed font-medium uppercase tracking-widest">Everything unlocked. All classes (8-10), all ebooks, and priority AI help. One pass to rule them all.</p>
-                <button 
-                  onClick={() => setSelectedPlan(PREMIUM_PLANS[0])}
-                  className="w-full py-5 bg-white text-black rounded-3xl font-black text-[11px] uppercase tracking-[0.4em] shadow-2xl active:scale-[0.98] transition-all hover:bg-gray-100"
-                >
-                  Join NoteVix+
-                </button>
-              </div>
-           </motion.div>
-
-           <div className="p-10 glass-card rounded-[3.5rem] bg-white/5 border border-white/5 space-y-8 shadow-xl">
-              <h5 className="font-black text-[10px] text-gray-500 uppercase tracking-[0.4em]">Student Trust</h5>
-              <div className="space-y-8">
-                {[
-                  { label: 'One-time Payment', icon: CreditCard, detail: 'Lifetime access to notes' },
-                  { label: 'AI Doubt Solver', icon: Zap, detail: '24/7 smart assistant' },
-                  { label: 'Safe & Secure', icon: ShieldCheck, detail: 'Verified by AI instant' }
-                ].map((perk, i) => (
-                  <div key={i} className="flex items-start gap-4 group">
-                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-gray-500 group-hover:bg-indigo-600/10 group-hover:text-indigo-400 transition-all border border-white/5">
-                      <perk.icon className="w-6 h-6" />
+            return (
+              <div key={res.id} className="bg-[#0c0c0c] border border-white/5 rounded-[2rem] overflow-hidden flex flex-col group">
+                <div className="aspect-[3/4] relative overflow-hidden">
+                  {res.coverUrl ? (
+                    <img src={res.coverUrl} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                  ) : (
+                    <div className="w-full h-full bg-indigo-600/10 flex items-center justify-center">
+                      <BookOpen size={40} className="text-indigo-500/20" />
                     </div>
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-white block">{perk.label}</span>
-                      <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block opacity-60">{perk.detail}</span>
-                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+                  <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-[10px] font-black text-white">₹39</div>
+                </div>
+
+                <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-sm font-black uppercase truncate">{res.subject} Notes</h3>
+                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Class {res.class}</p>
                   </div>
-                ))}
+
+                  {unlocked ? (
+                    <div className="space-y-2">
+                       <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20 text-center">
+                          <span className="text-[7px] text-emerald-500 font-bold block">PASSWORD</span>
+                          <code className="text-xs font-black text-white">{history?.password_unlocked || res.password || 'APPROVED'}</code>
+                       </div>
+                       <a 
+                        href={getDirectDownloadLink(res.driveLink || '')} 
+                        target="_blank" 
+                        className="w-full py-3 bg-white text-black rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase shadow-lg shadow-white/10"
+                       >
+                         <Download size={14} /> Download PDF
+                       </a>
+                    </div>
+                  ) : isPending ? (
+                    <div className="w-full py-3 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 rounded-xl text-center font-black text-[10px] uppercase">
+                       <Clock className="w-3.5 h-3.5 inline mr-1 animate-pulse" /> Pending
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => setSelectedPlan({ ...PREMIUM_PLANS[0], subject: res.subject, class: res.class })}
+                      className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
+                    >
+                      <Crown size={14} className="inline mr-1" /> Buy Now
+                    </button>
+                  )}
+                </div>
               </div>
-           </div>
+            );
+          })}
         </div>
-      </div>
-    </div>
+      )}
 
-      <AnimatePresence>
-        {purchaseSuccess && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/95 backdrop-blur-3xl">
-             <motion.div
-               initial={{ opacity: 0, scale: 0.9, y: 30 }}
-               animate={{ opacity: 1, scale: 1, y: 0 }}
-               className="w-full max-w-md bg-[#0a0a0a] border border-emerald-500/30 rounded-[3rem] p-10 text-center space-y-8 relative overflow-hidden"
-             >
-                <div className="absolute -top-24 -left-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-[80px]" />
-                
-                <div className="flex flex-col items-center gap-6">
-                   <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20">
-                     <ShieldCheck className="w-10 h-10 text-emerald-400" />
-                   </div>
-                   <div className="space-y-2">
-                     <h2 className="text-3xl font-black text-white uppercase tracking-tighter">AI VERIFIED</h2>
-                     <p className="text-emerald-400 text-xs font-black uppercase tracking-widest leading-none">{purchaseSuccess.subject} UNLOCKED</p>
-                   </div>
-                </div>
-
-                <div className="space-y-4">
-                   <div className="flex flex-col gap-1 text-center">
-                     <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest animate-pulse">
-                       ⚠️ Critical Warning
-                     </span>
-                     <p className="text-[9px] text-rose-400 font-bold uppercase tracking-wider px-4">
-                       Remember the password without this you cant able to open the {purchaseSuccess.subject} PDF notes.
-                     </p>
-                   </div>
-
-                   <div className="p-8 rounded-3xl bg-white/5 border border-white/10 space-y-4">
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">YOUR PDF PASSWORD</p>
-                      <div className="flex flex-col items-center gap-4">
-                         <div className="w-full py-2 text-center">
-                           <code className="text-sm sm:text-xl font-black text-white tracking-[0.15em] break-all px-4 block bg-white/5 py-4 rounded-2xl border border-white/10 select-all">
-                             {purchaseSuccess.password}
-                           </code>
-                         </div>
-                         <button 
-                           onClick={() => {
-                             navigator.clipboard.writeText(purchaseSuccess.password);
-                             toast.success("Password Copied!");
-                           }}
-                           className="flex items-center gap-2 px-6 py-3 bg-indigo-500/10 rounded-2xl hover:bg-indigo-500/20 transition-all border border-indigo-500/20 text-indigo-400 group"
-                         >
-                           <Copy className="w-4 h-4" />
-                           <span className="text-[10px] font-black uppercase tracking-widest">Copy Password</span>
-                         </button>
-                      </div>
-                   </div>
-                </div>
-
-                <div className="space-y-6">
-                   <div className="flex items-start gap-3 bg-white/5 p-4 rounded-2xl text-left">
-                     <AlertCircle className="w-4 h-4 text-emerald-400 mt-1 flex-shrink-0" />
-                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
-                       Password must be entered exactly in <span className="text-white">CAPITAL LETTERS</span> to open the PDF.
-                     </p>
-                   </div>
-                   
-                   <button 
-                    onClick={() => {
-                      setPurchaseSuccess(null);
-                      setSelectedPlan(null);
-                      window.location.reload();
-                    }}
-                    className="w-full h-16 bg-white text-black rounded-3xl font-black text-sm uppercase tracking-[0.3em] active:scale-95 transition-all shadow-2xl"
-                   >
-                     GO TO LIBRARY
-                   </button>
-                </div>
-             </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
+      {/* Payment Modal */}
       <AnimatePresence>
         {selectedPlan && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-2xl">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                className="relative w-full max-w-lg max-h-[90vh] flex flex-col bg-[#0a0a0a] border border-white/10 rounded-[3rem] overflow-hidden"
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
+              className="relative w-full max-w-lg bg-[#0A0A0B] border border-white/10 rounded-[40px] p-10 space-y-8"
+            >
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-black uppercase">{selectedPlan.subject || selectedPlan.name}</h2>
+                <button onClick={() => setSelectedPlan(null)}><X size={24} className="text-gray-500 hover:text-white" /></button>
+              </div>
+
+              <div className="bg-indigo-600/5 p-8 rounded-3xl border border-indigo-600/20 flex flex-col items-center gap-6">
+                 <div className="p-4 bg-white rounded-2xl">
+                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=9236489649@mbk&pn=NoteVix&am=${selectedPlan.price}&cu=INR`} className="w-32 h-32" />
+                 </div>
+                 <div className="text-center">
+                    <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">Pay ₹{selectedPlan.price} via UPI</p>
+                    <code className="text-lg font-black text-white">9236489649@mbk</code>
+                 </div>
+              </div>
+
+              <div className="space-y-4">
+                 <input 
+                  type="text" placeholder="WhatsApp Number" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)}
+                  className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none focus:border-indigo-500"
+                 />
+                 <div className="grid grid-cols-2 gap-4">
+                    <input type="number" placeholder="Amount Paid" value={amount} onChange={e => setAmount(e.target.value)} className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none" />
+                    <input type="text" placeholder="Transaction ID" value={transactionId} onChange={e => setTransactionId(e.target.value)} className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none font-mono" />
+                 </div>
+              </div>
+
+              <button 
+                onClick={handlePurchase} disabled={isSubmitting}
+                className="w-full h-16 bg-white text-black rounded-3xl font-black text-sm uppercase shadow-xl disabled:opacity-50"
               >
-                <div className="p-8 space-y-8 overflow-y-auto flex-1 custom-scrollbar pb-10">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <h2 className="text-2xl font-black tracking-tight">{selectedPlan.name}</h2>
-                    <p className="text-xs text-indigo-400 font-bold uppercase tracking-widest">Manual Payment Verification</p>
-                  </div>
-                  <button onClick={() => setSelectedPlan(null)} className="p-3 hover:bg-white/5 rounded-2xl transition-colors">
-                    <X className="w-6 h-6 text-gray-400" />
-                  </button>
-                </div>
-
-                <div className="space-y-6">
-                  <div className="p-6 bg-indigo-600/5 border border-indigo-600/20 rounded-[2rem] flex flex-col items-center gap-6">
-                    <div className="p-4 bg-white rounded-3xl">
-                      <img 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=${upiId}&pn=Poonam%20Devi&am=${selectedPlan.price}&cu=INR`}
-                        alt="QR"
-                        className="w-32 h-32"
-                      />
-                    </div>
-                    <div className="text-center space-y-2">
-                       <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
-                         Scan to Pay: <span className="text-white">₹{selectedPlan.price}</span> <br />
-                         ID: <span className="text-white">{upiId}</span>
-                       </p>
-                       <button 
-                        onClick={() => {
-                          navigator.clipboard.writeText(upiId);
-                          toast.success('UPI ID Copied!');
-                        }}
-                        className="px-6 py-2 bg-white/5 rounded-xl border border-white/10 text-sm font-bold flex items-center gap-2 hover:bg-white/10 transition-colors mx-auto"
-                       >
-                         {upiId}
-                         <Copy className="w-3 h-3 text-indigo-400" />
-                       </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 pb-10">
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">WhatsApp/Phone Number</label>
-                        <input 
-                          type="tel" 
-                          value={phoneNumber}
-                          onChange={(e) => setPhoneNumber(e.target.value)}
-                          placeholder="9236XXXXXX"
-                          className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-all"
-                        />
-                      </div>
-
-                      {!user && (
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Email for Access</label>
-                          <input 
-                            type="email" 
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder="your@email.com"
-                            className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-all"
-                          />
-                        </div>
-                      )}
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Amount Paid (₹)</label>
-                          <input 
-                            type="number" 
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            placeholder={selectedPlan.price.toString()}
-                            className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-all"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Transaction ID / UTR</label>
-                          <input 
-                            type="text" 
-                            value={transactionId}
-                            onChange={(e) => setTransactionId(e.target.value)}
-                            placeholder="12-digit UTR"
-                            className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-all"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-5 bg-indigo-500/5 rounded-3xl border border-indigo-500/10 space-y-4">
-                      <div className="flex items-start gap-3">
-                        <Info className="w-5 h-5 text-indigo-400 mt-0.5" />
-                        <div className="space-y-2 flex-1">
-                          <p className="text-[11px] font-black text-white uppercase tracking-widest">Manual Verification Rules</p>
-                          <div className="space-y-1.5">
-                            <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
-                              • Enter your Transaction ID/UTR correctly. <br/>
-                              • Admin will verify payment and grant access instantly. <br/>
-                              • Do not submit duplicate requests.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="pt-3 border-t border-indigo-500/10 text-center space-y-1">
-                         <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
-                           Payment Issues / Stuck? Contact Admin
-                         </p>
-                         <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest leading-relaxed">
-                           WhatsApp: 9236489649 <br/> Gmail: expertnotevix@gmail.com
-                         </p>
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-8 pt-0 flex-shrink-0">
-                <button
-                  onClick={handlePurchase}
-                  disabled={isSubmitting}
-                  className="w-full h-16 bg-indigo-600 text-white rounded-3xl font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50"
-                >
-                  {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
-                  {isSubmitting ? 'Submitting Details...' : 'Submit Payment Details'}
-                </button>
-              </div>
+                {isSubmitting ? 'Submitting...' : 'Submit Payment'}
+              </button>
             </motion.div>
           </div>
         )}
