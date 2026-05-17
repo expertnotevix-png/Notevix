@@ -23,7 +23,24 @@ export const dataBridge = {
   async addResource(res: Partial<SubjectResource>) {
     if (!supabase) return { success: false };
     try {
-      const { data, error } = await supabase.from('subject_resources').insert(res).select().single();
+      // Explicitly pick only allowed columns for insertion
+      const cleanData = {
+        subject: res.subject,
+        class_level: res.class_level,
+        description: res.description,
+        drive_link: res.drive_link,
+        cover_image: res.cover_image,
+        price: res.price,
+        pdf_password: res.pdf_password,
+        is_premium: res.is_premium,
+        created_at: res.created_at || new Date().toISOString()
+      };
+      
+      const { data, error } = await supabase.from('subject_resources')
+        .insert(cleanData)
+        .select('id, subject, class_level, description, drive_link, cover_image, price, pdf_password, is_premium, created_at')
+        .single();
+      
       if (error) throw error;
       return { success: true, data };
     } catch (err: any) {
@@ -34,7 +51,21 @@ export const dataBridge = {
   async updateResource(id: string, res: Partial<SubjectResource>) {
     if (!supabase) return { success: false };
     try {
-      const { error } = await supabase.from('subject_resources').update(res).eq('id', id);
+      // Explicitly pick only allowed columns for updates
+      const updateData: any = {};
+      if (res.subject !== undefined) updateData.subject = res.subject;
+      if (res.class_level !== undefined) updateData.class_level = res.class_level;
+      if (res.description !== undefined) updateData.description = res.description;
+      if (res.drive_link !== undefined) updateData.drive_link = res.drive_link;
+      if (res.cover_image !== undefined) updateData.cover_image = res.cover_image;
+      if (res.price !== undefined) updateData.price = res.price;
+      if (res.pdf_password !== undefined) updateData.pdf_password = res.pdf_password;
+      if (res.is_premium !== undefined) updateData.is_premium = res.is_premium;
+
+      const { error } = await supabase.from('subject_resources')
+        .update(updateData)
+        .eq('id', id);
+      
       if (error) throw error;
       return { success: true };
     } catch (err: any) {
