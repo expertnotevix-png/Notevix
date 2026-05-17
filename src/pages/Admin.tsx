@@ -4,7 +4,7 @@ import { AppUser, VerifiedPayment, PdfRequest, SubjectResource, PromoBanner } fr
 import { 
   Plus, Trash2, Edit2, Save, X, 
   Bell, Send, CheckCircle2, Clock, 
-  Shield, RefreshCw, CreditCard, Check, XCircle, Users, 
+  Shield, RefreshCw, CreditCard, Check, XCircle, Users, Inbox, User, 
   LayoutDashboard, BarChart3, Settings, Search, TrendingUp, DollarSign, UserCheck,
   BookOpen, Zap, AlertCircle, FileText, Smartphone, Instagram
 } from 'lucide-react';
@@ -371,7 +371,8 @@ export default function Admin() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar bg-[#050505]">
+          <div className="max-w-6xl mx-auto space-y-8">
           {activeTab === 'analytics' && (
             <div className="space-y-8 animate-in fade-in duration-500">
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -465,147 +466,207 @@ export default function Admin() {
               </div>
             </div>
           )}
-
           {activeTab === 'verified_payments' && (
-            <div className="space-y-6 animate-in fade-in duration-500">
-               <div className="sticky top-0 z-[30] bg-[#050505]/80 backdrop-blur-xl -mx-8 px-8 py-6 mb-6 border-b border-white/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-2xl">
-                <div className="relative flex-1 max-w-md">
+            <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                 <div>
+                   <h3 className="text-2xl font-black uppercase tracking-tight">Payment Requests</h3>
+                   <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">
+                     Verify and Approve Transactions
+                   </p>
+                 </div>
+                 
+                 <div className="flex items-center gap-2 bg-white/5 p-1 rounded-2xl border border-white/5 w-full md:w-auto">
+                    <button 
+                      onClick={() => setShowOnlyPending(true)}
+                      className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showOnlyPending ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-gray-500 hover:text-gray-300'}`}
+                    >
+                      Pending ({verifiedPayments.filter(p => p.status === 'pending').length})
+                    </button>
+                    <button 
+                      onClick={() => setShowOnlyPending(false)}
+                      className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!showOnlyPending ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-gray-500 hover:text-gray-300'}`}
+                    >
+                      History
+                    </button>
+                 </div>
+               </div>
+
+               <div className="relative">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input 
                     type="text"
                     placeholder="Search Transaction ID or Phone..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 py-3 text-sm focus:border-indigo-500 outline-none"
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm focus:border-indigo-500 outline-none transition-all"
                   />
-                </div>
-                <div className="flex items-center gap-2 bg-white/5 p-1 rounded-2xl border border-white/5">
-                  <button 
-                    onClick={() => setShowOnlyPending(true)}
-                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showOnlyPending ? 'bg-indigo-600 text-white' : 'text-gray-500'}`}
-                  >
-                    Pending
-                  </button>
-                  <button 
-                    onClick={() => setShowOnlyPending(false)}
-                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!showOnlyPending ? 'bg-indigo-600 text-white' : 'text-gray-500'}`}
-                  >
-                    All
-                  </button>
-                </div>
-              </div>
+               </div>
 
-              <div className="bg-[#0a0a0a] rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="border-b border-white/5 bg-white/10">
-                        <th className="p-6 text-[10px] font-black text-gray-500 uppercase tracking-widest">User Details</th>
-                        <th className="p-6 text-[10px] font-black text-gray-500 uppercase tracking-widest">Transaction</th>
-                        <th className="p-6 text-[10px] font-black text-gray-500 uppercase tracking-widest">Status</th>
-                        <th className="p-6 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {filteredPayments.map((p) => (
-                        <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
-                          <td className="p-6">
-                            <div>
-                              <p className="text-xs font-black uppercase">{p.product_name || 'Unknown Product'}</p>
-                              <p className="text-[10px] text-gray-500 font-bold">{p.phone_number}</p>
-                            </div>
-                          </td>
-                          <td className="p-6">
-                            <div>
-                                <code className="text-[11px] text-indigo-400 font-black px-2 py-0.5 bg-indigo-400/10 rounded">{p.transaction_id}</code>
-                                <p className="text-[10px] text-gray-500 mt-1">₹{p.amount}</p>
-                            </div>
-                          </td>
-                          <td className="p-6">
-                            <span className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${
-                              p.approved ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
-                              p.status === 'rejected' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
-                              'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'
-                            }`}>
-                              {p.status}
-                            </span>
-                          </td>
-                          <td className="p-6 text-right">
-                             {!p.approved ? (
-                               <div className="flex justify-end gap-2">
-                                 <button onClick={() => handleOpenApproveModal(p)} className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-white transition-all">
-                                   <Check size={16} />
-                                 </button>
-                                 <button onClick={() => setRejectModal({ id: p.id, isOpen: true, reason: '' })} className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all">
-                                   <X size={16} />
-                                 </button>
+               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {filteredPayments.map((p) => (
+                    <div key={p.id} className="group bg-[#0a0a0a] border border-white/5 rounded-[2rem] p-6 hover:border-indigo-500/30 transition-all shadow-xl">
+                      <div className="flex justify-between items-start gap-4">
+                         <div className="space-y-4 flex-1">
+                            <div className="flex items-center gap-3">
+                               <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+                                  <DollarSign size={20} />
                                </div>
-                             ) : (
-                               <p className="text-[10px] font-mono text-gray-600">{p.unlock_password || 'RESOLVED'}</p>
-                             )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {filteredPayments.length === 0 && (
-                    <div className="p-12 text-center text-gray-600 italic text-sm">No transactions found matching filters</div>
-                  )}
-                </div>
-              </div>
+                               <div>
+                                  <p className="text-xs font-black uppercase tracking-tight">{p.product_name || 'Unknown Product'}</p>
+                                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{p.phone_number}</p>
+                               </div>
+                            </div>
+
+                            <div className="p-4 bg-white/[0.02] rounded-2xl border border-white/5 space-y-2">
+                               <div className="flex justify-between items-center">
+                                  <span className="text-[10px] text-gray-500 font-bold uppercase">Transaction ID</span>
+                                  <code className="text-[10px] text-indigo-400 font-black">{p.transaction_id}</code>
+                               </div>
+                               <div className="flex justify-between items-center">
+                                  <span className="text-[10px] text-gray-500 font-bold uppercase">Amount</span>
+                                  <span className="text-sm font-black">₹{p.amount}</span>
+                               </div>
+                            </div>
+                         </div>
+
+                         <div className="flex flex-col gap-2">
+                            {p.status === 'pending' ? (
+                               <>
+                                  <button 
+                                    onClick={() => handleOpenApproveModal(p)}
+                                    className="p-3 bg-emerald-500 text-black rounded-xl hover:bg-emerald-400 transition-all active:scale-95 flex items-center justify-center shadow-lg shadow-emerald-500/20"
+                                  >
+                                    <Check size={18} />
+                                  </button>
+                                  <button 
+                                    onClick={() => setRejectModal({ id: p.id, isOpen: true, reason: '' })}
+                                    className="p-3 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl hover:bg-red-500 hover:text-white transition-all active:scale-95 flex items-center justify-center"
+                                  >
+                                    <X size={18} />
+                                  </button>
+                               </>
+                            ) : (
+                               <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${
+                                 p.status === 'approved' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
+                               }`}>
+                                 {p.status}
+                               </div>
+                            )}
+                         </div>
+                      </div>
+                      
+                      {p.status === 'approved' && p.unlock_password && (
+                        <div className="mt-4 pt-4 border-t border-white/5">
+                           <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">Grant Key</p>
+                           <code className="text-xs text-indigo-400 font-black block p-2 bg-indigo-500/5 rounded-lg border border-indigo-500/10">{p.unlock_password}</code>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+               </div>
+
+               {filteredPayments.length === 0 && (
+                  <div className="py-20 text-center space-y-4 bg-white/[0.02] border-2 border-dashed border-white/5 rounded-[3rem]">
+                     <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto text-gray-600">
+                        <Inbox size={32} />
+                     </div>
+                     <p className="text-gray-500 uppercase font-black text-xs tracking-widest">No transaction requests found</p>
+                  </div>
+               )}
             </div>
           )}
 
           {activeTab === 'pdf_requests' && (
-             <div className="space-y-6 animate-in fade-in duration-500">
-               <div className="bg-[#0a0a0a] rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="border-b border-white/5 bg-white/10">
-                        <th className="p-6 text-[10px] font-black text-gray-500 uppercase tracking-widest">Student</th>
-                        <th className="p-6 text-[10px] font-black text-gray-500 uppercase tracking-widest">Requested PDF</th>
-                        <th className="p-6 text-[10px] font-black text-gray-500 uppercase tracking-widest">Handle</th>
-                        <th className="p-6 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {pdfRequests.map((req) => (
-                        <tr key={req.id} className="hover:bg-white/[0.02] transition-colors">
-                          <td className="p-6">
-                            <div>
-                                <p className="text-xs font-black">{req.student_name}</p>
-                                <p className="text-[10px] text-gray-500 uppercase">Class {req.class_name} • {req.phone_number}</p>
-                            </div>
-                          </td>
-                          <td className="p-6">
-                            <span className="text-xs font-bold text-gray-300">{req.requested_pdf}</span>
-                          </td>
-                          <td className="p-6">
-                            <div className="flex items-center gap-1.5 text-indigo-400">
-                              <Instagram size={12} />
-                              <span className="text-[11px] font-bold">{req.instagram_username}</span>
-                            </div>
-                          </td>
-                          <td className="p-6 text-right">
-                             {req.status === 'pending' ? (
-                               <div className="flex justify-end gap-2">
-                                 <button onClick={() => handleApprovePdf(req.id)} className="px-4 py-2 bg-emerald-500 text-black rounded-xl text-[10px] font-black uppercase active:scale-95 transition-all">Grant Access</button>
-                                 <button onClick={() => handleRejectPdf(req.id)} className="p-2 border border-red-500/20 text-red-500 rounded-xl hover:bg-red-500/10 transition-all"><X size={16} /></button>
-                               </div>
-                             ) : (
-                               <span className="text-[10px] font-black uppercase text-indigo-500">{req.status}</span>
-                             )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {pdfRequests.length === 0 && (
-                    <div className="p-12 text-center text-gray-600 italic text-sm">No PDF requests available</div>
-                  )}
+             <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                   <div>
+                      <h3 className="text-2xl font-black uppercase tracking-tight">PDF Requests</h3>
+                      <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Manual Access Requests</p>
+                   </div>
+                   <div className="flex items-center gap-2 bg-white/5 p-1 rounded-2xl border border-white/5 w-full md:w-auto">
+                      <button 
+                        onClick={() => setShowOnlyPending(true)}
+                        className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showOnlyPending ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-gray-500 hover:text-gray-300'}`}
+                      >
+                        Pending ({pdfRequests.filter(r => r.status === 'pending').length})
+                      </button>
+                      <button 
+                        onClick={() => setShowOnlyPending(false)}
+                        className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!showOnlyPending ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-gray-500 hover:text-gray-300'}`}
+                      >
+                        History
+                      </button>
+                   </div>
                 </div>
-              </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {pdfRequests.filter(r => showOnlyPending ? r.status === 'pending' : true).map((req) => (
+                    <div key={req.id} className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] p-6 space-y-6 hover:border-indigo-500/20 transition-all shadow-xl">
+                       <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-3">
+                             <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400">
+                                <User size={20} />
+                             </div>
+                             <div>
+                                <p className="text-sm font-black uppercase truncate">{req.student_name}</p>
+                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Class {req.class_name} • {req.phone_number}</p>
+                             </div>
+                          </div>
+                          
+                          <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                            req.status === 'approved' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
+                            req.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' :
+                            'bg-red-500/10 text-red-500 border border-red-500/20'
+                          }`}>
+                            {req.status}
+                          </div>
+                       </div>
+
+                       <div className="space-y-4">
+                          <div className="p-4 bg-white/[0.02] rounded-2xl border border-white/5 space-y-3">
+                             <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-gray-500 font-bold uppercase">Requested PDF</span>
+                                <span className="text-gray-200 font-bold">{req.requested_pdf}</span>
+                             </div>
+                             <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-gray-500 font-bold uppercase">Instagram</span>
+                                <div className="flex items-center gap-1.5 text-indigo-400 font-black">
+                                   <Instagram size={12} />
+                                   {req.instagram_username}
+                                </div>
+                             </div>
+                          </div>
+
+                          {req.status === 'pending' && (
+                             <div className="flex gap-2">
+                                <button 
+                                  onClick={() => handleApprovePdf(req.id)} 
+                                  className="flex-1 py-3 bg-emerald-500 text-black rounded-xl text-[10px] font-black uppercase shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                                >
+                                  Grant Access
+                                </button>
+                                <button 
+                                  onClick={() => handleRejectPdf(req.id)} 
+                                  className="px-4 py-3 border border-white/5 text-red-500 rounded-xl hover:bg-white/5 transition-all active:scale-95"
+                                >
+                                  <X size={16} />
+                                </button>
+                             </div>
+                          )}
+                       </div>
+                    </div>
+                  ))}
+                </div>
+
+                {pdfRequests.filter(r => showOnlyPending ? r.status === 'pending' : true).length === 0 && (
+                   <div className="py-20 text-center space-y-4 bg-white/[0.02] border-2 border-dashed border-white/5 rounded-[3rem]">
+                      <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto text-gray-600">
+                         <Inbox size={32} />
+                      </div>
+                      <p className="text-gray-500 uppercase font-black text-xs tracking-widest">No manual requests found</p>
+                   </div>
+                )}
              </div>
           )}
 
@@ -665,6 +726,7 @@ export default function Admin() {
               </div>
             </div>
           )}
+          </div>
         </main>
       </div>
       {/* Modals */}
