@@ -36,7 +36,7 @@ export interface PdfRequest {
 export interface SubjectResource {
   id: string;
   subject: string;
-  class_level: string;
+  class: string;
   description?: string;
   cover_image?: string;
   drive_link?: string;

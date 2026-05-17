@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS public.subject_resources (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     subject TEXT NOT NULL,
-    class_level TEXT NOT NULL,
+    class TEXT NOT NULL,
     description TEXT,
     drive_link TEXT,
     cover_image TEXT,

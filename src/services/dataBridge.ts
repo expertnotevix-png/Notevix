@@ -9,9 +9,9 @@ export const dataBridge = {
     if (!supabase) return [];
     try {
       let query = supabase.from('subject_resources')
-        .select('id, subject, class_level, description, drive_link, cover_image, price, pdf_password, is_premium, created_at')
+        .select('id, subject, class, description, drive_link, cover_image, price, pdf_password, is_premium, created_at')
         .order('created_at', { ascending: false });
-      if (classLevel) query = query.eq('class_level', classLevel);
+      if (classLevel) query = query.eq('class', classLevel);
       if (isPremium !== undefined) query = query.eq('is_premium', isPremium);
       const { data } = await query;
       return (data || []) as SubjectResource[];
@@ -26,7 +26,7 @@ export const dataBridge = {
       // Explicitly pick only allowed columns for insertion
       const cleanData = {
         subject: res.subject,
-        class_level: res.class_level,
+        class: res.class,
         description: res.description,
         drive_link: res.drive_link,
         cover_image: res.cover_image,
@@ -38,7 +38,7 @@ export const dataBridge = {
       
       const { data, error } = await supabase.from('subject_resources')
         .insert(cleanData)
-        .select('id, subject, class_level, description, drive_link, cover_image, price, pdf_password, is_premium, created_at')
+        .select('id, subject, class, description, drive_link, cover_image, price, pdf_password, is_premium, created_at')
         .single();
       
       if (error) throw error;
@@ -54,7 +54,7 @@ export const dataBridge = {
       // Explicitly pick only allowed columns for updates
       const updateData: any = {};
       if (res.subject !== undefined) updateData.subject = res.subject;
-      if (res.class_level !== undefined) updateData.class_level = res.class_level;
+      if (res.class !== undefined) updateData.class = res.class;
       if (res.description !== undefined) updateData.description = res.description;
       if (res.drive_link !== undefined) updateData.drive_link = res.drive_link;
       if (res.cover_image !== undefined) updateData.cover_image = res.cover_image;

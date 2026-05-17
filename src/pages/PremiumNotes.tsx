@@ -76,7 +76,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     setIsSubmitting(true);
     try {
       const res = await dataBridge.saveVerifiedPayment({
-        product_name: selectedPlan.subject ? `${selectedPlan.subject} Notes (Class ${selectedPlan.classLevel})` : selectedPlan.name,
+        product_name: selectedPlan.subject ? `${selectedPlan.subject} Notes (Class ${selectedPlan.class})` : selectedPlan.name,
         amount: parseFloat(amount),
         transaction_id: transactionId,
         phone_number: phoneNumber,
@@ -154,7 +154,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                 <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
                   <div>
                     <h3 className="text-sm font-black uppercase truncate">{res.subject}</h3>
-                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Class {res.class_level}</p>
+                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Class {res.class}</p>
                   </div>
 
                   {unlocked ? (
@@ -177,7 +177,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                     </div>
                   ) : (
                     <button 
-                      onClick={() => setSelectedPlan({ ...PREMIUM_PLANS[0], subject: res.subject, classLevel: res.class_level, price: res.price })}
+                      onClick={() => setSelectedPlan({ ...PREMIUM_PLANS[0], subject: res.subject, class: res.class, price: res.price })}
                       className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
                     >
                       <Crown size={14} className="inline mr-1" /> Buy Now

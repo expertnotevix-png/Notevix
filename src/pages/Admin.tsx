@@ -98,7 +98,7 @@ export default function Admin() {
     try {
       const resData = {
         subject: formData.subject,
-        class_level: formData.class_level,
+        class: formData.class,
         price: formData.is_premium ? parseFloat(formData.price || '0') : 0,
         description: formData.description,
         cover_image: formData.cover_image,
@@ -422,7 +422,7 @@ export default function Admin() {
                         <div>
                            <h4 className="font-black text-sm uppercase truncate">{res.subject}</h4>
                            <p className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.2em] mt-1 space-x-2">
-                             <span>Class {res.class_level}</span>
+                             <span>Class {res.class}</span>
                              <span>•</span>
                              <span className="text-indigo-400">V{res.id.slice(-4)}</span>
                            </p>
@@ -736,7 +736,7 @@ export default function Admin() {
 // Sub-components
 function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
   const [form, setForm] = useState(resource || {
-    subject: '', class_level: '10', price: '39', description: '', cover_image: '', drive_link: '', pdf_password: '', is_premium: true
+    subject: '', class: '10', price: '39', description: '', cover_image: '', drive_link: '', pdf_password: '', is_premium: true
   });
   const [upLoading, setUpLoading] = useState(false);
 
@@ -755,7 +755,7 @@ function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
            </div>
            <div className="space-y-1.5 col-span-2">
               <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Class</label>
-              <select value={form.class_level} onChange={e => setForm({...form, class_level: e.target.value})} className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 outline-none">
+              <select value={form.class} onChange={e => setForm({...form, class: e.target.value})} className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 outline-none">
                  <option value="8">Class 8</option>
                  <option value="9">Class 9</option>
                  <option value="10">Class 10</option>

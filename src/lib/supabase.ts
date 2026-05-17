@@ -36,7 +36,7 @@ export const supabase = (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUr
  * CREATE TABLE IF NOT EXISTS public.subject_resources (
  *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  *   subject TEXT NOT NULL,
- *   class_level TEXT NOT NULL,
+ *   class TEXT NOT NULL,
  *   description TEXT,
  *   drive_link TEXT,
  *   cover_image TEXT,

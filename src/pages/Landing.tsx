@@ -47,7 +47,7 @@ export default function Landing() {
     setIsSubmitting(true);
     try {
       const res = await dataBridge.saveVerifiedPayment({
-        product_name: selectedPlan.subject ? `${selectedPlan.subject} Notes (Class ${selectedPlan.classLevel})` : 'Master Pack',
+        product_name: selectedPlan.subject ? `${selectedPlan.subject} Notes (Class ${selectedPlan.class})` : 'Master Pack',
         amount: parseFloat(amount),
         transaction_id: transactionId,
         phone_number: phoneNumber,
@@ -147,9 +147,9 @@ export default function Landing() {
                    </div>
                    <div className="p-8 space-y-4">
                       <h3 className="text-lg font-black uppercase tracking-tight">{res.subject}</h3>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Class {res.class_level} • Topic Pack</p>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Class {res.class} • Topic Pack</p>
                       <button 
-                        onClick={() => setSelectedPlan({ subject: res.subject, classLevel: res.class_level, price: res.price || 39 })}
+                        onClick={() => setSelectedPlan({ subject: res.subject, class: res.class, price: res.price || 39 })}
                         className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-500 transition-all shadow-lg active:scale-95"
                       >
                         Buy Now
