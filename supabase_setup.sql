@@ -229,15 +229,14 @@ CREATE POLICY "Anyone can read stats" ON public.community_stats FOR SELECT USING
 CREATE TABLE IF NOT EXISTS public.subject_resources (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     subject TEXT NOT NULL,
-    class TEXT NOT NULL,
-    price NUMERIC DEFAULT 0,
+    class_level TEXT NOT NULL,
     description TEXT,
-    cover_url TEXT,
     drive_link TEXT,
-    is_free BOOLEAN DEFAULT FALSE,
-    features JSONB DEFAULT '["Chapter-wise Notes", "PYQs Included", "AI Doubt Support"]',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    cover_image TEXT,
+    price NUMERIC DEFAULT 0,
+    pdf_password TEXT,
+    is_premium BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 ALTER TABLE public.subject_resources ENABLE ROW LEVEL SECURITY;

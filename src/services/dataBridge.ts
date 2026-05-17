@@ -8,7 +8,9 @@ export const dataBridge = {
   async getResources(classLevel?: string, isPremium?: boolean) {
     if (!supabase) return [];
     try {
-      let query = supabase.from('subject_resources').select('*').order('created_at', { ascending: false });
+      let query = supabase.from('subject_resources')
+        .select('id, subject, class_level, description, drive_link, cover_image, price, pdf_password, is_premium, created_at')
+        .order('created_at', { ascending: false });
       if (classLevel) query = query.eq('class_level', classLevel);
       if (isPremium !== undefined) query = query.eq('is_premium', isPremium);
       const { data } = await query;
