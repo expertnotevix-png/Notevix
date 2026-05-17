@@ -86,6 +86,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
       if (!res.success) throw new Error(res.error || "Failed to submit");
 
+      localStorage.setItem('last_payment_phone', phoneNumber);
       toast.success("Details submitted! Admin will verify and grant access.");
       setSelectedPlan(null);
       setTransactionId('');

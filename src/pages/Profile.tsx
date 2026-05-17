@@ -111,6 +111,11 @@ export default function Profile({ user, setUser }: ProfileProps) {
                 <div>
                   <p className="text-xs font-bold uppercase">{p.product_name}</p>
                   <p className="text-[10px] text-gray-500 uppercase tracking-widest">{p.transaction_id.slice(0, 12)}... • ₹{p.amount}</p>
+                  {p.approved && p.unlock_password && (
+                    <div className="mt-2 p-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl">
+                      <p className="text-[9px] text-indigo-400 font-black uppercase tracking-widest">Password: {p.unlock_password}</p>
+                    </div>
+                  )}
                 </div>
                 <div className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${
                   p.status === 'approved' ? 'bg-emerald-500/10 text-emerald-500' :

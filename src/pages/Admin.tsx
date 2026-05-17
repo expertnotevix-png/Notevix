@@ -34,7 +34,7 @@ export default function Admin() {
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [isAddingBanner, setIsAddingBanner] = useState(false);
   const [notifData, setNotifData] = useState({ title: '', message: '', type: 'info' as const });
-  const [approveModal, setApproveModal] = useState<{ id: string, isOpen: boolean, password: string }>({ id: '', isOpen: false, password: '' });
+  const [approveModal, setApproveModal] = useState<{ id: string, isOpen: boolean, password: string, productName?: string }>({ id: '', isOpen: false, password: '' });
   const [rejectModal, setRejectModal] = useState<{ id: string, isOpen: boolean, reason: string }>({ id: '', isOpen: false, reason: '' });
 
   const navigate = useNavigate();
@@ -185,6 +185,16 @@ export default function Admin() {
     if (res.success) {
       toast.success("Banner deleted");
       fetchBanners();
+    }
+  };
+
+  const handleOpenApproveModal = async (payment: VerifiedPayment) => {
+    setApproveModal({ id: payment.id, isOpen: true, password: '', productName: payment.product_name });
+    if (payment.product_name) {
+      const password = await dataBridge.getPasswordByProductName(payment.product_name);
+      if (password) {
+        setApproveModal(prev => ({ ...prev, password }));
+      }
     }
   };
 
@@ -523,7 +533,7 @@ export default function Admin() {
                           <td className="p-6 text-right">
                              {!p.approved ? (
                                <div className="flex justify-end gap-2">
-                                 <button onClick={() => setApproveModal({ id: p.id, isOpen: true, password: '' })} className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-white transition-all">
+                                 <button onClick={() => handleOpenApproveModal(p)} className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-white transition-all">
                                    <Check size={16} />
                                  </button>
                                  <button onClick={() => setRejectModal({ id: p.id, isOpen: true, reason: '' })} className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all">

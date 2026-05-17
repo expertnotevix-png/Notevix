@@ -4,7 +4,7 @@ import { onAuthStateChanged, browserLocalPersistence, setPersistence } from 'fir
 import { auth } from './components/firebase';
 import { AppUser } from './types';
 import { dataBridge } from './services/dataBridge';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
 
 // Lazy loaded pages
 const Home = lazy(() => import('./pages/Home'));
@@ -22,6 +22,47 @@ const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const Disclaimer = lazy(() => import('./pages/Disclaimer'));
 
 import BottomNav from './components/BottomNav';
+
+function PaymentNotifier({ user }: { user: AppUser }) {
+  useEffect(() => {
+    if (!user || user.role === 'admin') return;
+
+    const checkPayments = async () => {
+      const savedPhone = localStorage.getItem('last_payment_phone') || user.phone;
+      if (!savedPhone) return;
+
+      const payments = await dataBridge.getUserPayments(savedPhone);
+      const approvedPayments = payments.filter(p => p.approved && p.unlock_password);
+
+      const notified = JSON.parse(localStorage.getItem('notified_payments') || '[]');
+      let newNotified = false;
+      
+      approvedPayments.forEach(p => {
+        if (!notified.includes(p.id)) {
+          toast.success(`Payment Approved!`, {
+            description: `Your PDF password for ${p.product_name} is: ${p.unlock_password}`,
+            duration: 15000,
+          });
+          notified.push(p.id);
+          newNotified = true;
+        }
+      });
+
+      if (newNotified) {
+        localStorage.setItem('notified_payments', JSON.stringify(notified));
+      }
+    };
+
+    const firstCheck = setTimeout(checkPayments, 2000);
+    const interval = setInterval(checkPayments, 30000);
+    return () => {
+      clearTimeout(firstCheck);
+      clearInterval(interval);
+    };
+  }, [user]);
+
+  return null;
+}
 
 interface ErrorBoundaryProps { children?: ReactNode; }
 interface ErrorBoundaryState { hasError: boolean; }
@@ -42,6 +83,7 @@ function AppLayout({ user, setUser, children }: { user: any, setUser: any, child
 
   return (
     <div className={`min-h-screen bg-black text-white ${isAdmin ? '' : 'pb-20'}`}>
+      {user && <PaymentNotifier user={user} />}
       <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-gray-500 uppercase tracking-widest text-[10px]">Loading...</div>}>
         {children}
       </Suspense>

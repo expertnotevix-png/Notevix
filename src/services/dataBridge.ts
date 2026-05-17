@@ -189,6 +189,28 @@ export const dataBridge = {
     }
   },
 
+  async getPasswordByProductName(productName: string) {
+    if (!supabase || !productName) return null;
+    try {
+      // product_name is usually "Subject Notes (Class Class)"
+      // but it could also be a plan name like "Master Pack"
+      // We try to extract the subject
+      let subject = productName.split(' Notes')[0];
+      
+      // Fallback for custom plans if they match subject names
+      const { data } = await supabase.from('subject_resources')
+        .select('pdf_password')
+        .eq('subject', subject)
+        .order('id', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      return data?.pdf_password || null;
+    } catch (err) {
+      return null;
+    }
+  },
+
   /**
    * PDF Requests
    */

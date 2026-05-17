@@ -57,6 +57,7 @@ export default function Landing() {
 
       if (!res.success) throw new Error(res.error || "Failed to submit");
 
+      localStorage.setItem('last_payment_phone', phoneNumber);
       setPurchaseSuccess(true);
       toast.success("Details submitted! Admin will verify your payment.");
     } catch (error: any) {
