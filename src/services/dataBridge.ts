@@ -257,13 +257,20 @@ export const dataBridge = {
   /**
    * User Specific
    */
-  async getUserPayments(userId: string) {
-    if (!supabase || !userId) return [];
+  async getUserPayments(userId: string, email?: string) {
+    if (!supabase || (!userId && !email)) return [];
     try {
-      const { data } = await supabase.from('verified_payments')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+      let query = supabase.from('verified_payments').select('*');
+      
+      if (userId && email) {
+        query = query.or(`user_id.eq.${userId},email.eq.${email}`);
+      } else if (userId) {
+        query = query.eq('user_id', userId);
+      } else if (email) {
+        query = query.eq('email', email);
+      }
+
+      const { data } = await query.order('created_at', { ascending: false });
       return (data || []) as VerifiedPayment[];
     } catch (err) {
       return [];

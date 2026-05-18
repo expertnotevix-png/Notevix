@@ -207,7 +207,10 @@ export default function Admin() {
     try {
       const res = await dataBridge.approvePurchase(approveModal.id, approveModal.password);
       if (res.success) {
-        toast.success("Payment approved!");
+        toast.success(`Payment Approved!`, {
+          description: `User can now see password: ${approveModal.password}`,
+          duration: 5000,
+        });
         setApproveModal({ id: '', isOpen: false, password: '' });
         await fetchVerifiedPayments();
       } else {

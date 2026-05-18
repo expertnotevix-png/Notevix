@@ -21,7 +21,7 @@ export default function Profile({ user, setUser }: ProfileProps) {
   }, [user]);
 
   const fetchHistory = async () => {
-    const data = await dataBridge.getUserPayments(user.uid);
+    const data = await dataBridge.getUserPayments(user.uid, user.email);
     setPurchaseHistory(data);
   };
 
@@ -118,11 +118,11 @@ export default function Profile({ user, setUser }: ProfileProps) {
                   )}
                 </div>
                 <div className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${
-                  p.status === 'approved' ? 'bg-emerald-500/10 text-emerald-500' :
+                  p.approved ? 'bg-emerald-500/10 text-emerald-500' :
                   p.status === 'rejected' ? 'bg-red-500/10 text-red-500' :
                   'bg-yellow-500/10 text-yellow-500'
                 }`}>
-                  {p.status}
+                  {p.approved ? 'APPROVED' : p.status.toUpperCase()}
                 </div>
               </div>
             ))

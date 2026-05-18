@@ -29,9 +29,9 @@ function PaymentNotifier({ user }: { user: AppUser }) {
 
     const checkPayments = async () => {
       const savedUserId = localStorage.getItem('last_payment_user_id') || user.uid;
-      if (!savedUserId) return;
+      if (!savedUserId && !user.email) return;
 
-      const payments = await dataBridge.getUserPayments(savedUserId);
+      const payments = await dataBridge.getUserPayments(savedUserId, user.email);
       const approvedPayments = payments.filter(p => p.approved && p.unlock_password);
 
       const notified = JSON.parse(localStorage.getItem('notified_payments') || '[]');
