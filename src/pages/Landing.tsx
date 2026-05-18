@@ -39,43 +39,8 @@ export default function Landing() {
   }, [activeClass]);
 
   const handleSubmitPayment = async () => {
-    // If not logged in, redirect to login
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      toast.error('Please login first to purchase');
-      navigate('/login');
-      return;
-    }
-
-    if (!transactionId || !amount) {
-      toast.error('Please fill all fields');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const res = await dataBridge.saveVerifiedPayment({
-        user_id: user.id,
-        email: user.email || '',
-        product_name: selectedPlan.subject ? `${selectedPlan.subject} Notes (Class ${selectedPlan.class})` : 'Master Pack',
-        amount: parseFloat(amount),
-        transaction_id: transactionId,
-        phone_number: phoneNumber || undefined,
-        status: 'pending',
-        approved: false
-      });
-
-      if (!res.success) throw new Error(res.error || "Failed to submit");
-
-      localStorage.setItem('last_payment_user_id', user.id);
-      setPurchaseSuccess(true);
-      toast.success("Details submitted! Admin will verify your payment.");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to submit");
-    } finally {
-      setIsSubmitting(false);
-    }
+    toast.info('Please Sign In to proceed with the purchase');
+    navigate('/login');
   };
 
   return (

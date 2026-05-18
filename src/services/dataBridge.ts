@@ -258,21 +258,28 @@ export const dataBridge = {
    * User Specific
    */
   async getUserPayments(userId: string, email?: string) {
-    if (!supabase || (!userId && !email)) return [];
+    if (!supabase) return [];
     try {
       let query = supabase.from('verified_payments').select('*');
       
-      if (userId && email) {
-        query = query.or(`user_id.eq.${userId},email.eq.${email}`);
-      } else if (userId) {
-        query = query.eq('user_id', userId);
-      } else if (email) {
-        query = query.eq('email', email);
+      const filters = [];
+      if (userId && userId.trim()) filters.push(`user_id.eq.${userId}`);
+      if (email && email.trim()) filters.push(`email.eq.${email}`);
+      
+      if (filters.length === 0) return [];
+
+      if (filters.length > 1) {
+        query = query.or(filters.join(','));
+      } else {
+        const [field, , value] = filters[0].split('.');
+        if (field === 'user_id') query = query.eq('user_id', userId);
+        else query = query.eq('email', email!);
       }
 
       const { data } = await query.order('created_at', { ascending: false });
       return (data || []) as VerifiedPayment[];
     } catch (err) {
+      console.error("getUserPayments error:", err);
       return [];
     }
   },

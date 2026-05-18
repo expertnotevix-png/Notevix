@@ -48,7 +48,12 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
   useEffect(() => {
     fetchResources();
-    if (user) fetchUserHistory();
+    if (user) {
+      fetchUserHistory();
+      // Poll every 10 seconds to check for approval
+      const interval = setInterval(fetchUserHistory, 10000);
+      return () => clearInterval(interval);
+    }
   }, [activeClass, user]);
 
   const fetchResources = async () => {
@@ -63,7 +68,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
   const fetchUserHistory = async () => {
     if (!user) return;
-    const data = await dataBridge.getUserPayments(user.phone || '');
+    const data = await dataBridge.getUserPayments(user.uid, user.email);
     setPurchaseHistory(data);
   };
 
@@ -142,8 +147,8 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {resources.map((res) => {
             const history = purchaseHistory.find(h => h.product_name.includes(res.subject));
-            const unlocked = !res.is_premium || history?.status === 'approved' || user?.role === 'admin';
-            const isPending = history?.status === 'pending';
+            const unlocked = !res.is_premium || history?.approved || user?.role === 'admin';
+            const isPending = history?.status === 'pending' && !history?.approved;
 
             return (
               <div key={res.id} className="bg-[#0c0c0c] border border-white/5 rounded-[2rem] overflow-hidden flex flex-col group">
