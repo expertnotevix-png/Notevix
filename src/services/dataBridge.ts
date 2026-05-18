@@ -200,7 +200,7 @@ export const dataBridge = {
       // Fallback for custom plans if they match subject names
       const { data } = await supabase.from('subject_resources')
         .select('pdf_password')
-        .eq('subject', subject)
+        .ilike('subject', subject)
         .order('id', { ascending: false })
         .limit(1)
         .maybeSingle();

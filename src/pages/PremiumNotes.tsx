@@ -146,7 +146,11 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {resources.map((res) => {
-            const history = purchaseHistory.find(h => h.product_name.includes(res.subject));
+            const history = purchaseHistory.find(h => {
+              const productName = h.product_name.toLowerCase();
+              const subject = res.subject.toLowerCase();
+              return productName.includes(subject) || productName.includes('master pack');
+            });
             const unlocked = !res.is_premium || history?.approved || user?.role === 'admin';
             const isPending = history?.status === 'pending' && !history?.approved;
 
