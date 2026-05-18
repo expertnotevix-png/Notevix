@@ -21,7 +21,9 @@ CREATE POLICY "Admin write resources" ON public.subject_resources FOR ALL USING 
 -- 2. Verified Payments (REBUILT)
 CREATE TABLE IF NOT EXISTS public.verified_payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    phone_number TEXT NOT NULL,
+    user_id TEXT,
+    email TEXT,
+    phone_number TEXT,
     transaction_id TEXT UNIQUE NOT NULL,
     amount NUMERIC NOT NULL,
     product_name TEXT,

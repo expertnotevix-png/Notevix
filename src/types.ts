@@ -1,6 +1,8 @@
 export interface VerifiedPayment {
   id: string;
-  phone_number: string;
+  user_id: string;
+  email: string;
+  phone_number?: string;
   transaction_id: string;
   amount: number;
   product_name: string;

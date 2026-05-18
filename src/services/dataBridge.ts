@@ -257,12 +257,12 @@ export const dataBridge = {
   /**
    * User Specific
    */
-  async getUserPayments(phone: string) {
-    if (!supabase || !phone) return [];
+  async getUserPayments(userId: string) {
+    if (!supabase || !userId) return [];
     try {
       const { data } = await supabase.from('verified_payments')
         .select('*')
-        .eq('phone_number', phone)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
       return (data || []) as VerifiedPayment[];
     } catch (err) {

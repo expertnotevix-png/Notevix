@@ -280,8 +280,10 @@ export default function Admin() {
 
   const filteredPayments = useMemo(() => {
     return verifiedPayments.filter(p => {
-      const matchesSearch = p.transaction_id.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            p.phone_number.includes(searchQuery);
+      const search = searchQuery.toLowerCase();
+      const matchesSearch = p.transaction_id.toLowerCase().includes(search) || 
+                            p.email.toLowerCase().includes(search) ||
+                            (p.phone_number || '').includes(searchQuery);
       if (showOnlyPending) return p.status === 'pending' && matchesSearch;
       return matchesSearch;
     });
@@ -496,7 +498,7 @@ export default function Admin() {
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input 
                     type="text"
-                    placeholder="Search Transaction ID or Phone..."
+                    placeholder="Search Transaction ID, Email or Phone..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm focus:border-indigo-500 outline-none transition-all"
@@ -514,7 +516,8 @@ export default function Admin() {
                                </div>
                                <div>
                                   <p className="text-xs font-black uppercase tracking-tight">{p.product_name || 'Unknown Product'}</p>
-                                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{p.phone_number}</p>
+                                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-none truncate max-w-[150px]">{p.email}</p>
+                                  {p.phone_number && <p className="text-[8px] text-gray-600 font-bold uppercase tracking-widest mt-0.5">{p.phone_number}</p>}
                                </div>
                             </div>
 

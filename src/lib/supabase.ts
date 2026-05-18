@@ -60,7 +60,9 @@ export const supabase = (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUr
  * -- 3. Verified Payments Table
  * CREATE TABLE IF NOT EXISTS public.verified_payments (
  *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
- *   phone_number TEXT NOT NULL,
+ *   user_id TEXT,
+ *   email TEXT,
+ *   phone_number TEXT,
  *   transaction_id TEXT NOT NULL,
  *   amount FLOAT NOT NULL,
  *   product_name TEXT,

@@ -68,7 +68,12 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   };
 
   const handlePurchase = async () => {
-    if (!phoneNumber || !amount || !transactionId) {
+    if (!user) {
+      toast.error('Please login to purchase');
+      return;
+    }
+
+    if (!amount || !transactionId) {
       toast.error('Please fill all fields');
       return;
     }
@@ -76,17 +81,19 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     setIsSubmitting(true);
     try {
       const res = await dataBridge.saveVerifiedPayment({
+        user_id: user.uid,
+        email: user.email,
         product_name: selectedPlan.subject ? `${selectedPlan.subject} Notes (Class ${selectedPlan.class})` : selectedPlan.name,
         amount: parseFloat(amount),
         transaction_id: transactionId,
-        phone_number: phoneNumber,
+        phone_number: phoneNumber || undefined,
         status: 'pending',
         approved: false
       });
 
       if (!res.success) throw new Error(res.error || "Failed to submit");
 
-      localStorage.setItem('last_payment_phone', phoneNumber);
+      localStorage.setItem('last_payment_user_id', user.uid);
       toast.success("Details submitted! Admin will verify and grant access.");
       setSelectedPlan(null);
       setTransactionId('');
@@ -215,10 +222,16 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
               </div>
 
               <div className="space-y-4">
-                 <input 
-                  type="text" placeholder="WhatsApp Number" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)}
-                  className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none focus:border-indigo-500"
-                 />
+                 <div className="relative">
+                   <input 
+                    type="text" 
+                    placeholder="WhatsApp Number (Optional)" 
+                    value={phoneNumber} 
+                    onChange={e => setPhoneNumber(e.target.value)}
+                    className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none focus:border-indigo-500"
+                   />
+                   <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[8px] font-black text-gray-500 uppercase tracking-widest hidden sm:block">Optional</span>
+                 </div>
                  <div className="grid grid-cols-2 gap-4">
                     <input type="number" placeholder="Amount Paid" value={amount} onChange={e => setAmount(e.target.value)} className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none" />
                     <input type="text" placeholder="Transaction ID" value={transactionId} onChange={e => setTransactionId(e.target.value)} className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none font-mono" />

@@ -28,10 +28,10 @@ function PaymentNotifier({ user }: { user: AppUser }) {
     if (!user || user.role === 'admin') return;
 
     const checkPayments = async () => {
-      const savedPhone = localStorage.getItem('last_payment_phone') || user.phone;
-      if (!savedPhone) return;
+      const savedUserId = localStorage.getItem('last_payment_user_id') || user.uid;
+      if (!savedUserId) return;
 
-      const payments = await dataBridge.getUserPayments(savedPhone);
+      const payments = await dataBridge.getUserPayments(savedUserId);
       const approvedPayments = payments.filter(p => p.approved && p.unlock_password);
 
       const notified = JSON.parse(localStorage.getItem('notified_payments') || '[]');

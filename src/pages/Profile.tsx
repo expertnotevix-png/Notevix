@@ -21,7 +21,7 @@ export default function Profile({ user, setUser }: ProfileProps) {
   }, [user]);
 
   const fetchHistory = async () => {
-    const data = await dataBridge.getUserPayments(user.phone || '');
+    const data = await dataBridge.getUserPayments(user.uid);
     setPurchaseHistory(data);
   };
 
