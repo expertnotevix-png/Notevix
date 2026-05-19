@@ -9,6 +9,7 @@ import { AppUser, SubjectResource } from '../types';
 import { toast } from 'sonner';
 import { dataBridge } from '../services/dataBridge';
 import { supabase } from '../lib/supabase';
+import { auth } from '../components/firebase';
 
 interface PremiumNotesProps {
   user: AppUser | null;
@@ -78,6 +79,15 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       return;
     }
 
+    const firebaseUser = auth.currentUser;
+    const finalEmail = user.email || firebaseUser?.email;
+    const finalUid = user.uid || firebaseUser?.uid;
+
+    if (!finalEmail || !finalUid) {
+      toast.error('Authentication error. Please login again.');
+      return;
+    }
+
     if (!amount || !transactionId) {
       toast.error('Please fill all fields');
       return;
@@ -86,8 +96,8 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     setIsSubmitting(true);
     try {
       const res = await dataBridge.saveVerifiedPayment({
-        user_id: user.uid,
-        email: user.email,
+        user_id: finalUid,
+        email: finalEmail,
         product_name: selectedPlan.subject ? `${selectedPlan.subject} Notes (Class ${selectedPlan.class})` : selectedPlan.name,
         amount: parseFloat(amount),
         transaction_id: transactionId,
@@ -146,12 +156,22 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {resources.map((res) => {
-            const history = purchaseHistory.find(h => {
-              const productName = h.product_name.toLowerCase();
-              const subject = res.subject.toLowerCase();
-              return productName.includes(subject) || productName.includes('master pack');
-            });
-            const unlocked = !res.is_premium || history?.approved || user?.role === 'admin';
+            const history = purchaseHistory
+              .filter(h => {
+                const productName = h.product_name.toLowerCase();
+                const subject = res.subject.toLowerCase();
+                return productName.includes(subject) || productName.includes('master pack');
+              })
+              .sort((a, b) => {
+                // Prefer approved over everything
+                if (a.approved && !b.approved) return -1;
+                if (!a.approved && b.approved) return 1;
+                // Then prefer pending over rejected
+                if (a.status === 'pending' && b.status === 'rejected') return -1;
+                if (a.status === 'rejected' && b.status === 'pending') return 1;
+                return 0;
+              })[0];
+            const unlocked = !res.is_premium || (history && history.approved) || user?.role === 'admin';
             const isPending = history?.status === 'pending' && !history?.approved;
 
             return (

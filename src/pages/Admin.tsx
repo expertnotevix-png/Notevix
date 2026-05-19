@@ -518,9 +518,9 @@ export default function Admin() {
                                   <DollarSign size={20} />
                                </div>
                                <div>
-                                  <p className="text-xs font-black uppercase tracking-tight">{p.product_name || 'Unknown Product'}</p>
-                                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-none truncate max-w-[150px]">{p.email}</p>
-                                  {p.phone_number && <p className="text-[8px] text-gray-600 font-bold uppercase tracking-widest mt-0.5">{p.phone_number}</p>}
+                                  <p className="text-sm font-black uppercase tracking-tight">{p.product_name || 'Unknown Product'}</p>
+                                  <p className="text-sm text-indigo-400 font-bold select-all break-all">{p.email}</p>
+                                  {p.phone_number && <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{p.phone_number}</p>}
                                </div>
                             </div>
 
