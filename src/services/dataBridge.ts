@@ -163,10 +163,18 @@ export const dataBridge = {
   async approvePurchase(id: string, unlockPassword: string) {
     if (!supabase) return { success: false };
     try {
+      let finalPassword = unlockPassword;
+      if (!finalPassword) {
+        const { data: payment } = await supabase.from('verified_payments').select('product_name').eq('id', id).maybeSingle();
+        if (payment?.product_name) {
+          finalPassword = await this.getPasswordByProductName(payment.product_name) || '';
+        }
+      }
+
       const { error } = await supabase.from('verified_payments').update({
         approved: true,
         status: 'approved',
-        unlock_password: unlockPassword
+        unlock_password: finalPassword
       }).eq('id', id);
       if (error) throw error;
       return { success: true };
@@ -180,6 +188,7 @@ export const dataBridge = {
     try {
       const { error } = await supabase.from('verified_payments').update({
         status: 'rejected',
+        approved: false, // Make sure approved is set to false if rejected
         rejection_reason: reason
       }).eq('id', id);
       if (error) throw error;
@@ -195,15 +204,31 @@ export const dataBridge = {
       // product_name is usually "Subject Notes (Class Class)"
       // but it could also be a plan name like "Master Pack"
       // We try to extract the subject
-      let subject = productName.split(' Notes')[0];
+      let subject = productName.split(' Notes')[0].trim();
       
-      // Fallback for custom plans if they match subject names
-      const { data } = await supabase.from('subject_resources')
+      // First try exact or subset ilike match with subject
+      let { data } = await supabase.from('subject_resources')
         .select('pdf_password')
-        .ilike('subject', subject)
+        .ilike('subject', `%${subject}%`)
         .order('id', { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      if (!data?.pdf_password) {
+        // Fallback: search all subject_resources and see if the productName contains the subject or vice-versa
+        const { data: allRes } = await supabase.from('subject_resources')
+          .select('subject, pdf_password');
+        
+        if (allRes) {
+          const matched = allRes.find(r => 
+            productName.toLowerCase().includes(r.subject.toLowerCase()) || 
+            r.subject.toLowerCase().includes(productName.toLowerCase())
+          );
+          if (matched?.pdf_password) {
+            return matched.pdf_password;
+          }
+        }
+      }
       
       return data?.pdf_password || null;
     } catch (err) {

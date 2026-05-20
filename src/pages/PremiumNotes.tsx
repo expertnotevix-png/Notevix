@@ -53,7 +53,36 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       fetchUserHistory();
       // Poll every 10 seconds to check for approval
       const interval = setInterval(fetchUserHistory, 10000);
-      return () => clearInterval(interval);
+
+      let channel: any = null;
+      if (supabase) {
+        channel = supabase
+          .channel(`verified_payments_premium_notes_${user.uid}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'verified_payments',
+            },
+            (payload) => {
+              const newRecord = payload.new as any;
+              const oldRecord = payload.old as any;
+              const currentRecord = newRecord || oldRecord;
+              if (currentRecord && (currentRecord.user_id === user.uid || currentRecord.email === user.email)) {
+                fetchUserHistory();
+              }
+            }
+          )
+          .subscribe();
+      }
+
+      return () => {
+        clearInterval(interval);
+        if (channel && supabase) {
+          supabase.removeChannel(channel);
+        }
+      };
     }
   }, [activeClass, user]);
 
@@ -172,7 +201,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                 return 0;
               })[0];
             const unlocked = !res.is_premium || (history && history.approved) || user?.role === 'admin';
-            const isPending = history?.status === 'pending' && !history?.approved;
+            const isPending = history && !history.approved;
 
             return (
               <div key={res.id} className="bg-[#0c0c0c] border border-white/5 rounded-[2rem] overflow-hidden flex flex-col group">
