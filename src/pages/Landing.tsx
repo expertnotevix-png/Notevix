@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Zap, QrCode, Shield, Copy, Info } from 'lucide-react';
+import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Zap, QrCode, Shield, Copy, Info, FileText } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { PromoCarousel } from '../components/PromoCarousel';
 import { useState, useEffect } from 'react';
@@ -125,12 +125,22 @@ export default function Landing() {
                    <div className="p-8 space-y-4">
                       <h3 className="text-lg font-black uppercase tracking-tight">{res.subject}</h3>
                       <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Class {res.class} • Topic Pack</p>
-                      <button 
+                      <div className="space-y-2 pt-2">
+                        <a 
+                          href={res.drive_link || '#'} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase transition-all"
+                        >
+                          <FileText size={14} className="text-gray-400" /> Open PDF
+                        </a>
+                        <button 
                         onClick={() => setSelectedPlan({ subject: res.subject, class: res.class, price: res.price || 39 })}
                         className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-500 transition-all shadow-lg active:scale-95"
                       >
                         Buy Now
                       </button>
+                    </div>
                    </div>
                 </div>
               );

@@ -159,24 +159,6 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {resources.map((res) => {
-            const history = purchaseHistory
-              .filter(h => {
-                const productName = h.product_name.toLowerCase();
-                const subject = res.subject.toLowerCase();
-                return productName.includes(subject) || productName.includes('master pack');
-              })
-              .sort((a, b) => {
-                // Prefer approved over everything
-                if (a.approved && !b.approved) return -1;
-                if (!a.approved && b.approved) return 1;
-                // Then prefer pending over rejected
-                if (a.status === 'pending' && b.status === 'rejected') return -1;
-                if (a.status === 'rejected' && b.status === 'pending') return 1;
-                return 0;
-              })[0];
-            const unlocked = !res.is_premium || (history && history.approved) || user?.role === 'admin';
-            const isPending = history && !history.approved;
-
             return (
               <div key={res.id} className="bg-[#0c0c0c] border border-white/5 rounded-[2rem] overflow-hidden flex flex-col group">
                 <div className="aspect-[3/4] relative overflow-hidden">
@@ -197,36 +179,27 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                     <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Class {res.class}</p>
                   </div>
 
-                  {unlocked ? (
-                    <div className="space-y-2">
-                       <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20 text-center">
-                          <span className="text-[7px] text-emerald-500 font-bold block">PASSWORD</span>
-                          <code className="text-xs font-black text-white">{history?.unlock_password || res.pdf_password || 'APPROVED'}</code>
-                       </div>
-                       <a 
-                        href={getDirectDownloadLink(res.drive_link || '')} 
-                        target="_blank" 
-                        className="w-full py-3 bg-white text-black rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase shadow-lg shadow-white/10"
-                       >
-                         <Download size={14} /> Download PDF
-                       </a>
-                    </div>
-                  ) : isPending ? (
-                    <div className="w-full py-3 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 rounded-xl text-center font-black text-[10px] uppercase">
-                       <Clock className="w-3.5 h-3.5 inline mr-1 animate-pulse" /> Pending
-                    </div>
-                  ) : (
+                  <div className="space-y-2">
+                    <a 
+                      href={res.drive_link || '#'} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase transition-all"
+                    >
+                      <FileText size={14} className="text-gray-400" /> Open PDF
+                    </a>
+                    
                     <button 
                       onClick={() => {
                         setIsSuccessStep(false);
                         setSubmittedTxId('');
                         setSelectedPlan({ ...PREMIUM_PLANS[0], subject: res.subject, class: res.class, price: res.price });
                       }}
-                      className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
+                      className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase shadow-lg shadow-indigo-600/20 active:scale-95 transition-all flex items-center justify-center gap-2"
                     >
-                      <Crown size={14} className="inline mr-1" /> Buy Now
+                      <Crown size={14} /> Buy Now
                     </button>
-                  )}
+                  </div>
                 </div>
               </div>
             );
