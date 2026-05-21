@@ -1,12 +1,13 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Zap, QrCode, Shield, Copy, Info, FileText } from 'lucide-react';
+import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Zap, QrCode, Shield, Copy, Info, FileText, CheckCircle2 } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { PromoCarousel } from '../components/PromoCarousel';
 import { useState, useEffect } from 'react';
 import { dataBridge } from '../services/dataBridge';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
+import { AppUser } from '../types';
 
 const CLASSES = ['8', '9', '10'];
 
@@ -17,18 +18,43 @@ const SUBJECT_ICONS: Record<string, any> = {
   english: Languages
 };
 
-export default function Landing() {
+interface LandingProps {
+  user: AppUser | null;
+}
+
+export default function Landing({ user }: LandingProps) {
   const navigate = useNavigate();
   const [activeClass, setActiveClass] = useState<'8' | '9' | '10'>('10');
   const [resources, setResources] = useState<any[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
   
   // Purchase Form State
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [transactionId, setTransactionId] = useState('');
+  const [buyerName, setBuyerName] = useState('');
+  const [buyerEmail, setBuyerEmail] = useState('');
+  const [buyerPhone, setBuyerPhone] = useState('');
   const [amount, setAmount] = useState('');
+  const [transactionId, setTransactionId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [purchaseSuccess, setPurchaseSuccess] = useState(false);
+
+  // Success Step state
+  const [submittedTxId, setSubmittedTxId] = useState('');
+  const [submittedEmail, setSubmittedEmail] = useState('');
+  const [submittedName, setSubmittedName] = useState('');
+
+  useEffect(() => {
+    if (selectedPlan) {
+      if (user) {
+        setBuyerName(user.displayName || '');
+        setBuyerEmail(user.email || '');
+      } else {
+        setBuyerName('');
+        setBuyerEmail('');
+      }
+      setBuyerPhone('');
+      setAmount(selectedPlan.price ? selectedPlan.price.toString() : '39');
+    }
+  }, [selectedPlan, user]);
 
   useEffect(() => {
     const fetchResources = async () => {
@@ -39,8 +65,46 @@ export default function Landing() {
   }, [activeClass]);
 
   const handleSubmitPayment = async () => {
-    toast.info('Please Sign In to proceed with the purchase');
-    navigate('/login');
+    if (!buyerName || !buyerEmail || !buyerPhone || !amount || !transactionId) {
+      toast.error('Please fill all fields');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const finalUid = user?.uid || 'guest';
+
+      const res = await dataBridge.saveVerifiedPayment({
+        user_id: finalUid,
+        email: buyerEmail,
+        product_name: selectedPlan.subject ? `${selectedPlan.subject} Notes (Class ${selectedPlan.class})` : selectedPlan.name,
+        amount: parseFloat(amount),
+        transaction_id: transactionId,
+        phone_number: `${buyerName} (${buyerPhone})`, // Save combined Name & Phone
+        status: 'pending',
+        approved: false,
+        created_at: new Date().toISOString()
+      });
+
+      if (!res.success) throw new Error(res.error || "Failed to submit");
+
+      if (user?.uid) {
+        localStorage.setItem('last_payment_user_id', user.uid);
+      }
+      setSubmittedTxId(transactionId);
+      setSubmittedEmail(buyerEmail);
+      setSubmittedName(buyerName);
+      setPurchaseSuccess(true);
+      setTransactionId('');
+      setAmount('');
+      setBuyerName('');
+      setBuyerEmail('');
+      setBuyerPhone('');
+    } catch (error: any) {
+      toast.error(error.message || "Failed to submit");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -162,29 +226,53 @@ export default function Landing() {
               <div className="absolute top-0 inset-x-0 h-1.5 bg-indigo-600" />
               
               {purchaseSuccess ? (
-                <div className="space-y-8 text-center py-10">
-                   <div className="w-20 h-20 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto">
-                      <Zap className="text-emerald-500" size={32} />
+                <div className="space-y-6 text-center py-4 flex flex-col items-center overflow-y-auto">
+                   <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500 border border-emerald-500/20">
+                      <CheckCircle2 className="w-8 h-8" />
                    </div>
-                   <div className="space-y-4">
-                      <h2 className="text-3xl font-black uppercase">Request Sent</h2>
-                      <p className="text-gray-400 text-sm font-medium leading-relaxed">
-                        Admin will verify your payment of ₹{amount} for the {selectedPlan.subject} notes. 
-                        Once approved, your password will be available.
+                   <div className="space-y-4 bg-white/[0.02] border border-white/5 p-6 rounded-3xl w-full">
+                      <p className="text-emerald-400 text-sm font-black leading-relaxed">
+                        Payment submitted successfully! ✅
                       </p>
+                      <p className="text-gray-400 text-xs leading-relaxed">
+                        To receive your PDF password, contact us on WhatsApp: <strong className="text-white">9236489649</strong>. Send your Transaction ID and we will send you the password within a few minutes!
+                      </p>
+                      <div className="pt-2">
+                        <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Submitted ID</p>
+                        <code className="text-xs bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 text-indigo-400 font-black inline-block mt-1 font-mono">{submittedTxId}</code>
+                      </div>
                    </div>
-                   <button 
-                    onClick={() => setSelectedPlan(null)}
-                    className="w-full h-16 bg-white text-black rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl"
-                   >
-                     CLOSE
-                   </button>
+                   <div className="space-y-3 pt-2 w-full">
+                     <a 
+                       href={`https://wa.me/919236489649?text=${encodeURIComponent(`Hi, My name is ${submittedName}. I paid for NoteVix. My Transaction ID is ${submittedTxId}. My Email is ${submittedEmail}. Please send me the PDF password.`)}`}
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       className="w-full h-16 bg-emerald-600 hover:bg-emerald-500 text-white rounded-3xl font-black text-sm uppercase shadow-xl shadow-emerald-600/10 flex items-center justify-center gap-2 transition-all"
+                     >
+                       <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                         <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.262 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.458L0 24zm6.59-4.846c1.6.95 3.18 1.449 4.825 1.451 5.436 0 9.86-4.37 9.863-9.73.001-2.595-1.013-5.035-2.855-6.882C16.636 2.146 14.197.94 11.599.94c-5.45 0-9.88 4.372-9.883 9.73-.001 1.93.51 3.801 1.48 5.476l-.974 3.565 3.655-.958zm12.385-6.619c-.29-.144-1.713-.837-1.979-.933-.266-.096-.459-.144-.652.144-.193.288-.748.933-.917 1.125-.169.191-.338.216-.628.072-.29-.144-1.226-.447-2.336-1.427-.864-.763-1.448-1.706-1.617-1.994-.169-.288-.018-.444.127-.587.13-.13.29-.336.435-.504.145-.168.193-.288.29-.48.096-.192.048-.36-.024-.504-.072-.144-.652-1.554-.892-2.13-.233-.566-.47-.489-.652-.498-.169-.008-.362-.01-.556-.01-.193 0-.507.072-.772.36-.266.288-1.014.981-1.014 2.394 0 1.413 1.039 2.78 1.184 2.972.145.19 2.044 3.09 4.949 4.329.693.295 1.233.473 1.654.606.697.219 1.332.188 1.833.114.558-.083 1.713-.692 1.954-1.36.242-.667.242-1.241.169-1.36-.073-.119-.266-.216-.556-.36z"/>
+                       </svg>
+                       Open WhatsApp Chat
+                     </a>
+                     <button 
+                       onClick={() => {
+                         setSelectedPlan(null);
+                         setPurchaseSuccess(false);
+                       }}
+                       className="w-full h-14 bg-white/5 hover:bg-white/10 text-white rounded-3xl font-black text-sm uppercase transition-all"
+                     >
+                       Close Window
+                     </button>
+                   </div>
                 </div>
               ) : (
                 <>
                   <div className="flex justify-between items-center mb-8">
                     <h2 className="text-2xl font-black uppercase">Unlock Notes</h2>
-                    <button onClick={() => setSelectedPlan(null)} className="text-gray-500 hover:text-white transition-colors">
+                    <button onClick={() => {
+                      setSelectedPlan(null);
+                      setPurchaseSuccess(false);
+                    }} className="text-gray-500 hover:text-white transition-colors">
                       <ChevronRight size={28} className="rotate-90" />
                     </button>
                   </div>
@@ -205,31 +293,61 @@ export default function Landing() {
                     </div>
 
                     <div className="space-y-4">
-                       <div className="relative">
-                          <input 
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                         <div>
+                           <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2">Full Name</label>
+                           <input 
                             type="text" 
-                            placeholder="WhatsApp Number (Optional)" 
-                            value={phoneNumber}
-                            onChange={(e) => setPhoneNumber(e.target.value)}
-                            className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
-                          />
-                          <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[8px] font-black text-gray-500 uppercase tracking-widest hidden sm:block">Optional</span>
+                            placeholder="Your Name" 
+                            value={buyerName} 
+                            onChange={e => setBuyerName(e.target.value)}
+                            className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none focus:border-indigo-500 text-white"
+                           />
+                         </div>
+                         <div>
+                           <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2">Email Address</label>
+                           <input 
+                            type="email" 
+                            placeholder="Your Email" 
+                            value={buyerEmail} 
+                            onChange={e => setBuyerEmail(e.target.value)}
+                            className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none focus:border-indigo-500 text-white"
+                           />
+                         </div>
                        </div>
+
+                       <div>
+                         <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2">Phone Number (WhatsApp)</label>
+                         <input 
+                          type="text" 
+                          placeholder="WhatsApp Number" 
+                          value={buyerPhone} 
+                          onChange={e => setBuyerPhone(e.target.value)}
+                          className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none focus:border-indigo-500 text-white"
+                         />
+                       </div>
+
                        <div className="grid grid-cols-2 gap-4">
-                          <input 
-                            type="number" 
-                            placeholder="Amount Paid (₹)" 
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
-                          />
-                          <input 
-                            type="text" 
-                            placeholder="Transaction ID" 
-                            value={transactionId}
-                            onChange={(e) => setTransactionId(e.target.value)}
-                            className="w-full h-15 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors"
-                          />
+                          <div>
+                            <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-1">Amount Paid (₹)</label>
+                            <input 
+                              type="number" 
+                              placeholder="Amount Paid" 
+                              value={amount}
+                              onChange={(e) => setAmount(e.target.value)}
+                              className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors text-white animate-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-1">Transaction ID (UTR)</label>
+                            <input 
+                              type="text" 
+                              placeholder="UTR Number" 
+                              value={transactionId}
+                              onChange={(e) => setTransactionId(e.target.value)}
+                              className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm focus:border-indigo-500 outline-none transition-colors font-mono text-white"
+                            />
+                          </div>
                        </div>
                     </div>
 

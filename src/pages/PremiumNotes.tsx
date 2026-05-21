@@ -42,6 +42,8 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   
   // Purchase Form State
   const [buyerName, setBuyerName] = useState('');
+  const [buyerEmail, setBuyerEmail] = useState('');
+  const [buyerPhone, setBuyerPhone] = useState('');
   const [amount, setAmount] = useState('');
   const [transactionId, setTransactionId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -50,6 +52,22 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   // Success Step state
   const [isSuccessStep, setIsSuccessStep] = useState(false);
   const [submittedTxId, setSubmittedTxId] = useState('');
+  const [submittedEmail, setSubmittedEmail] = useState('');
+  const [submittedName, setSubmittedName] = useState('');
+
+  useEffect(() => {
+    if (selectedPlan) {
+      if (user) {
+        setBuyerName(user.displayName || '');
+        setBuyerEmail(user.email || '');
+      } else {
+        setBuyerName('');
+        setBuyerEmail('');
+      }
+      setBuyerPhone('');
+      setAmount(selectedPlan.price ? selectedPlan.price.toString() : '39');
+    }
+  }, [selectedPlan, user]);
 
   useEffect(() => {
     fetchResources();
@@ -75,34 +93,23 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   };
 
   const handlePurchase = async () => {
-    if (!user) {
-      toast.error('Please login to purchase');
+    if (!buyerName || !buyerEmail || !buyerPhone || !amount || !transactionId) {
+      toast.error('Please fill all fields');
       return;
     }
 
     const firebaseUser = auth.currentUser;
-    const finalEmail = user.email || firebaseUser?.email;
-    const finalUid = user.uid || firebaseUser?.uid;
-
-    if (!finalEmail || !finalUid) {
-      toast.error('Authentication error. Please login again.');
-      return;
-    }
-
-    if (!buyerName || !amount || !transactionId) {
-      toast.error('Please fill all fields');
-      return;
-    }
+    const finalUid = user?.uid || firebaseUser?.uid || 'guest';
 
     setIsSubmitting(true);
     try {
       const res = await dataBridge.saveVerifiedPayment({
         user_id: finalUid,
-        email: finalEmail,
+        email: buyerEmail,
         product_name: selectedPlan.subject ? `${selectedPlan.subject} Notes (Class ${selectedPlan.class})` : selectedPlan.name,
         amount: parseFloat(amount),
         transaction_id: transactionId,
-        phone_number: buyerName, // Save Buyer Name into phone_number field for schema compatibility
+        phone_number: `${buyerName} (${buyerPhone})`, // Save combined Name & Phone
         status: 'pending',
         approved: false,
         created_at: new Date().toISOString()
@@ -110,13 +117,21 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
       if (!res.success) throw new Error(res.error || "Failed to submit");
 
-      localStorage.setItem('last_payment_user_id', user.uid);
+      if (user?.uid) {
+        localStorage.setItem('last_payment_user_id', user.uid);
+      }
       setSubmittedTxId(transactionId);
+      setSubmittedEmail(buyerEmail);
+      setSubmittedName(buyerName);
       setIsSuccessStep(true);
       setTransactionId('');
       setAmount('');
       setBuyerName('');
-      fetchUserHistory();
+      setBuyerEmail('');
+      setBuyerPhone('');
+      if (user) {
+        fetchUserHistory();
+      }
     } catch (error: any) {
       toast.error(error.message || "Failed to submit");
     } finally {
@@ -236,24 +251,48 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                   </div>
 
                   <div className="space-y-4">
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                       <div>
+                         <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2">Full Name</label>
+                         <input 
+                          type="text" 
+                          placeholder="Your Name" 
+                          value={buyerName} 
+                          onChange={e => setBuyerName(e.target.value)}
+                          className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none focus:border-indigo-500 text-white"
+                         />
+                       </div>
+                       <div>
+                         <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2">Email Address</label>
+                         <input 
+                          type="email" 
+                          placeholder="Your Email" 
+                          value={buyerEmail} 
+                          onChange={e => setBuyerEmail(e.target.value)}
+                          className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none focus:border-indigo-500 text-white"
+                         />
+                       </div>
+                     </div>
+
                      <div>
-                       <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2"> Your Name</label>
+                       <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2">Phone Number (WhatsApp)</label>
                        <input 
                         type="text" 
-                        placeholder="Enter your Name" 
-                        value={buyerName} 
-                        onChange={e => setBuyerName(e.target.value)}
+                        placeholder="WhatsApp Number" 
+                        value={buyerPhone} 
+                        onChange={e => setBuyerPhone(e.target.value)}
                         className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none focus:border-indigo-500 text-white"
                        />
                      </div>
+
                      <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2">Amount Paid (₹)</label>
-                          <input type="number" placeholder="Enter Amount" value={amount} onChange={e => setAmount(e.target.value)} className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none text-white" />
+                          <input type="number" placeholder="Enter Amount" value={amount} onChange={e => setAmount(e.target.value)} className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none text-white animate-none" />
                         </div>
                         <div>
-                          <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2">Transaction ID</label>
-                          <input type="text" placeholder="Transaction ID (UTR)" value={transactionId} onChange={e => setTransactionId(e.target.value)} className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none font-mono text-white" />
+                          <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2">Transaction ID (UTR)</label>
+                          <input type="text" placeholder="UTR Number" value={transactionId} onChange={e => setTransactionId(e.target.value)} className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none font-mono text-white" />
                         </div>
                      </div>
                   </div>
@@ -272,8 +311,8 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                   </div>
                   
                   <div className="space-y-4 bg-white/[0.02] border border-white/5 p-6 rounded-3xl">
-                    <p className="text-gray-300 text-sm font-medium leading-relaxed">
-                      Payment details submitted successfully! ✅
+                    <p className="text-emerald-400 text-sm font-black leading-relaxed">
+                      Payment submitted successfully! ✅
                     </p>
                     <p className="text-gray-400 text-xs leading-relaxed">
                       To receive your PDF password, contact us on WhatsApp: <strong className="text-white">9236489649</strong>. Send your Transaction ID and we will send you the password within a few minutes!
@@ -286,7 +325,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
 
                   <div className="space-y-3 pt-2">
                     <a 
-                      href={`https://wa.me/919236489649?text=${encodeURIComponent(`Hi, I just paid for NoteVix. My Transaction ID is ${submittedTxId}. Please send me the PDF password.`)}`}
+                      href={`https://wa.me/919236489649?text=${encodeURIComponent(`Hi, My name is ${submittedName}. I paid for NoteVix. My Transaction ID is ${submittedTxId}. My Email is ${submittedEmail}. Please send me the PDF password.`)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full h-16 bg-emerald-600 hover:bg-emerald-500 text-white rounded-3xl font-black text-sm uppercase shadow-xl shadow-emerald-600/10 flex items-center justify-center gap-2 transition-all"

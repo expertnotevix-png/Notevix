@@ -132,7 +132,7 @@ export default function App() {
         <AppLayout user={user} setUser={setUser}>
           <Routes>
             <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
-            <Route path="/" element={user ? <Home user={user} /> : <Landing />} />
+            <Route path="/" element={user ? <Home user={user} /> : <Landing user={user} />} />
             <Route path="/profile" element={user ? <Profile user={user} setUser={setUser} /> : <Navigate to="/login" />} />
             <Route path="/class/:classId/:subjectId" element={<ChapterList />} />
             <Route path="/note/:noteId" element={<NoteView user={user} setUser={setUser} />} />
