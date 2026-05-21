@@ -188,53 +188,20 @@ export default function Admin() {
     }
   };
 
-  const handleOpenApproveModal = async (payment: VerifiedPayment) => {
-    setApproveModal({ id: payment.id, isOpen: true, password: '', productName: payment.product_name });
-    if (payment.product_name) {
-      const password = await dataBridge.getPasswordByProductName(payment.product_name);
-      if (password) {
-        setApproveModal(prev => ({ ...prev, password }));
-      }
-    }
-  };
-
-  const handleApprovePurchase = async () => {
-    if (!approveModal.id || !approveModal.password) {
-      toast.error("Please enter a password");
-      return;
-    }
+  const handleMarkAsDone = async (paymentId: string) => {
     setLoading(true);
     try {
-      const res = await dataBridge.approvePurchase(approveModal.id, approveModal.password);
-      if (res.success) {
-        toast.success(`Payment Approved!`, {
-          description: `User can now see password: ${approveModal.password}`,
-          duration: 5000,
-        });
-        setApproveModal({ id: '', isOpen: false, password: '' });
-        await fetchVerifiedPayments();
-      } else {
-        toast.error(res.error || "Failed to approve");
-      }
+      if (!supabase) throw new Error("Supabase is not initialized");
+      const { error } = await supabase.from('verified_payments').update({
+        approved: true,
+        status: 'done'
+      }).eq('id', paymentId);
+      
+      if (error) throw error;
+      toast.success("Payment marked as done!");
+      await fetchVerifiedPayments();
     } catch (err: any) {
-      toast.error(err.message || "An unexpected error occurred");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRejectPurchase = async () => {
-    if (!rejectModal.id) return;
-    setLoading(true);
-    try {
-      const res = await dataBridge.rejectPurchase(rejectModal.id, rejectModal.reason);
-      if (res.success) {
-        toast.success("Payment rejected");
-        setRejectModal({ id: '', isOpen: false, reason: '' });
-        await fetchVerifiedPayments();
-      } else {
-        toast.error(res.error || "Failed to reject");
-      }
+      toast.error(err.message || "Failed to mark as done");
     } finally {
       setLoading(false);
     }
@@ -515,59 +482,46 @@ export default function Admin() {
                          <div className="space-y-4 flex-1">
                             <div className="flex items-center gap-3">
                                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400">
-                                  <DollarSign size={20} />
+                                  <User size={20} />
                                </div>
                                <div>
-                                  <p className="text-sm font-black uppercase tracking-tight">{p.product_name || 'Unknown Product'}</p>
+                                  <p className="text-sm font-black uppercase tracking-tight text-white">Buyer: {p.phone_number || 'Unknown'}</p>
                                   <p className="text-sm text-indigo-400 font-bold select-all break-all">{p.email}</p>
-                                  {p.phone_number && <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{p.phone_number}</p>}
+                                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-1">Product: {p.product_name}</p>
                                </div>
                             </div>
 
                             <div className="p-4 bg-white/[0.02] rounded-2xl border border-white/5 space-y-2">
                                <div className="flex justify-between items-center">
                                   <span className="text-[10px] text-gray-500 font-bold uppercase">Transaction ID</span>
-                                  <code className="text-[10px] text-indigo-400 font-black">{p.transaction_id}</code>
+                                  <code className="text-[10px] select-all text-indigo-400 font-black font-mono">{p.transaction_id}</code>
                                </div>
                                <div className="flex justify-between items-center">
                                   <span className="text-[10px] text-gray-500 font-bold uppercase">Amount</span>
-                                  <span className="text-sm font-black">₹{p.amount}</span>
+                                  <span className="text-sm font-black text-emerald-400">₹{p.amount}</span>
+                               </div>
+                               <div className="flex justify-between items-center">
+                                  <span className="text-[10px] text-gray-500 font-bold uppercase">Date</span>
+                                  <span className="text-[10px] text-gray-400 font-medium">{p.created_at ? new Date(p.created_at).toLocaleString() : 'N/A'}</span>
                                </div>
                             </div>
                          </div>
 
                          <div className="flex flex-col gap-2">
-                            {p.status === 'pending' ? (
-                               <>
-                                  <button 
-                                    onClick={() => handleOpenApproveModal(p)}
-                                    className="p-3 bg-emerald-500 text-black rounded-xl hover:bg-emerald-400 transition-all active:scale-95 flex items-center justify-center shadow-lg shadow-emerald-500/20"
-                                  >
-                                    <Check size={18} />
-                                  </button>
-                                  <button 
-                                    onClick={() => setRejectModal({ id: p.id, isOpen: true, reason: '' })}
-                                    className="p-3 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl hover:bg-red-500 hover:text-white transition-all active:scale-95 flex items-center justify-center"
-                                  >
-                                    <X size={18} />
-                                  </button>
-                               </>
+                            {!p.approved && p.status !== 'done' ? (
+                               <button 
+                                 onClick={() => handleMarkAsDone(p.id)}
+                                 className="px-4 py-2 bg-emerald-500 text-black rounded-xl hover:bg-emerald-400 transition-all active:scale-95 flex items-center justify-center gap-1 font-bold text-xs uppercase"
+                               >
+                                 <Check size={14} /> Mark as Done
+                               </button>
                             ) : (
-                               <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${
-                                 p.status === 'approved' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
-                               }`}>
-                                 {p.status}
+                               <div className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-500 flex items-center gap-1.5 border border-emerald-500/20">
+                                 <CheckCircle2 className="w-3.5 h-3.5" /> Done
                                </div>
                             )}
                          </div>
                       </div>
-                      
-                      {p.status === 'approved' && p.unlock_password && (
-                        <div className="mt-4 pt-4 border-t border-white/5">
-                           <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">Grant Key</p>
-                           <code className="text-xs text-indigo-400 font-black block p-2 bg-indigo-500/5 rounded-lg border border-indigo-500/10">{p.unlock_password}</code>
-                        </div>
-                      )}
                     </div>
                   ))}
                </div>
@@ -751,61 +705,6 @@ export default function Admin() {
           banner={editingItem}
           uploadHandler={handleFileUpload}
         />
-      )}
-      {approveModal.isOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/90 backdrop-blur-md">
-           <div className="w-full max-w-sm bg-[#0a0a0a] border border-white/10 rounded-[2.5rem] p-10 space-y-6 animate-in zoom-in-95 duration-300">
-              <div className="flex justify-between items-center">
-                 <h3 className="text-xl font-black uppercase">Approve Payment</h3>
-                 <button onClick={() => setApproveModal({ ...approveModal, isOpen: false })} className="text-gray-500 hover:text-white transition-all"><X size={20} /></button>
-              </div>
-              <p className="text-xs text-gray-500 font-bold leading-relaxed uppercase">Enter the password the user will see to unlock their PDF material.</p>
-              <div className="space-y-1.5">
-                 <label className="text-[10px] text-gray-400 font-black uppercase ml-1">Unlock Password</label>
-                 <input 
-                  type="text" 
-                  value={approveModal.password} 
-                  onChange={e => setApproveModal({...approveModal, password: e.target.value})}
-                  className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-emerald-500 outline-none transition-all"
-                  placeholder="e.g. EXPN-9283"
-                  autoFocus
-                 />
-              </div>
-              <button 
-                onClick={handleApprovePurchase}
-                className="w-full py-4 bg-emerald-500 text-black rounded-2xl font-black text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-emerald-500/10"
-              >
-                Confirm Approval
-              </button>
-           </div>
-        </div>
-      )}
-      {rejectModal.isOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/90 backdrop-blur-md">
-           <div className="w-full max-w-sm bg-[#0a0a0a] border border-white/10 rounded-[2.5rem] p-10 space-y-6 animate-in zoom-in-95 duration-300">
-              <div className="flex justify-between items-center">
-                 <h3 className="text-xl font-black uppercase">Reject Payment</h3>
-                 <button onClick={() => setRejectModal({ ...rejectModal, isOpen: false })} className="text-gray-500 hover:text-white transition-all"><X size={20} /></button>
-              </div>
-              <p className="text-xs text-gray-500 font-bold leading-relaxed uppercase">Provide a reason for rejection. This will help the user understand why access was denied.</p>
-              <div className="space-y-1.5">
-                 <label className="text-[10px] text-gray-400 font-black uppercase ml-1">Reason (Optional)</label>
-                 <textarea 
-                  value={rejectModal.reason} 
-                  onChange={e => setRejectModal({...rejectModal, reason: e.target.value})}
-                  className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-red-500 outline-none transition-all min-h-[100px] resize-none"
-                  placeholder="e.g. Transaction ID not found or mismatched amount."
-                  autoFocus
-                 />
-              </div>
-              <button 
-                onClick={handleRejectPurchase}
-                className="w-full py-4 bg-red-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-red-500/10"
-              >
-                Confirm Rejection
-              </button>
-           </div>
-        </div>
       )}
     </div>
   );

@@ -18,35 +18,6 @@ export default function Profile({ user, setUser }: ProfileProps) {
 
   useEffect(() => {
     fetchHistory();
-
-    let channel: any = null;
-    if (user && supabase) {
-      channel = supabase
-        .channel(`verified_payments_profile_${user.uid}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'verified_payments',
-          },
-          (payload) => {
-            const newRecord = payload.new as any;
-            const oldRecord = payload.old as any;
-            const currentRecord = newRecord || oldRecord;
-            if (currentRecord && (currentRecord.user_id === user.uid || currentRecord.email === user.email)) {
-              fetchHistory();
-            }
-          }
-        )
-        .subscribe();
-    }
-
-    return () => {
-      if (channel && supabase) {
-        supabase.removeChannel(channel);
-      }
-    };
   }, [user]);
 
   const fetchHistory = async () => {

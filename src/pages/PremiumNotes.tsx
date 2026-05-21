@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Crown, Check, ShieldCheck, Copy, X, 
   CreditCard, Loader2, Zap, Download,
-  FileText, SearchCheck, Info, Clock, XCircle, BookOpen
+  FileText, SearchCheck, Info, Clock, XCircle, BookOpen, CheckCircle2
 } from 'lucide-react';
 import { AppUser, SubjectResource } from '../types';
 import { toast } from 'sonner';
@@ -41,48 +41,20 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
   const [loading, setLoading] = useState(true);
   
   // Purchase Form State
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [buyerName, setBuyerName] = useState('');
   const [amount, setAmount] = useState('');
   const [transactionId, setTransactionId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
 
+  // Success Step state
+  const [isSuccessStep, setIsSuccessStep] = useState(false);
+  const [submittedTxId, setSubmittedTxId] = useState('');
+
   useEffect(() => {
     fetchResources();
     if (user) {
       fetchUserHistory();
-      // Poll every 10 seconds to check for approval
-      const interval = setInterval(fetchUserHistory, 10000);
-
-      let channel: any = null;
-      if (supabase) {
-        channel = supabase
-          .channel(`verified_payments_premium_notes_${user.uid}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'verified_payments',
-            },
-            (payload) => {
-              const newRecord = payload.new as any;
-              const oldRecord = payload.old as any;
-              const currentRecord = newRecord || oldRecord;
-              if (currentRecord && (currentRecord.user_id === user.uid || currentRecord.email === user.email)) {
-                fetchUserHistory();
-              }
-            }
-          )
-          .subscribe();
-      }
-
-      return () => {
-        clearInterval(interval);
-        if (channel && supabase) {
-          supabase.removeChannel(channel);
-        }
-      };
     }
   }, [activeClass, user]);
 
@@ -117,7 +89,7 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       return;
     }
 
-    if (!amount || !transactionId) {
+    if (!buyerName || !amount || !transactionId) {
       toast.error('Please fill all fields');
       return;
     }
@@ -130,18 +102,20 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
         product_name: selectedPlan.subject ? `${selectedPlan.subject} Notes (Class ${selectedPlan.class})` : selectedPlan.name,
         amount: parseFloat(amount),
         transaction_id: transactionId,
-        phone_number: phoneNumber || undefined,
+        phone_number: buyerName, // Save Buyer Name into phone_number field for schema compatibility
         status: 'pending',
-        approved: false
+        approved: false,
+        created_at: new Date().toISOString()
       });
 
       if (!res.success) throw new Error(res.error || "Failed to submit");
 
       localStorage.setItem('last_payment_user_id', user.uid);
-      toast.success("Details submitted! Admin will verify and grant access.");
-      setSelectedPlan(null);
+      setSubmittedTxId(transactionId);
+      setIsSuccessStep(true);
       setTransactionId('');
       setAmount('');
+      setBuyerName('');
       fetchUserHistory();
     } catch (error: any) {
       toast.error(error.message || "Failed to submit");
@@ -243,7 +217,11 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                     </div>
                   ) : (
                     <button 
-                      onClick={() => setSelectedPlan({ ...PREMIUM_PLANS[0], subject: res.subject, class: res.class, price: res.price })}
+                      onClick={() => {
+                        setIsSuccessStep(false);
+                        setSubmittedTxId('');
+                        setSelectedPlan({ ...PREMIUM_PLANS[0], subject: res.subject, class: res.class, price: res.price });
+                      }}
                       className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
                     >
                       <Crown size={14} className="inline mr-1" /> Buy Now
@@ -262,46 +240,101 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl">
             <motion.div 
               initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
-              className="relative w-full max-w-lg bg-[#0A0A0B] border border-white/10 rounded-[40px] p-10 space-y-8"
+              className="relative w-full max-w-lg bg-[#0A0A0B] border border-white/10 rounded-[40px] p-10 space-y-8 max-h-[90vh] overflow-y-auto"
             >
               <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-black uppercase">{selectedPlan.subject || selectedPlan.name}</h2>
-                <button onClick={() => setSelectedPlan(null)}><X size={24} className="text-gray-500 hover:text-white" /></button>
+                <h2 className="text-2xl font-black uppercase text-white">{selectedPlan.subject || selectedPlan.name}</h2>
+                <button onClick={() => {
+                  setSelectedPlan(null);
+                  setIsSuccessStep(false);
+                }}><X size={24} className="text-gray-500 hover:text-white" /></button>
               </div>
 
-              <div className="bg-indigo-600/5 p-8 rounded-3xl border border-indigo-600/20 flex flex-col items-center gap-6">
-                 <div className="p-4 bg-white rounded-2xl">
-                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=9236489649@mbk&pn=NoteVix&am=${selectedPlan.price}&cu=INR`} className="w-32 h-32" />
-                 </div>
-                 <div className="text-center">
-                    <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">Pay ₹{selectedPlan.price} via UPI</p>
-                    <code className="text-lg font-black text-white">9236489649@mbk</code>
-                 </div>
-              </div>
+              {!isSuccessStep ? (
+                <>
+                  <div className="bg-indigo-600/5 p-8 rounded-3xl border border-indigo-600/20 flex flex-col items-center gap-6">
+                     <div className="p-4 bg-white rounded-2xl">
+                        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=9236489649@mbk&pn=NoteVix&am=${selectedPlan.price}&cu=INR`} className="w-32 h-32" alt="UPI QR Code" />
+                     </div>
+                     <div className="text-center">
+                        <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">Pay ₹{selectedPlan.price} via UPI</p>
+                        <code className="text-lg font-black text-white select-all">9236489649@mbk</code>
+                     </div>
+                  </div>
 
-              <div className="space-y-4">
-                 <div className="relative">
-                   <input 
-                    type="text" 
-                    placeholder="WhatsApp Number (Optional)" 
-                    value={phoneNumber} 
-                    onChange={e => setPhoneNumber(e.target.value)}
-                    className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none focus:border-indigo-500"
-                   />
-                   <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[8px] font-black text-gray-500 uppercase tracking-widest hidden sm:block">Optional</span>
-                 </div>
-                 <div className="grid grid-cols-2 gap-4">
-                    <input type="number" placeholder="Amount Paid" value={amount} onChange={e => setAmount(e.target.value)} className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none" />
-                    <input type="text" placeholder="Transaction ID" value={transactionId} onChange={e => setTransactionId(e.target.value)} className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none font-mono" />
-                 </div>
-              </div>
+                  <div className="space-y-4">
+                     <div>
+                       <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2"> Your Name</label>
+                       <input 
+                        type="text" 
+                        placeholder="Enter your Name" 
+                        value={buyerName} 
+                        onChange={e => setBuyerName(e.target.value)}
+                        className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none focus:border-indigo-500 text-white"
+                       />
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2">Amount Paid (₹)</label>
+                          <input type="number" placeholder="Enter Amount" value={amount} onChange={e => setAmount(e.target.value)} className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none text-white" />
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2">Transaction ID</label>
+                          <input type="text" placeholder="Transaction ID (UTR)" value={transactionId} onChange={e => setTransactionId(e.target.value)} className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-sm outline-none font-mono text-white" />
+                        </div>
+                     </div>
+                  </div>
 
-              <button 
-                onClick={handlePurchase} disabled={isSubmitting}
-                className="w-full h-16 bg-white text-black rounded-3xl font-black text-sm uppercase shadow-xl disabled:opacity-50"
-              >
-                {isSubmitting ? 'Submitting...' : 'Submit Payment'}
-              </button>
+                  <button 
+                    onClick={handlePurchase} disabled={isSubmitting}
+                    className="w-full h-16 bg-white text-black rounded-3xl font-black text-sm uppercase shadow-xl disabled:opacity-50 transition-all hover:bg-neutral-200"
+                  >
+                    {isSubmitting ? 'Submitting...' : 'Submit Payment'}
+                  </button>
+                </>
+              ) : (
+                <div className="space-y-6 text-center py-4">
+                  <div className="mx-auto w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500 border border-emerald-500/20">
+                    <CheckCircle2 className="w-8 h-8" />
+                  </div>
+                  
+                  <div className="space-y-4 bg-white/[0.02] border border-white/5 p-6 rounded-3xl">
+                    <p className="text-gray-300 text-sm font-medium leading-relaxed">
+                      Payment details submitted successfully! ✅
+                    </p>
+                    <p className="text-gray-400 text-xs leading-relaxed">
+                      To receive your PDF password, contact us on WhatsApp: <strong className="text-white">9236489649</strong>. Send your Transaction ID and we will send you the password within a few minutes!
+                    </p>
+                    <div className="pt-2">
+                      <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Submitted ID</p>
+                      <code className="text-xs bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 text-indigo-400 font-black inline-block mt-1 font-mono">{submittedTxId}</code>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 pt-2">
+                    <a 
+                      href={`https://wa.me/919236489649?text=${encodeURIComponent(`Hi, I just paid for NoteVix. My Transaction ID is ${submittedTxId}. Please send me the PDF password.`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full h-16 bg-emerald-600 hover:bg-emerald-500 text-white rounded-3xl font-black text-sm uppercase shadow-xl shadow-emerald-600/10 flex items-center justify-center gap-2 transition-all"
+                    >
+                      <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.262 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.458L0 24zm6.59-4.846c1.6.95 3.18 1.449 4.825 1.451 5.436 0 9.86-4.37 9.863-9.73.001-2.595-1.013-5.035-2.855-6.882C16.636 2.146 14.197.94 11.599.94c-5.45 0-9.88 4.372-9.883 9.73-.001 1.93.51 3.801 1.48 5.476l-.974 3.565 3.655-.958zm12.385-6.619c-.29-.144-1.713-.837-1.979-.933-.266-.096-.459-.144-.652.144-.193.288-.748.933-.917 1.125-.169.191-.338.216-.628.072-.29-.144-1.226-.447-2.336-1.427-.864-.763-1.448-1.706-1.617-1.994-.169-.288-.018-.444.127-.587.13-.13.29-.336.435-.504.145-.168.193-.288.29-.48.096-.192.048-.36-.024-.504-.072-.144-.652-1.554-.892-2.13-.233-.566-.47-.489-.652-.498-.169-.008-.362-.01-.556-.01-.193 0-.507.072-.772.36-.266.288-1.014.981-1.014 2.394 0 1.413 1.039 2.78 1.184 2.972.145.19 2.044 3.09 4.949 4.329.693.295 1.233.473 1.654.606.697.219 1.332.188 1.833.114.558-.083 1.713-.692 1.954-1.36.242-.667.242-1.241.169-1.36-.073-.119-.266-.216-.556-.36z"/>
+                      </svg>
+                      Open WhatsApp Chat
+                    </a>
+                    <button 
+                      onClick={() => {
+                        setSelectedPlan(null);
+                        setIsSuccessStep(false);
+                      }}
+                      className="w-full h-14 bg-white/5 hover:bg-white/10 text-white rounded-3xl font-black text-sm uppercase transition-all"
+                    >
+                      Close Window
+                    </button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           </div>
         )}
