@@ -36,6 +36,8 @@ export default function Landing({ user }: LandingProps) {
   const [transactionId, setTransactionId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [purchaseSuccess, setPurchaseSuccess] = useState(false);
+  const [sourcePlatform, setSourcePlatform] = useState('');
+  const [sourceAccount, setSourceAccount] = useState('');
 
   // Success Step state
   const [submittedTxId, setSubmittedTxId] = useState('');
@@ -53,6 +55,8 @@ export default function Landing({ user }: LandingProps) {
       }
       setBuyerPhone('');
       setAmount(selectedPlan.price ? selectedPlan.price.toString() : '39');
+      setSourcePlatform('');
+      setSourceAccount('');
     }
   }, [selectedPlan, user]);
 
@@ -65,8 +69,8 @@ export default function Landing({ user }: LandingProps) {
   }, [activeClass]);
 
   const handleSubmitPayment = async () => {
-    if (!buyerName || !buyerEmail || !buyerPhone || !amount || !transactionId) {
-      toast.error('Please fill all fields');
+    if (!buyerName || !buyerEmail || !buyerPhone || !amount || !transactionId || !sourcePlatform || (sourcePlatform === 'Instagram' && !sourceAccount)) {
+      toast.error('Please fill all fields, including where you heard about us');
       return;
     }
 
@@ -83,6 +87,8 @@ export default function Landing({ user }: LandingProps) {
         phone_number: `${buyerName} (${buyerPhone})`, // Save combined Name & Phone
         status: 'pending',
         approved: false,
+        source_platform: sourcePlatform,
+        source_account: sourcePlatform === 'Instagram' ? sourceAccount : null,
         created_at: new Date().toISOString()
       });
 
@@ -317,7 +323,42 @@ export default function Landing({ user }: LandingProps) {
                        </div>
 
                        <div>
-                         <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2">Phone Number (WhatsApp)</label>
+                         <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2">Where did you hear about us?</label>
+                          <select
+                            value={sourcePlatform}
+                            onChange={e => {
+                              setSourcePlatform(e.target.value);
+                              if (e.target.value !== 'Instagram') {
+                                setSourceAccount('');
+                              }
+                            }}
+                            className="w-full h-14 bg-[#141415] border border-white/10 rounded-2xl px-6 text-sm outline-none focus:border-indigo-500 text-white mb-4"
+                          >
+                            <option value="">Select platform</option>
+                            <option value="Instagram">Instagram</option>
+                            <option value="Snapchat">Snapchat</option>
+                            <option value="YouTube">YouTube</option>
+                            <option value="Friend's Referral">Friend's Referral</option>
+                            <option value="Other">Other</option>
+                          </select>
+
+                          {sourcePlatform === 'Instagram' && (
+                            <div className="mb-4">
+                              <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2">Which account?</label>
+                              <select
+                                value={sourceAccount}
+                                onChange={e => setSourceAccount(e.target.value)}
+                                className="w-full h-14 bg-[#141415] border border-white/10 rounded-2xl px-6 text-sm outline-none focus:border-indigo-500 text-white"
+                              >
+                                <option value="">Select account</option>
+                                <option value="@studyhacks100">@studyhacks100</option>
+                                <option value="@theexamtips">@theexamtips</option>
+                                <option value="Other">Other</option>
+                              </select>
+                            </div>
+                          )}
+
+                          <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2">Phone Number (WhatsApp)</label>
                          <input 
                           type="text" 
                           placeholder="WhatsApp Number" 

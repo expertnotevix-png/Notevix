@@ -11,6 +11,8 @@ export interface VerifiedPayment {
   rejection_reason?: string;
   approved: boolean;
   created_at: string;
+  source_platform?: string;
+  source_account?: string;
 }
 
 export interface AppUser {

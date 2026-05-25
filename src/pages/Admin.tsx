@@ -53,7 +53,10 @@ export default function Admin() {
     setLoading(true);
     try {
       switch (activeTab) {
-        case 'analytics': await fetchAnalytics(); break;
+        case 'analytics': 
+          await fetchAnalytics(); 
+          await fetchVerifiedPayments();
+          break;
         case 'resources': await fetchSubjectResources(); break;
         case 'banners': await fetchBanners(); break;
         case 'verified_payments': await fetchVerifiedPayments(); break;
@@ -189,6 +192,19 @@ export default function Admin() {
   };
 
   const handleMarkAsDone = async (paymentId: string) => {
+    const payment = verifiedPayments.find(p => p.id === paymentId);
+    const paymentAmt = payment?.amount ? parseFloat(payment.amount as any) : 0;
+
+    // Immediately update analytics state locally to feel instant
+    setAnalyticsData(prev => ({
+      ...prev,
+      totalRevenue: prev.totalRevenue + paymentAmt,
+      premiumSales: prev.premiumSales + 1
+    }));
+
+    // Update verified payments locally so the list update displays immediately
+    setVerifiedPayments(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'done', approved: true } : p));
+
     setLoading(true);
     try {
       if (!supabase) throw new Error("Supabase is not initialized");
@@ -200,8 +216,16 @@ export default function Admin() {
       if (error) throw error;
       toast.success("Payment marked as done!");
       await fetchVerifiedPayments();
+      await fetchAnalytics();
     } catch (err: any) {
       toast.error(err.message || "Failed to mark as done");
+      // Rollback on fail
+      setVerifiedPayments(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'pending', approved: false } : p));
+      setAnalyticsData(prev => ({
+        ...prev,
+        totalRevenue: Math.max(0, prev.totalRevenue - paymentAmt),
+        premiumSales: Math.max(0, prev.premiumSales - 1)
+      }));
     } finally {
       setLoading(false);
     }
@@ -247,6 +271,51 @@ export default function Admin() {
     { id: 'notifications', label: 'Broadcast', icon: Bell },
     { id: 'settings', label: 'Settings', icon: Settings },
   ] as const;
+
+  const trafficSourcesData = useMemo(() => {
+    const platformTracker: Record<string, number> = {
+      'Instagram': 0,
+      'Snapchat': 0,
+      'YouTube': 0,
+      "Friend's Referral": 0,
+      'Other': 0
+    };
+
+    const accountTracker: Record<string, number> = {
+      '@studyhacks100': 0,
+      '@theexamtips': 0,
+      'Other': 0
+    };
+
+    // Filter successful payments (approved or done status)
+    const sales = verifiedPayments.filter(p => p.approved || p.status === 'done');
+    const totalSalesNum = sales.length;
+    const instagramSalesNum = sales.filter(p => p.source_platform === 'Instagram').length;
+
+    sales.forEach(p => {
+      if (p.source_platform && platformTracker[p.source_platform] !== undefined) {
+        platformTracker[p.source_platform]++;
+      }
+      if (p.source_platform === 'Instagram' && p.source_account && accountTracker[p.source_account] !== undefined) {
+        accountTracker[p.source_account]++;
+      }
+    });
+
+    return {
+      platforms: Object.entries(platformTracker).map(([name, count]) => ({
+        name,
+        count,
+        percentage: totalSalesNum > 0 ? Math.round((count / totalSalesNum) * 100) : 0
+      })),
+      accounts: Object.entries(accountTracker).map(([name, count]) => ({
+        name,
+        count,
+        percentage: instagramSalesNum > 0 ? Math.round((count / instagramSalesNum) * 100) : 0
+      })),
+      totalSalesNum,
+      instagramSalesNum
+    };
+  }, [verifiedPayments]);
 
   const filteredPayments = useMemo(() => {
     return verifiedPayments.filter(p => {
@@ -363,6 +432,169 @@ export default function Admin() {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Traffic Sources Chart SECTION */}
+              <div className="bg-white/[0.02] border border-white/10 rounded-[2.5rem] p-8 space-y-8">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
+                   <div>
+                      <h3 className="text-xl font-black uppercase tracking-tight text-white flex items-center gap-2">
+                         <TrendingUp className="text-indigo-400 w-5 h-5" />
+                         Traffic Sources
+                      </h3>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">
+                         Acquisition Channels & Instagram Performance
+                      </p>
+                   </div>
+                   <span className="text-[9px] bg-indigo-500/10 text-indigo-400 font-black border border-indigo-500/20 px-3 py-1 rounded-full uppercase tracking-wider">
+                     {trafficSourcesData.totalSalesNum} Total Sales Tracked
+                   </span>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Platform Acquisition */}
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="text-xs font-black uppercase text-gray-300 tracking-wider">Sales by Platform</h4>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">Where your buyers are coming from</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
+                      <div className="space-y-4">
+                        {trafficSourcesData.platforms.map((platform, img) => {
+                          const COLORS = ['#6366f1', '#eab308', '#ef4444', '#10b981', '#737373'];
+                          let dotColor = COLORS[img % COLORS.length];
+
+                          return (
+                            <div key={platform.name} className="space-y-1.5">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="font-bold text-gray-300 flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: dotColor }} />
+                                  {platform.name}
+                                </span>
+                                <div className="space-x-1">
+                                  <span className="text-gray-400 font-black">{platform.count}</span>
+                                  <span className="text-indigo-400 font-black">({platform.percentage}%)</span>
+                                </div>
+                              </div>
+                              <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                                <div 
+                                  className="h-full rounded-full transition-all duration-500"
+                                  style={{ width: `${platform.percentage}%`, backgroundColor: dotColor }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* PieChart Visualization */}
+                      <div className="h-48 relative flex items-center justify-center">
+                        {trafficSourcesData.totalSalesNum === 0 ? (
+                          <div className="text-center">
+                            <TrendingUp className="w-8 h-8 text-gray-700 mx-auto mb-1" />
+                            <p className="text-[10px] text-gray-500 font-bold uppercase">No data</p>
+                          </div>
+                        ) : (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={trafficSourcesData.platforms}
+                                cx="55%"
+                                cy="50%"
+                                innerRadius={45}
+                                outerRadius={65}
+                                paddingAngle={2}
+                                dataKey="count"
+                              >
+                                {trafficSourcesData.platforms.map((entry, index) => {
+                                  const COLORS = ['#6366f1', '#eab308', '#ef4444', '#10b981', '#737373'];
+                                  return <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />;
+                                })}
+                              </Pie>
+                              <Tooltip 
+                                contentStyle={{ backgroundColor: '#0A0A0B', borderColor: '#1F2937', borderRadius: '1rem', color: '#fff' }}
+                                itemStyle={{ color: '#fff' }}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Instagram Account Attribution */}
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="text-xs font-black uppercase text-gray-300 tracking-wider">Instagram Account Performance</h4>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">Performance of creator accounts</p>
+                    </div>
+
+                    {trafficSourcesData.instagramSalesNum === 0 ? (
+                      <div className="h-48 rounded-3xl border border-white/5 bg-white/[0.01] flex flex-col items-center justify-center text-center p-6">
+                        <Instagram className="w-8 h-8 text-gray-700 mb-2" />
+                        <p className="text-[10px] text-gray-500 font-black uppercase tracking-wider">No Instagram Sales Tracked Yet</p>
+                        <p className="text-[9px] text-gray-600 font-semibold uppercase tracking-wider mt-1">Select Instagram in payment form to track</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
+                        <div className="space-y-4">
+                          {trafficSourcesData.accounts.map((account, index) => {
+                            const COLORS = ['#ec4899', '#d946ef', '#737373'];
+                            let dotColor = COLORS[index % COLORS.length];
+
+                            return (
+                              <div key={account.name} className="space-y-1.5">
+                                <div className="flex justify-between items-center text-xs">
+                                  <span className="font-bold text-gray-300 font-mono flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: dotColor }} />
+                                    {account.name}
+                                  </span>
+                                  <div className="space-x-1">
+                                    <span className="text-gray-400 font-black">{account.count}</span>
+                                    <span className="text-pink-400 font-black">({account.percentage}%)</span>
+                                  </div>
+                                </div>
+                                <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                                  <div 
+                                    className="h-full rounded-full transition-all duration-500"
+                                    style={{ width: `${account.percentage}%`, backgroundColor: dotColor }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* PieChart for Instagram Accounts */}
+                        <div className="h-48 relative flex items-center justify-center">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={trafficSourcesData.accounts}
+                                cx="55%"
+                                cy="50%"
+                                innerRadius={45}
+                                outerRadius={65}
+                                paddingAngle={2}
+                                dataKey="count"
+                              >
+                                {trafficSourcesData.accounts.map((entry, index) => {
+                                  const COLORS = ['#ec4899', '#d946ef', '#737373'];
+                                  return <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />;
+                                })}
+                              </Pie>
+                              <Tooltip 
+                                contentStyle={{ backgroundColor: '#0A0A0B', borderColor: '#1F2937', borderRadius: '1rem', color: '#fff' }}
+                                itemStyle={{ color: '#fff' }}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -504,6 +736,21 @@ export default function Admin() {
                                   <span className="text-[10px] text-gray-500 font-bold uppercase">Date</span>
                                   <span className="text-[10px] text-gray-400 font-medium">{p.created_at ? new Date(p.created_at).toLocaleString() : 'N/A'}</span>
                                </div>
+                               {p.source_platform && (
+                                  <div className="flex justify-between items-center border-t border-white/5 pt-1.5 mt-1.5">
+                                     <span className="text-[10px] text-gray-500 font-bold uppercase">Source Platform</span>
+                                     <span className="text-[10px] text-indigo-300 font-black uppercase flex items-center gap-1">
+                                       {p.source_platform === 'Instagram' && <Instagram size={11} className="text-pink-500" />}
+                                       {p.source_platform}
+                                     </span>
+                                  </div>
+                               )}
+                               {p.source_platform === 'Instagram' && p.source_account && (
+                                  <div className="flex justify-between items-center">
+                                     <span className="text-[10px] text-gray-500 font-bold uppercase">Instagram Account</span>
+                                     <strong className="text-[10px] text-pink-400 font-mono">{p.source_account}</strong>
+                                  </div>
+                               )}
                             </div>
                          </div>
 
