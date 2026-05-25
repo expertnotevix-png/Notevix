@@ -347,8 +347,14 @@ export const dataBridge = {
     try {
         const { data: payments } = await supabase.from('verified_payments').select('amount, status, approved');
         if (payments) {
-            stats.totalRevenue = payments.filter(p => p.approved).reduce((sum, p) => sum + (p.amount || 0), 0);
-            stats.premiumSales = payments.filter(p => p.approved).length;
+            const successfulPayments = payments.filter(p => 
+                p.approved === true || 
+                p.approved === 'true' || 
+                p.status === 'done' || 
+                p.status === 'approved'
+            );
+            stats.totalRevenue = successfulPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+            stats.premiumSales = successfulPayments.length;
         }
         const { count } = await supabase.from('pdf_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending');
         stats.pendingRequests = count || 0;
