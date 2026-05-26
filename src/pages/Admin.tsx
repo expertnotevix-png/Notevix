@@ -50,12 +50,7 @@ export default function Admin() {
   }, [activeTab]);
 
   useEffect(() => {
-    const successfulPayments = verifiedPayments.filter(p => 
-      p.approved === true || 
-      (p.approved as any) === 'true' || 
-      p.status === 'done' || 
-      p.status === 'approved'
-    );
+    const successfulPayments = verifiedPayments.filter(p => p.status === 'done');
     const totalRev = successfulPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
     const salesCount = successfulPayments.length;
 
@@ -234,13 +229,9 @@ export default function Admin() {
 
     setLoading(true);
     try {
-      if (!supabase) throw new Error("Supabase is not initialized");
-      const { error } = await supabase.from('verified_payments').update({
-        approved: true,
-        status: 'done'
-      }).eq('id', paymentId);
+      const res = await dataBridge.markPaymentAsDone(paymentId);
+      if (!res.success) throw new Error(res.error);
       
-      if (error) throw error;
       toast.success("Payment marked as done!");
       await fetchVerifiedPayments();
       await fetchAnalytics();
@@ -315,13 +306,8 @@ export default function Admin() {
       'Other': 0
     };
 
-    // Filter successful payments (approved or done status)
-    const sales = verifiedPayments.filter(p => 
-      p.approved === true || 
-      (p.approved as any) === 'true' || 
-      p.status === 'done' || 
-      p.status === 'approved'
-    );
+    // Filter successful payments (done status)
+    const sales = verifiedPayments.filter(p => p.status === 'done');
     const totalSalesNum = sales.length;
     const instagramSalesNum = sales.filter(p => p.source_platform === 'Instagram').length;
 
@@ -788,7 +774,7 @@ export default function Admin() {
                          </div>
 
                          <div className="flex flex-col gap-2">
-                            {!(p.approved === true || (p.approved as any) === 'true' || p.status === 'done' || p.status === 'approved') ? (
+                            {p.status !== 'done' ? (
                                <button 
                                  onClick={() => handleMarkAsDone(p.id)}
                                  className="px-4 py-2 bg-emerald-500 text-black rounded-xl hover:bg-emerald-400 transition-all active:scale-95 flex items-center justify-center gap-1 font-bold text-xs uppercase"

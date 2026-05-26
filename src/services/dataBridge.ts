@@ -347,12 +347,7 @@ export const dataBridge = {
     try {
         const { data: payments } = await supabase.from('verified_payments').select('amount, status, approved');
         if (payments) {
-            const successfulPayments = payments.filter(p => 
-                p.approved === true || 
-                p.approved === 'true' || 
-                p.status === 'done' || 
-                p.status === 'approved'
-            );
+            const successfulPayments = payments.filter(p => p.status === 'done');
             stats.totalRevenue = successfulPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
             stats.premiumSales = successfulPayments.length;
         }
@@ -361,6 +356,20 @@ export const dataBridge = {
         return stats;
     } catch (err) {
       return stats;
+    }
+  },
+
+  async markPaymentAsDone(id: string) {
+    if (!supabase) return { success: false, error: 'Supabase not connected' };
+    try {
+      const { error } = await supabase.from('verified_payments').update({
+        status: 'done',
+        approved: true
+      }).eq('id', id);
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
     }
   }
 };
