@@ -251,8 +251,15 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
                      <div className="p-4 bg-white rounded-2xl">
                         <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=9236489649@mbk&pn=NoteVix&am=${selectedPlan.price}&cu=INR`} className="w-32 h-32" alt="UPI QR Code" />
                      </div>
+
+                     {/* Prominent Price Highlight */}
+                     <div className="w-full text-center bg-emerald-500/10 border border-emerald-500/25 px-6 py-4 rounded-3xl">
+                       <span className="text-[10px] text-emerald-400 font-black tracking-widest uppercase block mb-1">Amount to Pay</span>
+                       <span className="text-4xl font-black text-emerald-400 tracking-tight block">₹{selectedPlan.price}</span>
+                     </div>
+
                      <div className="text-center">
-                        <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">Pay ₹{selectedPlan.price} via UPI</p>
+                        <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">Pay UPI ID</p>
                         <code className="text-lg font-black text-white select-all">9236489649@mbk</code>
                      </div>
                   </div>

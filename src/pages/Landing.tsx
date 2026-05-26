@@ -292,6 +292,13 @@ export default function Landing({ user }: LandingProps) {
                             className="w-32 h-32"
                           />
                        </div>
+
+                       {/* Prominent Price Highlight */}
+                       <div className="w-full text-center bg-emerald-500/10 border border-emerald-500/25 px-6 py-4 rounded-3xl">
+                         <span className="text-[10px] text-emerald-400 font-black tracking-widest uppercase block mb-1">Amount to Pay</span>
+                         <span className="text-4xl font-black text-emerald-400 tracking-tight block">₹{selectedPlan.price}</span>
+                       </div>
+
                        <div className="text-center">
                           <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">UPI ID</p>
                           <code className="text-lg font-black text-white">9236489649@mbk</code>
