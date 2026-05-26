@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Zap, QrCode, Shield, Copy, Info, FileText, CheckCircle2 } from 'lucide-react';
+import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Zap, QrCode, Shield, Copy, Info, FileText, CheckCircle2, Instagram, Youtube, Send, Users } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { PromoCarousel } from '../components/PromoCarousel';
 import { useState, useEffect } from 'react';
@@ -324,37 +324,70 @@ export default function Landing({ user }: LandingProps) {
 
                        <div>
                          <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2">Where did you hear about us?</label>
-                          <select
-                            value={sourcePlatform}
-                            onChange={e => {
-                              setSourcePlatform(e.target.value);
-                              if (e.target.value !== 'Instagram') {
-                                setSourceAccount('');
-                              }
-                            }}
-                            className="w-full h-14 bg-[#141415] border border-white/10 rounded-2xl px-6 text-sm outline-none focus:border-indigo-500 text-white mb-4"
-                          >
-                            <option value="">Select platform</option>
-                            <option value="Instagram">Instagram</option>
-                            <option value="Snapchat">Snapchat</option>
-                            <option value="YouTube">YouTube</option>
-                            <option value="Friend's Referral">Friend's Referral</option>
-                            <option value="Other">Other</option>
-                          </select>
+                        <div className="grid grid-cols-2 gap-2 mb-4">
+                          {[
+                            { value: 'Instagram', label: 'Instagram', icon: Instagram, iconColor: 'text-pink-500' },
+                            { value: 'Telegram', label: 'Telegram', icon: Send, iconColor: 'text-sky-400' },
+                            { value: 'Snapchat', label: 'Snapchat' },
+                            { value: 'YouTube', label: 'YouTube', icon: Youtube, iconColor: 'text-red-500' },
+                            { value: "Friend's Referral", label: "Friend's Referral", icon: Users, iconColor: 'text-emerald-400', fullWidth: true },
+                          ].map((plat) => {
+                            const isSelected = sourcePlatform === plat.value;
+                            const IconComponent = plat.icon;
+                            return (
+                              <button
+                                key={plat.value}
+                                type="button"
+                                onClick={() => {
+                                  setSourcePlatform(plat.value);
+                                  if (plat.value !== 'Instagram') {
+                                    setSourceAccount('');
+                                  }
+                                }}
+                                className={`h-12 rounded-xl text-[11px] font-extrabold uppercase tracking-wider transition-all px-4 border flex items-center justify-center gap-2 text-center cursor-pointer ${
+                                  plat.fullWidth ? 'col-span-2' : ''
+                                } ${
+                                  isSelected
+                                    ? 'bg-gradient-to-r from-indigo-600/30 to-purple-600/30 border-indigo-500 text-white shadow-lg shadow-indigo-500/10 scale-[1.01]'
+                                    : 'bg-white/[0.02] border-white/5 text-gray-400 hover:border-white/15 hover:bg-white/[0.04] hover:text-white active:scale-95'
+                                }`}
+                              >
+                                {IconComponent && <IconComponent className={`w-3.5 h-3.5 ${plat.iconColor}`} />}
+                                {plat.value === 'Snapchat' && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                                )}
+                                {plat.label}
+                              </button>
+                            );
+                          })}
+                        </div>
 
                           {sourcePlatform === 'Instagram' && (
                             <div className="mb-4">
                               <label className="text-[9px] text-gray-400 font-black uppercase tracking-widest block mb-2">Which account?</label>
-                              <select
-                                value={sourceAccount}
-                                onChange={e => setSourceAccount(e.target.value)}
-                                className="w-full h-14 bg-[#141415] border border-white/10 rounded-2xl px-6 text-sm outline-none focus:border-indigo-500 text-white"
-                              >
-                                <option value="">Select account</option>
-                                <option value="@studyhacks100">@studyhacks100</option>
-                                <option value="@theexamtips">@theexamtips</option>
-                                <option value="Other">Other</option>
-                              </select>
+                              <div className="grid grid-cols-3 gap-2 mt-2">
+                                {[
+                                  { value: '@studyhacks100', label: '@studyhacks100' },
+                                  { value: '@theexamtips', label: '@theexamtips' },
+                                  { value: 'Other', label: 'Other/Ref' },
+                                ].map((acc) => {
+                                  const isSelected = sourceAccount === acc.value;
+                                  return (
+                                    <button
+                                      key={acc.value}
+                                      type="button"
+                                      onClick={() => setSourceAccount(acc.value)}
+                                      className={`h-11 rounded-lg text-[10px] font-extrabold transition-all px-2 border flex items-center justify-center text-center cursor-pointer ${
+                                        isSelected
+                                          ? 'bg-pink-500/15 border-pink-500 text-pink-300 shadow-md shadow-pink-500/5 scale-[1.01]'
+                                          : 'bg-white/[0.02] border-white/5 text-gray-400 hover:border-white/15 hover:bg-white/[0.04] hover:text-white active:scale-95'
+                                      }`}
+                                    >
+                                      {acc.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
                           )}
 

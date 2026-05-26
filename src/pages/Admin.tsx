@@ -49,6 +49,33 @@ export default function Admin() {
     fetchTabSpecificData();
   }, [activeTab]);
 
+  useEffect(() => {
+    const successfulPayments = verifiedPayments.filter(p => 
+      p.approved === true || 
+      (p.approved as any) === 'true' || 
+      p.status === 'done' || 
+      p.status === 'approved'
+    );
+    const totalRev = successfulPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    const salesCount = successfulPayments.length;
+
+    setAnalyticsData(prev => ({
+      ...prev,
+      totalRevenue: totalRev,
+      premiumSales: salesCount
+    }));
+  }, [verifiedPayments]);
+
+  useEffect(() => {
+    const pendingPdfCount = pdfRequests.filter(r => r.status === 'pending').length;
+    if (pdfRequests.length > 0) {
+      setAnalyticsData(prev => ({
+        ...prev,
+        pendingRequests: pendingPdfCount
+      }));
+    }
+  }, [pdfRequests]);
+
   const fetchTabSpecificData = async () => {
     setLoading(true);
     try {
@@ -278,6 +305,7 @@ export default function Admin() {
       'Snapchat': 0,
       'YouTube': 0,
       "Friend's Referral": 0,
+      'Telegram': 0,
       'Other': 0
     };
 
@@ -288,7 +316,12 @@ export default function Admin() {
     };
 
     // Filter successful payments (approved or done status)
-    const sales = verifiedPayments.filter(p => p.approved || p.status === 'done');
+    const sales = verifiedPayments.filter(p => 
+      p.approved === true || 
+      (p.approved as any) === 'true' || 
+      p.status === 'done' || 
+      p.status === 'approved'
+    );
     const totalSalesNum = sales.length;
     const instagramSalesNum = sales.filter(p => p.source_platform === 'Instagram').length;
 
@@ -462,7 +495,7 @@ export default function Admin() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
                       <div className="space-y-4">
                         {trafficSourcesData.platforms.map((platform, img) => {
-                          const COLORS = ['#6366f1', '#eab308', '#ef4444', '#10b981', '#737373'];
+                          const COLORS = ['#6366f1', '#eab308', '#ef4444', '#10b981', '#06b6d4', '#737373'];
                           let dotColor = COLORS[img % COLORS.length];
 
                           return (
@@ -508,7 +541,7 @@ export default function Admin() {
                                 dataKey="count"
                               >
                                 {trafficSourcesData.platforms.map((entry, index) => {
-                                  const COLORS = ['#6366f1', '#eab308', '#ef4444', '#10b981', '#737373'];
+                                  const COLORS = ['#6366f1', '#eab308', '#ef4444', '#10b981', '#06b6d4', '#737373'];
                                   return <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />;
                                 })}
                               </Pie>
@@ -755,7 +788,7 @@ export default function Admin() {
                          </div>
 
                          <div className="flex flex-col gap-2">
-                            {!p.approved && p.status !== 'done' ? (
+                            {!(p.approved === true || (p.approved as any) === 'true' || p.status === 'done' || p.status === 'approved') ? (
                                <button 
                                  onClick={() => handleMarkAsDone(p.id)}
                                  className="px-4 py-2 bg-emerald-500 text-black rounded-xl hover:bg-emerald-400 transition-all active:scale-95 flex items-center justify-center gap-1 font-bold text-xs uppercase"
