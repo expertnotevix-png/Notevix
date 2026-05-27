@@ -978,10 +978,43 @@ export default function Admin() {
 
 // Sub-components
 function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
-  const [form, setForm] = useState(resource || {
-    subject: '', class: '10', price: '39', description: '', cover_image: '', drive_link: '', pdf_password: '', is_premium: true
+  // Extract custom USD price from description if editing
+  const getUSDFromDesc = (desc: string) => {
+    if (!desc) return '1.99';
+    const match = desc.match(/\[USD:([\d.]+)\]/);
+    return match ? match[1] : '1.99';
+  };
+
+  const getCleanDesc = (desc: string) => {
+    if (!desc) return '';
+    return desc.replace(/\[USD:[\d.]+\]/, '').trim();
+  };
+
+  const [form, setForm] = useState(() => {
+    if (resource) {
+      return {
+        ...resource,
+        price: resource.price ? resource.price.toString() : '39',
+        price_usd: getUSDFromDesc(resource.description),
+        description: getCleanDesc(resource.description)
+      };
+    }
+    return {
+      subject: '', class: '10', price: '39', price_usd: '1.99', description: '', cover_image: '', drive_link: '', pdf_password: '', is_premium: true
+    };
   });
   const [upLoading, setUpLoading] = useState(false);
+
+  const handleSubmit = () => {
+    const cleanDesc = (form.description || '').replace(/\[USD:[\d.]+\]/, '').trim();
+    // Save custom USD price embedded safely in the description
+    const finalDesc = form.price_usd ? `${cleanDesc}\n\n[USD:${form.price_usd}]`.trim() : cleanDesc;
+    
+    onSave({
+      ...form,
+      description: finalDesc
+    });
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-sm">
@@ -1040,20 +1073,34 @@ function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
            </div>
         </div>
 
-        <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
-           <div className="flex items-center gap-3">
-              <input type="checkbox" checked={form.is_premium} onChange={e => setForm({...form, is_premium: e.target.checked})} className="w-5 h-5 accent-indigo-600" />
-              <span className="text-sm font-bold">Premium Material</span>
+        <div className="flex flex-col gap-4 p-4 bg-white/5 rounded-2xl border border-white/5">
+           <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                 <input type="checkbox" checked={form.is_premium} onChange={e => setForm({...form, is_premium: e.target.checked})} className="w-5 h-5 accent-indigo-600" />
+                 <span className="text-sm font-bold">Premium Material</span>
+              </div>
            </div>
            {form.is_premium && (
-             <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black">₹</span>
-                <input type="number" value={form.price} onChange={e => setForm({...form, price: e.target.value})} className="w-16 bg-transparent border-b border-indigo-500 text-center outline-none" />
+             <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/5">
+                <div className="space-y-1">
+                   <label className="text-[9px] text-gray-500 font-bold uppercase block">Price in Rupees (₹)</label>
+                   <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+                      <span className="text-xs font-black text-gray-400 font-sans">₹</span>
+                      <input type="number" value={form.price} onChange={e => setForm({...form, price: e.target.value})} className="w-full bg-transparent text-sm outline-none text-white" placeholder="39" />
+                   </div>
+                </div>
+                <div className="space-y-1">
+                   <label className="text-[9px] text-gray-500 font-bold uppercase block">Price in Dollars ($)</label>
+                   <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+                      <span className="text-xs font-black text-gray-400 font-sans">$</span>
+                      <input type="number" step="0.01" value={form.price_usd} onChange={e => setForm({...form, price_usd: e.target.value})} className="w-full bg-transparent text-sm outline-none text-white" placeholder="1.99" />
+                   </div>
+                </div>
              </div>
            )}
         </div>
 
-        <button onClick={() => onSave(form)} className="w-full py-4 bg-white text-black rounded-2xl font-black text-sm uppercase tracking-widest active:scale-95 transition-all">
+        <button onClick={handleSubmit} className="w-full py-4 bg-white text-black rounded-2xl font-black text-sm uppercase tracking-widest active:scale-95 transition-all">
            Save Resource
         </button>
       </div>
