@@ -127,6 +127,7 @@ export default function Admin() {
         price: formData.is_premium ? parseFloat(formData.price || '0') : 0,
         description: formData.description,
         cover_image: formData.cover_image,
+        preview_images: formData.preview_images || [],
         drive_link: formData.drive_link,
         pdf_password: formData.pdf_password,
         is_premium: formData.is_premium
@@ -996,11 +997,12 @@ function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
         ...resource,
         price: resource.price ? resource.price.toString() : '39',
         price_usd: getUSDFromDesc(resource.description),
-        description: getCleanDesc(resource.description)
+        description: getCleanDesc(resource.description),
+        preview_images: resource.preview_images || []
       };
     }
     return {
-      subject: '', class: '10', price: '39', price_usd: '1.99', description: '', cover_image: '', drive_link: '', pdf_password: '', is_premium: true
+      subject: '', class: '10', price: '39', price_usd: '1.99', description: '', cover_image: '', preview_images: [], drive_link: '', pdf_password: '', is_premium: true
     };
   });
   const [upLoading, setUpLoading] = useState(false);
@@ -1010,9 +1012,15 @@ function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
     // Save custom USD price embedded safely in the description
     const finalDesc = form.price_usd ? `${cleanDesc}\n\n[USD:${form.price_usd}]`.trim() : cleanDesc;
     
+    // Clean and filter empty preview_images
+    const finalPreviewImages = (form.preview_images || [])
+      .map((url: string) => url?.trim() || '')
+      .filter((url: string) => url !== '');
+
     onSave({
       ...form,
-      description: finalDesc
+      description: finalDesc,
+      preview_images: finalPreviewImages
     });
   };
 
@@ -1060,6 +1068,27 @@ function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
                  {upLoading ? '...' : 'Upload'}
               </label>
            </div>
+        </div>
+
+        {/* 'Preview Images' Section */}
+        <div className="space-y-3 p-4 bg-white/5 rounded-2xl border border-white/5">
+           <label className="text-[10px] text-gray-400 font-black uppercase tracking-wider block ml-1">Preview Images (Up to 5 URLs)</label>
+           {[0, 1, 2, 3, 4].map((index) => (
+              <div key={index} className="flex gap-2">
+                 <span className="text-[10px] text-gray-500 font-black flex items-center justify-center w-6 bg-white/5 rounded-xl border border-white/5">#{index + 1}</span>
+                 <input 
+                    type="text" 
+                    value={form.preview_images?.[index] || ''} 
+                    onChange={e => {
+                       const newImages = [...(form.preview_images || [])];
+                       newImages[index] = e.target.value;
+                       setForm({ ...form, preview_images: newImages });
+                    }} 
+                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs outline-none focus:border-indigo-500 text-white" 
+                    placeholder={`Image URL #${index + 1}`} 
+                 />
+              </div>
+           ))}
         </div>
 
         <div className="grid grid-cols-2 gap-4">

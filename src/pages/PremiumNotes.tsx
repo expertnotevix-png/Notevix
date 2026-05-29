@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { dataBridge } from '../services/dataBridge';
 import { supabase } from '../lib/supabase';
 import { auth } from '../components/firebase';
+import { ProductCarousel } from '../components/ProductCarousel';
 
 interface PremiumNotesProps {
   user: AppUser | null;
@@ -213,15 +214,12 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
             return (
               <div key={res.id} className="bg-[#0c0c0c] border border-white/5 rounded-[2rem] overflow-hidden flex flex-col group">
                 <div className="aspect-[3/4] relative overflow-hidden">
-                  {res.cover_image ? (
-                    <img src={res.cover_image} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
-                  ) : (
-                    <div className="w-full h-full bg-indigo-600/10 flex items-center justify-center">
-                      <BookOpen size={40} className="text-indigo-500/20" />
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
-                  <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-[10px] font-black text-white">₹{res.price}</div>
+                  <ProductCarousel 
+                    coverImage={res.cover_image} 
+                    previewImages={res.preview_images} 
+                    subject={res.subject} 
+                  />
+                  <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-[10px] font-black text-white z-20">₹{res.price}</div>
                 </div>
 
                 <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">

@@ -8,6 +8,7 @@ import { dataBridge } from '../services/dataBridge';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { AppUser } from '../types';
+import { ProductCarousel } from '../components/ProductCarousel';
 
 const CLASSES = ['8', '9', '10'];
 
@@ -206,16 +207,13 @@ export default function Landing({ user }: LandingProps) {
               const Icon = SUBJECT_ICONS[res.subject.toLowerCase()] || BookOpen;
               return (
                 <div key={res.id} className="group bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-2xl transition-all hover:-translate-y-2">
-                   <div className="aspect-[3/4] relative">
-                      {res.cover_image ? (
-                        <img src={res.cover_image} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full bg-indigo-600/10 flex items-center justify-center">
-                          <Icon size={40} className="text-indigo-500/20" />
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
-                      <div className="absolute top-6 right-6">
+                   <div className="aspect-[3/4] relative overflow-hidden">
+                      <ProductCarousel 
+                        coverImage={res.cover_image} 
+                        previewImages={res.preview_images} 
+                        subject={res.subject} 
+                      />
+                      <div className="absolute top-6 right-6 z-20">
                          <div className="w-10 h-10 bg-black/50 backdrop-blur-md rounded-full border border-white/10 flex items-center justify-center font-black text-indigo-400 text-xs">₹{res.price || 39}</div>
                       </div>
                    </div>

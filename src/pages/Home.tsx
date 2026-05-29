@@ -6,6 +6,7 @@ import { BookOpen, Crown, Bell, Zap, ExternalLink, ChevronRight } from 'lucide-r
 import { Logo } from '../components/Logo';
 import { PromoCarousel } from '../components/PromoCarousel';
 import { dataBridge } from '../services/dataBridge';
+import { ProductCarousel } from '../components/ProductCarousel';
 
 interface HomeProps {
   user: AppUser;
@@ -113,15 +114,12 @@ export default function Home({ user }: HomeProps) {
                     </div>
                   </div>
 
-                  <div className="aspect-[4/5] relative">
-                    {res.cover_image ? (
-                      <img src={res.cover_image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                    ) : (
-                      <div className="w-full h-full bg-indigo-600/10 flex items-center justify-center">
-                        <BookOpen className="w-16 h-16 text-indigo-500/20" />
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0f0f0f] via-transparent to-transparent" />
+                  <div className="aspect-[4/5] relative overflow-hidden">
+                    <ProductCarousel 
+                      coverImage={res.cover_image} 
+                      previewImages={res.preview_images} 
+                      subject={res.subject} 
+                    />
                   </div>
 
                   <div className="p-8 pt-6 space-y-4">

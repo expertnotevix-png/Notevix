@@ -43,6 +43,7 @@ export interface SubjectResource {
   class: string;
   description?: string;
   cover_image?: string;
+  preview_images?: string[];
   drive_link?: string;
   price: number;
   is_premium: boolean;

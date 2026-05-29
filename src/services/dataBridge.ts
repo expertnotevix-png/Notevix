@@ -9,7 +9,7 @@ export const dataBridge = {
     if (!supabase) return [];
     try {
       let query = supabase.from('subject_resources')
-        .select('id, subject, class, description, drive_link, cover_image, price, pdf_password, is_premium, created_at')
+        .select('id, subject, class, description, drive_link, cover_image, price, pdf_password, is_premium, created_at, preview_images')
         .order('created_at', { ascending: false });
       if (classLevel) query = query.eq('class', classLevel);
       if (isPremium !== undefined) query = query.eq('is_premium', isPremium);
@@ -30,6 +30,7 @@ export const dataBridge = {
         description: res.description,
         drive_link: res.drive_link,
         cover_image: res.cover_image,
+        preview_images: res.preview_images || [],
         price: res.price,
         pdf_password: res.pdf_password,
         is_premium: res.is_premium,
@@ -38,7 +39,7 @@ export const dataBridge = {
       
       const { data, error } = await supabase.from('subject_resources')
         .insert(cleanData)
-        .select('id, subject, class, description, drive_link, cover_image, price, pdf_password, is_premium, created_at')
+        .select('id, subject, class, description, drive_link, cover_image, price, pdf_password, is_premium, created_at, preview_images')
         .single();
       
       if (error) throw error;
@@ -58,6 +59,7 @@ export const dataBridge = {
       if (res.description !== undefined) updateData.description = res.description;
       if (res.drive_link !== undefined) updateData.drive_link = res.drive_link;
       if (res.cover_image !== undefined) updateData.cover_image = res.cover_image;
+      if (res.preview_images !== undefined) updateData.preview_images = res.preview_images;
       if (res.price !== undefined) updateData.price = res.price;
       if (res.pdf_password !== undefined) updateData.pdf_password = res.pdf_password;
       if (res.is_premium !== undefined) updateData.is_premium = res.is_premium;
