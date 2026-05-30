@@ -132,17 +132,20 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
     const firebaseUser = auth.currentUser;
     const finalUid = user?.uid || firebaseUser?.uid || 'guest';
     const subjectTitle = selectedPlan.subject ? `${selectedPlan.subject} Notes (Class ${selectedPlan.class})` : selectedPlan.name;
-    const finalAmountText = paymentMethod === 'paypal' ? `$${amount}` : `₹${amount}`;
+    const cleanedAmount = amount.toString().replace(/[^0-9.]/g, '');
+    const finalAmountText = paymentMethod === 'paypal' ? `$${cleanedAmount}` : `₹${cleanedAmount}`;
+    const cleanTxId = transactionId.trim();
+    const cleanEmail = buyerEmail.trim();
 
     setIsSubmitting(true);
     try {
       const res = await dataBridge.saveVerifiedPayment({
         user_id: finalUid,
-        email: buyerEmail,
+        email: cleanEmail,
         product_name: subjectTitle,
-        amount: parseFloat(amount),
-        transaction_id: transactionId,
-        phone_number: `${buyerName} (${buyerPhone})`, // Save combined Name & Phone
+        amount: parseFloat(cleanedAmount) || 0,
+        transaction_id: cleanTxId,
+        phone_number: `${buyerName.trim()} (${buyerPhone.trim()})`, // Save combined Name & Phone
         status: 'pending',
         approved: false,
         source_platform: sourcePlatform,
@@ -155,9 +158,9 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       if (user?.uid) {
         localStorage.setItem('last_payment_user_id', user.uid);
       }
-      setSubmittedTxId(transactionId);
-      setSubmittedEmail(buyerEmail);
-      setSubmittedName(buyerName);
+      setSubmittedTxId(cleanTxId);
+      setSubmittedEmail(cleanEmail);
+      setSubmittedName(buyerName.trim());
       setSubmittedAmount(finalAmountText);
       setSubmittedSubject(subjectTitle);
       setIsSuccessStep(true);

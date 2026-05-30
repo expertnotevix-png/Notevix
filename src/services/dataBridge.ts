@@ -155,7 +155,12 @@ export const dataBridge = {
     if (!supabase) return { success: false };
     try {
       const { error } = await supabase.from('verified_payments').insert(payment);
-      if (error) throw error;
+      if (error) {
+        if (error.code === '23505') {
+          return { success: false, error: "This UPI/Paypal Transaction ID has already been submitted for clearance." };
+        }
+        throw error;
+      }
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message };
