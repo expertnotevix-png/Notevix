@@ -29,6 +29,23 @@ export const supabase = (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUr
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
+// Test connection health immediately upon client initialization
+if (supabase) {
+  console.log("Supabase: Triggering non-blocking connection health check against 'subject_resources'...");
+  (async () => {
+    try {
+      const { error } = await supabase.from('subject_resources').select('id').limit(1);
+      if (error) {
+        console.error("Supabase Connection Health Check [FAILED]:", error.message, error.details || "");
+      } else {
+        console.log("Supabase Connection Health Check [OK]: Successfully established connection and fetched data from 'subject_resources'!");
+      }
+    } catch (err: any) {
+      console.error("Supabase Connection Health Check [ERROR]:", err?.message || err);
+    }
+  })();
+}
+
 /**
  * Supabase Table Schema - FULL MIGRATION (Run this in Supabase SQL Editor):
  * 
