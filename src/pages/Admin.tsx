@@ -163,17 +163,6 @@ export default function Admin() {
     }
   };
 
-  const handleFileUpload = async (file: File, bucket: 'Cover' | 'banners') => {
-    const res = await dataBridge.uploadImage(file, bucket);
-    if (res.success) {
-      toast.success("File uploaded successfully");
-      return res.url;
-    } else {
-      toast.error(res.error || "Upload failed");
-      return null;
-    }
-  };
-
   // Banner Management
   const handleSaveBanner = async (formData: any) => {
     setLoading(true);
@@ -962,7 +951,6 @@ export default function Admin() {
           onClose={() => { setIsAddingResource(false); setEditingItem(null); }} 
           onSave={handleSaveResource} 
           resource={editingItem}
-          uploadHandler={handleFileUpload}
         />
       )}
       {isAddingBanner && (
@@ -970,7 +958,6 @@ export default function Admin() {
           onClose={() => { setIsAddingBanner(false); setEditingItem(null); }} 
           onSave={handleSaveBanner} 
           banner={editingItem}
-          uploadHandler={handleFileUpload}
         />
       )}
     </div>
@@ -978,7 +965,7 @@ export default function Admin() {
 }
 
 // Sub-components
-function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
+function ResourceModal({ onClose, onSave, resource }: any) {
   // Extract custom USD price from description if editing
   const getUSDFromDesc = (desc: string) => {
     if (!desc) return '1.99';
@@ -1005,7 +992,6 @@ function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
       subject: '', class: '10', price: '39', price_usd: '1.99', description: '', cover_image: '', preview_images: [], drive_link: '', pdf_password: '', is_premium: true
     };
   });
-  const [upLoading, setUpLoading] = useState(false);
 
   const handleSubmit = () => {
     const cleanDesc = (form.description || '').replace(/\[USD:[\d.]+\]/, '').trim();
@@ -1053,21 +1039,8 @@ function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
         </div>
 
         <div className="space-y-1.5">
-           <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Cover Image</label>
-           <div className="flex gap-4">
-              <input type="text" value={form.cover_image} onChange={e => setForm({...form, cover_image: e.target.value})} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs" placeholder="URL or Upload" />
-              <input type="file" id="cover-up" className="hidden" onChange={async e => {
-                 if (e.target.files?.[0]) {
-                    setUpLoading(true);
-                    const url = await uploadHandler(e.target.files[0], 'Cover');
-                    if (url) setForm({...form, cover_image: url});
-                    setUpLoading(false);
-                 }
-              }} />
-              <label htmlFor="cover-up" className="px-4 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase cursor-pointer disabled:opacity-50">
-                 {upLoading ? '...' : 'Upload'}
-              </label>
-           </div>
+           <label className="text-[10px] text-gray-500 font-bold uppercase ml-1">Cover Image URL</label>
+           <input type="text" value={form.cover_image} onChange={e => setForm({...form, cover_image: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500 text-white" placeholder="e.g. https://ik.imagekit.io/your_id/covers/math-cover.webp" />
         </div>
 
         {/* 'Preview Images' Section */}
@@ -1085,7 +1058,7 @@ function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
                        setForm({ ...form, preview_images: newImages });
                     }} 
                     className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs outline-none focus:border-indigo-500 text-white" 
-                    placeholder={`Image URL #${index + 1}`} 
+                    placeholder={`e.g. https://ik.imagekit.io/your_id/previews/preview-${index + 1}.webp`} 
                  />
               </div>
            ))}
@@ -1137,9 +1110,8 @@ function ResourceModal({ onClose, onSave, resource, uploadHandler }: any) {
   );
 }
 
-function BannerModal({ onClose, onSave, banner, uploadHandler }: any) {
+function BannerModal({ onClose, onSave, banner }: any) {
   const [form, setForm] = useState(banner || { title: '', banner_image: '', redirect_link: '', location: 'home', is_active: true });
-  const [upLoading, setUpLoading] = useState(false);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-sm">
@@ -1164,21 +1136,8 @@ function BannerModal({ onClose, onSave, banner, uploadHandler }: any) {
            </div>
 
            <div className="space-y-1.5">
-              <label className="text-[10px] text-gray-500 font-bold uppercase">Banner Image</label>
-              <div className="flex gap-4">
-                <input type="text" value={form.banner_image} onChange={e => setForm({...form, banner_image: e.target.value})} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3" placeholder="URL or Upload" />
-                <input type="file" id="banner-up" className="hidden" onChange={async e => {
-                   if (e.target.files?.[0]) {
-                      setUpLoading(true);
-                      const url = await uploadHandler(e.target.files[0], 'banners');
-                      if (url) setForm({...form, banner_image: url});
-                      setUpLoading(false);
-                   }
-                }} />
-                <label htmlFor="banner-up" className="px-4 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase cursor-pointer">
-                   {upLoading ? '...' : 'Upload'}
-                </label>
-              </div>
+              <label className="text-[10px] text-gray-500 font-bold uppercase">Banner Image URL</label>
+              <input type="text" value={form.banner_image} onChange={e => setForm({...form, banner_image: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 text-white" placeholder="e.g. https://ik.imagekit.io/your_id/banners/discount-promo.webp" />
            </div>
 
            <div className="space-y-1.5">

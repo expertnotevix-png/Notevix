@@ -330,22 +330,6 @@ export const dataBridge = {
   },
 
   /**
-   * Storage
-   */
-  async uploadImage(file: File, bucket: 'Cover' | 'banners') {
-    if (!supabase) return { success: false, error: 'Supabase not connected' };
-    try {
-      const fileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
-      const { data, error } = await supabase.storage.from(bucket).upload(fileName, file);
-      if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(data.path);
-      return { success: true, url: publicUrl };
-    } catch (err: any) {
-      return { success: false, error: err.message };
-    }
-  },
-
-  /**
    * Analytics (Basic)
    */
   async getAdminStats() {
