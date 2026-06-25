@@ -82,7 +82,7 @@ async function startServer() {
       directives: {
         ...helmet.contentSecurityPolicy.getDefaultDirectives(),
         "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://www.googletagmanager.com", "https://apis.google.com"],
-        "connect-src": ["'self'", "https://*.googleapis.com", "https://*.firebaseio.com", "https://*.firebaseapp.com", "https://www.google-analytics.com", "https://integrate.api.nvidia.com", "https://*.supabase.co"],
+        "connect-src": ["'self'", "https:", "http:", "wss:", "ws:", "*", "https://*.googleapis.com", "https://*.firebaseio.com", "https://*.firebaseapp.com", "https://www.google-analytics.com", "https://integrate.api.nvidia.com", "https://*.supabase.co", "https://*.supabase.net"],
         "img-src": ["'self'", "data:", "https:", "https://picsum.photos"],
         "frame-src": ["'self'", "https://*.firebaseapp.com"],
         "frame-ancestors": ["'self'", "https://aistudio.google.com", "https://*.run.app"],

@@ -21,31 +21,81 @@ export const dataBridge = {
   },
 
   async addResource(res: Partial<SubjectResource>) {
-    if (!supabase) return { success: false };
+    console.log("=== AUDITING SUBJECT_RESOURCES INSERT FLOW ===");
+    
+    // 1. Exact payload received by method
+    console.log("1. Raw Payload received by addResource:", JSON.stringify(res, null, 2));
+
+    const cleanData = {
+      subject: res.subject,
+      class: res.class,
+      description: res.description,
+      drive_link: res.drive_link,
+      cover_image: res.cover_image,
+      preview_images: res.preview_images || [],
+      price: res.price,
+      pdf_password: res.pdf_password,
+      is_premium: res.is_premium,
+      created_at: res.created_at || new Date().toISOString()
+    };
+
+    // 2. Exact payload being inserted
+    console.log("2. Exact Payload being inserted into Supabase (cleanData):", JSON.stringify(cleanData, null, 2));
+
+    // 3. Whether code is sending class or class_level
+    const hasClass = 'class' in cleanData;
+    const hasClassLevel = 'class_level' in (cleanData as any);
+    console.log(`3. Payload Column Check: Sending 'class'? ${hasClass} (Value: ${cleanData.class}). Sending 'class_level'? ${hasClassLevel}.`);
+
+    // 4. Whether code is sending subject or title
+    const hasSubject = 'subject' in cleanData;
+    const hasTitle = 'title' in (cleanData as any);
+    console.log(`4. Payload Column Check: Sending 'subject'? ${hasSubject} (Value: ${cleanData.subject}). Sending 'title'? ${hasTitle}.`);
+
+    // 5. Whether preview_images is being sent as an array
+    const isPreviewImagesArray = Array.isArray(cleanData.preview_images);
+    console.log(`5. Type Check: Is preview_images sent as an Array? ${isPreviewImagesArray} (Value:`, cleanData.preview_images, `)`);
+
+    const insertStatementStr = "supabase.from('subject_resources').insert(cleanData).select('id, subject, class, description, drive_link, cover_image, price, pdf_password, is_premium, created_at, preview_images').single()";
+    // 6. Return/Log the exact insert statement being executed
+    console.log("6. Exact Insert Statement being executed:", insertStatementStr);
+
+    if (!supabase) {
+      const msg = "Supabase client is not initialized. Please check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Settings.";
+      console.error(msg);
+      return { success: false, error: msg };
+    }
+
     try {
-      // Explicitly pick only allowed columns for insertion
-      const cleanData = {
-        subject: res.subject,
-        class: res.class,
-        description: res.description,
-        drive_link: res.drive_link,
-        cover_image: res.cover_image,
-        preview_images: res.preview_images || [],
-        price: res.price,
-        pdf_password: res.pdf_password,
-        is_premium: res.is_premium,
-        created_at: res.created_at || new Date().toISOString()
-      };
-      
       const { data, error } = await supabase.from('subject_resources')
         .insert(cleanData)
         .select('id, subject, class, description, drive_link, cover_image, price, pdf_password, is_premium, created_at, preview_images')
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error("=== INSERT FAILED ===");
+        console.error("7. Full Supabase Error Object:", JSON.stringify(error, null, 2));
+        console.error("8. HTTP Status Code/Network Status:", (error as any).status || "N/A (Returned inside error object)");
+        
+        const detailedErrorMsg = `Supabase Error [Code: ${error.code || 'N/A'}, Status: ${(error as any).status || 'N/A'}]: ${error.message}. Detail: ${error.details || 'None'}. Hint: ${error.hint || 'None'}. Query Executed: ${insertStatementStr}`;
+        return { success: false, error: detailedErrorMsg };
+      }
+
+      console.log("=== INSERT SUCCESS ===");
+      console.log("Returned Data:", JSON.stringify(data, null, 2));
       return { success: true, data };
     } catch (err: any) {
-      return { success: false, error: err.message };
+      console.error("=== UNEXPECTED EXCEPTION CAUGHT DURING INSERT ===");
+      console.error("7. Full Exception Object caught:", err);
+      console.error("8. HTTP Status/Network Error Level:", err?.status || err?.statusCode || "Network level failure / CORS / CSP / DNS block");
+      
+      let errorMsg = err?.message || String(err);
+      if (errorMsg === "Failed to fetch") {
+        errorMsg = "TypeError: Failed to fetch (Supabase request was blocked by network, CORS, or CSP, or the Supabase URL/API Key is invalid/stale).";
+      }
+      
+      const fullFailingInfo = `Unexpected Error: ${errorMsg}. status: ${err?.status || 'N/A'}. stack: ${err?.stack || 'N/A'}. Executed query statement: ${insertStatementStr}`;
+      return { success: false, error: fullFailingInfo };
     }
   },
 
@@ -103,24 +153,77 @@ export const dataBridge = {
   },
 
   async addBanner(banner: Partial<PromoBanner>) {
-    if (!supabase) return { success: false };
+    console.log("=== SUPABASE INSERT OPERATION ===");
+    console.log("1. Exact Payload Being Sent:", JSON.stringify(banner, null, 2));
+    console.log("2. Exact Supabase Insert Query: supabase.from('promotional_banners').insert(banner).select().single()");
+
+    if (!supabase) {
+      const msg = "Supabase client is not initialized. Please verify VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables in Settings.";
+      console.error(msg);
+      return { success: false, error: msg };
+    }
+
     try {
       const { data, error } = await supabase.from('promotional_banners').insert(banner).select().single();
-      if (error) throw error;
+      
+      if (error) {
+        console.error("3. Full Supabase Error Object:", JSON.stringify(error, null, 2));
+        console.error("4. HTTP Status Code:", (error as any).status || "N/A (Returned inside error object)");
+        const detailedErrorMsg = `Supabase Error [Code: ${error.code || 'N/A'}, Status: ${(error as any).status || 'N/A'}]: ${error.message}. Detail: ${error.details || 'None'}. Hint: ${error.hint || 'None'}`;
+        return { success: false, error: detailedErrorMsg };
+      }
+
+      console.log("Supabase Insert [SUCCESS]:", JSON.stringify(data, null, 2));
       return { success: true, data };
     } catch (err: any) {
-      return { success: false, error: err.message };
+      console.error("3. Full Exception Object caught during fetch:", err);
+      console.error("4. HTTP Status Code/Network Error:", err?.status || err?.statusCode || "Network level failure / CORS / CSP block");
+      
+      let errorMsg = err?.message || String(err);
+      if (errorMsg === "Failed to fetch") {
+        errorMsg = "TypeError: Failed to fetch (Supabase request was blocked by network, CORS, or CSP, or the Supabase URL/API Key is invalid/stale).";
+      }
+      
+      const fullFailingInfo = `Error: ${errorMsg}. status: ${err?.status || 'N/A'}. stack: ${err?.stack || 'N/A'}`;
+      return { success: false, error: fullFailingInfo };
     }
   },
 
   async updateBanner(id: string, banner: Partial<PromoBanner>) {
-    if (!supabase) return { success: false };
+    console.log("=== SUPABASE UPDATE OPERATION ===");
+    console.log(`Updating banner ID: ${id}`);
+    console.log("1. Exact Payload Being Sent:", JSON.stringify(banner, null, 2));
+    console.log(`2. Exact Supabase Update Query: supabase.from('promotional_banners').update(banner).eq('id', '${id}')`);
+
+    if (!supabase) {
+      const msg = "Supabase client is not initialized. Please verify VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables in Settings.";
+      console.error(msg);
+      return { success: false, error: msg };
+    }
+
     try {
-      const { error } = await supabase.from('promotional_banners').update(banner).eq('id', id);
-      if (error) throw error;
-      return { success: true };
+      const { data, error } = await supabase.from('promotional_banners').update(banner).eq('id', id).select().single();
+      
+      if (error) {
+        console.error("3. Full Supabase Error Object:", JSON.stringify(error, null, 2));
+        console.error("4. HTTP Status Code:", (error as any).status || "N/A (Returned inside error object)");
+        const detailedErrorMsg = `Supabase Error [Code: ${error.code || 'N/A'}, Status: ${(error as any).status || 'N/A'}]: ${error.message}. Detail: ${error.details || 'None'}. Hint: ${error.hint || 'None'}`;
+        return { success: false, error: detailedErrorMsg };
+      }
+
+      console.log("Supabase Update [SUCCESS]:", JSON.stringify(data, null, 2));
+      return { success: true, data };
     } catch (err: any) {
-      return { success: false, error: err.message };
+      console.error("3. Full Exception Object caught during fetch:", err);
+      console.error("4. HTTP Status Code/Network Error:", err?.status || err?.statusCode || "Network level failure / CORS / CSP block");
+      
+      let errorMsg = err?.message || String(err);
+      if (errorMsg === "Failed to fetch") {
+        errorMsg = "TypeError: Failed to fetch (Supabase request was blocked by network, CORS, or CSP, or the Supabase URL/API Key is invalid/stale).";
+      }
+      
+      const fullFailingInfo = `Error: ${errorMsg}. status: ${err?.status || 'N/A'}. stack: ${err?.stack || 'N/A'}`;
+      return { success: false, error: fullFailingInfo };
     }
   },
 
