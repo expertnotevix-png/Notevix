@@ -37,6 +37,10 @@ export default function Admin() {
   const [approveModal, setApproveModal] = useState<{ id: string, isOpen: boolean, password: string, productName?: string }>({ id: '', isOpen: false, password: '' });
   const [rejectModal, setRejectModal] = useState<{ id: string, isOpen: boolean, reason: string }>({ id: '', isOpen: false, reason: '' });
 
+  // Connection Health Check states
+  const [checkingHealth, setCheckingHealth] = useState(false);
+  const [healthResults, setHealthResults] = useState<any[]>([]);
+
   const navigate = useNavigate();
 
   const [analyticsData, setAnalyticsData] = useState({
@@ -70,6 +74,191 @@ export default function Admin() {
       }));
     }
   }, [pdfRequests]);
+
+  const runConnectionCheck = async () => {
+    setCheckingHealth(true);
+    const results: any[] = [];
+
+    // Step 1: VITE_SUPABASE_URL
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    if (url && url.startsWith('https://')) {
+      results.push({
+        step: 'url',
+        status: 'success',
+        label: 'VITE_SUPABASE_URL Configured',
+      });
+    } else {
+      results.push({
+        step: 'url',
+        status: 'error',
+        label: 'Invalid Supabase URL',
+        errorDetails: {
+          message: 'The VITE_SUPABASE_URL is either missing or does not start with https://',
+          reason: 'Invalid Supabase URL Format',
+        }
+      });
+      setHealthResults(results);
+      setCheckingHealth(false);
+      return;
+    }
+
+    // Step 2: VITE_SUPABASE_ANON_KEY
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (key && key.length > 10) {
+      results.push({
+        step: 'anon',
+        status: 'success',
+        label: 'VITE_SUPABASE_ANON_KEY Configured',
+      });
+    } else {
+      results.push({
+        step: 'anon',
+        status: 'error',
+        label: 'Invalid Anon Key',
+        errorDetails: {
+          message: 'The VITE_SUPABASE_ANON_KEY is either missing or too short to be a valid public API key.',
+          reason: 'Invalid Anon Key',
+        }
+      });
+      setHealthResults(results);
+      setCheckingHealth(false);
+      return;
+    }
+
+    // Define helper to query tables
+    const checkTable = async (
+      stepName: 'resources' | 'banners' | 'settings',
+      tableName: string,
+      displayName: string
+    ) => {
+      const requestUrl = `${url}/rest/v1/${tableName}?select=id&limit=1`;
+      try {
+        if (!supabase) {
+          throw new Error('Supabase client is uninitialized');
+        }
+        
+        let errorResult: any = null;
+
+        if (stepName === 'settings') {
+          // app_settings select
+          const { error } = await supabase.from(tableName).select('*').limit(1);
+          errorResult = error;
+        } else {
+          const { error } = await supabase.from(tableName).select('id').limit(1);
+          errorResult = error;
+        }
+
+        if (errorResult) {
+          const isOnline = window.navigator.onLine;
+          let httpStatus = (errorResult as any).status || errorResult.statusCode || 400;
+          let code = errorResult.code || 'N/A';
+          let message = errorResult.message || 'Unknown Supabase database error';
+          let hint = errorResult.hint || 'None';
+          let details = errorResult.details || 'None';
+          let reason = 'Unknown database error';
+
+          if (code === 'PGRST116') {
+            reason = 'RLS Permission Denied / Empty Single Record';
+          } else if (code === '42P01') {
+            reason = 'Table Missing (Relation does not exist)';
+          } else if (code === '42703') {
+            reason = 'Column Missing (Undefined column in database)';
+          } else if (httpStatus === 401 || httpStatus === 403 || message.includes('JWT') || message.includes('anon')) {
+            reason = 'RLS Permission Denied / Invalid Anon Key';
+          } else if (httpStatus === 404) {
+            reason = 'Table or Endpoint Missing (404)';
+          }
+
+          results.push({
+            step: stepName,
+            status: 'error',
+            label: `${displayName} Failed`,
+            errorDetails: {
+              httpStatus,
+              code,
+              message,
+              hint,
+              details,
+              requestUrl,
+              reason
+            }
+          });
+          return false;
+        } else {
+          results.push({
+            step: stepName,
+            status: 'success',
+            label: `${displayName} OK`,
+          });
+          return true;
+        }
+      } catch (err: any) {
+        const isOnline = window.navigator.onLine;
+        let message = err?.message || String(err);
+        let httpStatus = err?.status || err?.statusCode || 'N/A';
+        let code = err?.code || 'N/A';
+        let hint = err?.hint || 'None';
+        let details = err?.details || 'None';
+        let reason = 'Network Error';
+
+        if (message.includes('Failed to fetch') || message.includes('fetch') || err instanceof TypeError) {
+          if (!isOnline) {
+            reason = 'Network Error (Browser is Offline)';
+          } else {
+            try {
+              const parsed = new URL(url);
+              if (!parsed.hostname.endsWith('.supabase.co') && !parsed.hostname.endsWith('.supabase.net') && !parsed.hostname.includes('localhost')) {
+                reason = 'Invalid Supabase URL (Does not match supabase patterns)';
+              } else {
+                reason = 'CORS Blocked / Network Level Failure (Request failed to connect or was blocked)';
+              }
+            } catch {
+              reason = 'Invalid Supabase URL Format';
+            }
+          }
+          message = "TypeError: Failed to fetch. Reason: " + reason;
+        }
+
+        results.push({
+          step: stepName,
+          status: 'error',
+          label: `${displayName} Failed`,
+          errorDetails: {
+            httpStatus,
+            code,
+            message,
+            hint,
+            details,
+            requestUrl,
+            reason
+          }
+        });
+        return false;
+      }
+    };
+
+    // Step 3: subject_resources
+    const resOk = await checkTable('resources', 'subject_resources', 'subject_resources');
+    if (!resOk) {
+      setHealthResults([...results]);
+      setCheckingHealth(false);
+      return;
+    }
+
+    // Step 4: promotional_banners
+    const bannersOk = await checkTable('banners', 'promotional_banners', 'promotional_banners');
+    if (!bannersOk) {
+      setHealthResults([...results]);
+      setCheckingHealth(false);
+      return;
+    }
+
+    // Step 5: app_settings
+    await checkTable('settings', 'app_settings', 'app_settings');
+
+    setHealthResults([...results]);
+    setCheckingHealth(false);
+  };
 
   const fetchTabSpecificData = async () => {
     setLoading(true);
@@ -270,15 +459,24 @@ export default function Admin() {
     }
   };
 
-  const menuItems = [
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'banners', label: 'Promotions', icon: LayoutDashboard },
-    { id: 'resources', label: 'PDF Library', icon: BookOpen },
-    { id: 'verified_payments', label: 'Payments', icon: CreditCard },
-    { id: 'pdf_requests', label: 'PDF Requests', icon: FileText },
-    { id: 'notifications', label: 'Broadcast', icon: Bell },
-    { id: 'settings', label: 'Settings', icon: Settings },
-  ] as const;
+  const menuItems = useMemo(() => {
+    const baseItems = [
+      { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+      { id: 'banners', label: 'Promotions', icon: LayoutDashboard },
+      { id: 'resources', label: 'PDF Library', icon: BookOpen },
+      { id: 'verified_payments', label: 'Payments', icon: CreditCard },
+      { id: 'pdf_requests', label: 'PDF Requests', icon: FileText },
+      { id: 'notifications', label: 'Broadcast', icon: Bell },
+    ] as const;
+
+    if (import.meta.env.DEV || import.meta.env.VITE_ADMIN_DEBUG_MODE === 'true') {
+      return [
+        ...baseItems,
+        { id: 'settings', label: 'Diagnostics', icon: Settings }
+      ] as any;
+    }
+    return baseItems;
+  }, []);
 
   const trafficSourcesData = useMemo(() => {
     const platformTracker: Record<string, number> = {
@@ -414,6 +612,19 @@ export default function Admin() {
           </div>
           
           <div className="flex items-center gap-6">
+            {(import.meta.env.DEV || import.meta.env.VITE_ADMIN_DEBUG_MODE === 'true') && (
+              <button 
+                onClick={() => {
+                  setActiveTab('settings');
+                  runConnectionCheck();
+                }}
+                disabled={checkingHealth}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
+              >
+                <Zap size={12} className={checkingHealth ? 'animate-spin text-yellow-300' : ''} />
+                {checkingHealth ? 'Checking...' : 'Test Connection'}
+              </button>
+            )}
             <div className="flex flex-col items-end">
               <p className="text-xs font-black tracking-tight">Raj Expert</p>
               <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">Master Admin</p>
@@ -941,6 +1152,169 @@ export default function Admin() {
                 ))}
               </div>
             </div>
+          )}
+
+          {activeTab === 'settings' && (import.meta.env.DEV || import.meta.env.VITE_ADMIN_DEBUG_MODE === 'true') && (
+             <div className="space-y-6 animate-in fade-in duration-500">
+                <div>
+                   <h3 className="text-2xl font-black uppercase tracking-tight">Connection Diagnostics</h3>
+                   <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Supabase database & environment health check</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                   {/* Connection Health Status Card */}
+                   <div className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] p-8 space-y-6 shadow-xl">
+                      <div className="flex justify-between items-center border-b border-white/5 pb-4">
+                         <h4 className="text-sm font-black uppercase tracking-wider text-indigo-400 flex items-center gap-2">
+                            <Shield className="w-4 h-4" />
+                            Database Diagnostics
+                         </h4>
+                         <button 
+                           onClick={runConnectionCheck}
+                           disabled={checkingHealth}
+                           className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95 animate-pulse"
+                         >
+                           {checkingHealth ? 'Running...' : 'Run Diagnostics'}
+                         </button>
+                      </div>
+
+                      {healthResults.length === 0 ? (
+                         <div className="py-8 text-center text-gray-500 text-xs font-bold uppercase tracking-widest space-y-3">
+                            <p>No diagnostics run yet.</p>
+                            <p className="text-[10px] text-gray-600 font-normal normal-case">Click the button above to test your connection to Supabase.</p>
+                         </div>
+                      ) : (
+                         <div className="space-y-4">
+                            {healthResults.map((res, index) => (
+                               <div key={index} className="flex items-start justify-between p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
+                                  <div className="flex items-center gap-3">
+                                     <span className="text-base">
+                                        {res.status === 'success' ? '✅' : '❌'}
+                                     </span>
+                                     <div>
+                                        <p className="text-xs font-black uppercase tracking-wider text-white">{res.label}</p>
+                                        {res.status === 'error' && res.errorDetails?.reason && (
+                                           <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider mt-1">
+                                              Error: {res.errorDetails.reason}
+                                           </p>
+                                        )}
+                                     </div>
+                                  </div>
+                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
+                                     res.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                                  }`}>
+                                     {res.status}
+                                  </span>
+                               </div>
+                            ))}
+                         </div>
+                      )}
+                   </div>
+
+                   {/* Runtime Info Card */}
+                   <div className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] p-8 space-y-6 shadow-xl flex flex-col justify-between">
+                      <div className="space-y-6">
+                         <div className="border-b border-white/5 pb-4">
+                            <h4 className="text-sm font-black uppercase tracking-wider text-indigo-400 flex items-center gap-2">
+                               <Settings className="w-4 h-4" />
+                               Runtime Information
+                            </h4>
+                         </div>
+
+                         <div className="space-y-4">
+                            <div className="flex justify-between items-center text-xs border-b border-white/[0.02] pb-2">
+                               <span className="text-gray-500 font-bold uppercase">Supabase Endpoint</span>
+                               <span className="font-mono text-[11px] text-indigo-300 select-all">
+                                 {(() => {
+                                   const urlStr = import.meta.env.VITE_SUPABASE_URL || '';
+                                   if (!urlStr) return 'Not Configured';
+                                   try {
+                                     const parsed = new URL(urlStr);
+                                     const host = parsed.hostname;
+                                     if (host.length > 8) {
+                                       return `${parsed.protocol}//${host.substring(0, 4)}***${host.substring(host.indexOf('.'))}`;
+                                     }
+                                     return `${parsed.protocol}//***`;
+                                   } catch {
+                                     return 'Invalid URL';
+                                   }
+                                 })()}
+                               </span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs border-b border-white/[0.02] pb-2">
+                               <span className="text-gray-500 font-bold uppercase">Environment</span>
+                               <span className="font-black uppercase text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-md text-[10px]">
+                                 {import.meta.env.MODE}
+                               </span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs border-b border-white/[0.02] pb-2">
+                               <span className="text-gray-500 font-bold uppercase">Build Version</span>
+                               <span className="font-mono text-gray-300">1.2.4-diagnostics</span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs pb-2">
+                               <span className="text-gray-500 font-bold uppercase">Deploy Timestamp</span>
+                               <span className="font-mono text-gray-300">2026-06-25 08:39:19 PDT</span>
+                            </div>
+                         </div>
+                      </div>
+
+                      <div className="p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl text-[10px] text-indigo-300/80 leading-relaxed font-bold">
+                         💡 <strong>Diagnostics Guide:</strong> If connection checks fail, verify that you have configured your environment variables in the <strong>Settings</strong> menu of the workspace.
+                      </div>
+                   </div>
+
+                   {/* Full Diagnostic Details Block on Failure */}
+                   {healthResults.some(r => r.status === 'error') && (
+                      <div className="col-span-1 md:col-span-2 bg-red-950/10 border border-red-500/20 rounded-[2rem] p-8 space-y-6 shadow-2xl">
+                         <div>
+                            <h4 className="text-sm font-black uppercase tracking-wider text-red-500 flex items-center gap-2">
+                               <AlertCircle className="w-4 h-4" />
+                               Diagnostic Error Report (Failed Request Details)
+                            </h4>
+                            <p className="text-[10px] text-gray-500 font-bold uppercase mt-1">Detailed failure reasons and metadata for debugging</p>
+                         </div>
+
+                         <div className="space-y-4">
+                            {healthResults.filter(r => r.status === 'error').map((errRes, index) => (
+                               <div key={index} className="bg-black/40 border border-white/5 rounded-2xl p-6 space-y-4">
+                                  <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
+                                     <span className="font-black text-red-400 uppercase">Target Check: {errRes.label}</span>
+                                     <span className="text-[10px] text-gray-500 font-bold uppercase">Reason: {errRes.errorDetails?.reason}</span>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                                     <div className="space-y-2">
+                                        <p className="text-gray-500 font-bold uppercase text-[10px]">HTTP Status</p>
+                                        <p className="font-mono text-white bg-white/5 px-3 py-2 rounded-xl">{errRes.errorDetails?.httpStatus}</p>
+                                     </div>
+                                     <div className="space-y-2">
+                                        <p className="text-gray-500 font-bold uppercase text-[10px]">Supabase Error Code</p>
+                                        <p className="font-mono text-white bg-white/5 px-3 py-2 rounded-xl">{errRes.errorDetails?.code}</p>
+                                     </div>
+                                     <div className="space-y-2 col-span-1 md:col-span-2">
+                                        <p className="text-gray-500 font-bold uppercase text-[10px]">Request URL</p>
+                                        <p className="font-mono text-indigo-300 bg-white/5 px-3 py-2 rounded-xl break-all">{errRes.errorDetails?.requestUrl}</p>
+                                     </div>
+                                     <div className="space-y-2 col-span-1 md:col-span-2">
+                                        <p className="text-gray-500 font-bold uppercase text-[10px]">Error Message</p>
+                                        <p className="font-mono text-red-300 bg-red-500/5 border border-red-500/10 px-3 py-2 rounded-xl leading-relaxed">{errRes.errorDetails?.message}</p>
+                                     </div>
+                                     <div className="space-y-2 col-span-1 md:col-span-2">
+                                        <p className="text-gray-500 font-bold uppercase text-[10px]">Hint</p>
+                                        <p className="font-mono text-gray-300 bg-white/5 px-3 py-2 rounded-xl">{errRes.errorDetails?.hint}</p>
+                                     </div>
+                                     <div className="space-y-2 col-span-1 md:col-span-2">
+                                        <p className="text-gray-500 font-bold uppercase text-[10px]">Details</p>
+                                        <p className="font-mono text-gray-300 bg-white/5 px-3 py-2 rounded-xl">{errRes.errorDetails?.details}</p>
+                                     </div>
+                                  </div>
+                               </div>
+                            ))}
+                         </div>
+                      </div>
+                   )}
+                </div>
+             </div>
           )}
           </div>
         </main>
