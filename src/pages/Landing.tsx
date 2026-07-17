@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Zap, QrCode, Shield, Copy, Info, FileText, CheckCircle2, Instagram, Youtube, Send, Users } from 'lucide-react';
+import { BookOpen, FlaskConical, Globe, Languages, Crown, ChevronRight, Zap, QrCode, Shield, Copy, Info, FileText, CheckCircle2, Instagram, Youtube, Send, Users, Sparkles, Smartphone, ShieldCheck, Flame, Star, Clock, Heart } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { PromoCarousel } from '../components/PromoCarousel';
 import { useState, useEffect } from 'react';
@@ -9,6 +9,10 @@ import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { AppUser } from '../types';
 import { ProductCarousel } from '../components/ProductCarousel';
+import { 
+  TrustBar, WhyChooseUs, Testimonials, SocialProof, 
+  FounderSection, AboutSection, FaqSection, ProductDetailsModal 
+} from '../components/PremiumSections';
 
 const CLASSES = ['8', '9', '10'];
 
@@ -28,6 +32,8 @@ export default function Landing({ user }: LandingProps) {
   const [activeClass, setActiveClass] = useState<'8' | '9' | '10'>('10');
   const [resources, setResources] = useState<any[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
+  const [viewingDetailsProduct, setViewingDetailsProduct] = useState<any | null>(null);
+  const [activePolicyModal, setActivePolicyModal] = useState<'privacy' | 'refund' | 'terms' | 'disclaimer' | null>(null);
   
   // Purchase Form State
   const [buyerName, setBuyerName] = useState('');
@@ -147,7 +153,7 @@ export default function Landing({ user }: LandingProps) {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white selection:bg-indigo-500/30 font-sans">
-      <header className="relative pt-16 pb-24 px-6 overflow-hidden">
+      <header className="relative pt-16 pb-20 px-6 overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-6xl h-[500px] bg-indigo-600/5 blur-[120px] -z-10 rounded-full" />
         
         <nav className="max-w-7xl mx-auto flex items-center justify-between mb-16">
@@ -169,22 +175,27 @@ export default function Landing({ user }: LandingProps) {
           <PromoCarousel />
         </div>
 
-        <div className="max-w-4xl mx-auto text-center space-y-8">
+        <div className="max-w-4xl mx-auto text-center space-y-8 mb-16">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-black uppercase tracking-widest">
+            <Sparkles size={12} className="animate-pulse" /> Verified CBSE Class 10 Topper Study Partner
+          </div>
           <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-none uppercase">
             Master Your Boards with <span className="text-indigo-500">Premium Notes</span>
           </h1>
           <p className="text-gray-400 text-lg max-w-2xl mx-auto font-medium">
-            Simplified one-page notes for Class 8-10. Get instant access to the most effective study material.
+            Simplified, high-retention study resources for Class 8-10 CBSE students. Handcrafted to turn bulky textbooks into concise 15-minute revision maps.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
             <button 
               onClick={() => document.getElementById('library')?.scrollIntoView({ behavior: 'smooth' })}
-              className="w-full sm:w-auto px-10 py-5 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-indigo-600/30 hover:scale-105 transition-all uppercase tracking-widest"
+              className="w-full sm:w-auto px-10 py-5 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-indigo-600/30 hover:scale-[1.03] active:scale-95 transition-all uppercase tracking-widest cursor-pointer"
             >
               Explore Library 📔
             </button>
           </div>
         </div>
+
+        <TrustBar />
       </header>
 
       <section id="library" className="py-24 px-6 border-t border-white/5">
@@ -210,36 +221,70 @@ export default function Landing({ user }: LandingProps) {
             {resources.map((res: any) => {
               const Icon = SUBJECT_ICONS[res.subject.toLowerCase()] || BookOpen;
               return (
-                <div key={res.id} className="group bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-2xl transition-all hover:-translate-y-2">
+                <div key={res.id} className="group bg-[#09090c] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-2xl transition-all duration-300 hover:-translate-y-2 hover:border-indigo-500/20 hover:shadow-[0_0_50px_rgba(99,102,241,0.08)] flex flex-col justify-between">
                    <div className="aspect-[3/4] relative overflow-hidden">
                       <ProductCarousel 
                         coverImage={res.cover_image} 
                         previewImages={res.preview_images} 
                         subject={res.subject} 
                       />
-                      <div className="absolute top-6 right-6 z-20">
-                         <div className="w-10 h-10 bg-black/50 backdrop-blur-md rounded-full border border-white/10 flex items-center justify-center font-black text-indigo-400 text-xs">₹{res.price || 39}</div>
+                      
+                      {/* Premium Badges */}
+                      <div className="absolute top-5 left-5 z-20 flex flex-col gap-1.5">
+                        <span className="bg-indigo-600 text-white text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border border-indigo-400/20 shadow-md">
+                          Updated 2026
+                        </span>
+                        <span className="bg-black/45 backdrop-blur-md text-indigo-400 text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border border-white/5 shadow-md">
+                          Premium Notes
+                        </span>
+                      </div>
+
+                      <div className="absolute top-5 right-5 z-20">
+                         <div className="w-12 h-12 bg-black/60 backdrop-blur-md rounded-full border border-white/15 flex items-center justify-center font-black text-indigo-400 text-xs shadow-lg group-hover:scale-110 transition-transform">
+                           ₹{res.price || 39}
+                         </div>
                       </div>
                    </div>
-                   <div className="p-8 space-y-4">
-                      <h3 className="text-lg font-black uppercase tracking-tight">{res.subject}</h3>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Class {res.class} • Topic Pack</p>
-                      <div className="space-y-2 pt-2">
-                        <a 
-                          href={res.drive_link || '#'} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase transition-all"
-                        >
-                          <FileText size={14} className="text-gray-400" /> Open PDF
-                        </a>
+
+                   <div className="p-8 space-y-4 flex-1 flex flex-col justify-between">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-start">
+                          <h3 className="text-lg font-black uppercase tracking-tight text-white">{res.subject}</h3>
+                          <Icon size={18} className="text-indigo-400 mt-1" />
+                        </div>
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Class {res.class} • Full Syllabus Pack</p>
+                        
+                        <div className="flex items-center gap-1.5 text-[9px] text-gray-500 font-bold uppercase mt-1">
+                          <Clock size={11} className="text-indigo-500/80" />
+                          <span>Last Updated: July 2026</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 pt-4">
                         <button 
-                        onClick={() => setSelectedPlan({ ...res, subject: res.subject, class: res.class, price: res.price || 39 })}
-                        className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-500 transition-all shadow-lg active:scale-95"
-                      >
-                        Buy Now
-                      </button>
-                    </div>
+                          onClick={() => setViewingDetailsProduct(res)}
+                          className="w-full py-3.5 bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-wider transition-all cursor-pointer"
+                        >
+                          <Info size={13} className="text-gray-400" /> What's Included?
+                        </button>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <a 
+                            href={res.drive_link || '#'} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="py-3.5 bg-white/5 border border-white/5 hover:bg-white/10 text-white rounded-xl flex items-center justify-center gap-1.5 font-black text-[9px] uppercase tracking-wider transition-all"
+                          >
+                            <FileText size={12} className="text-gray-400" /> Preview
+                          </a>
+                          <button 
+                            onClick={() => setSelectedPlan({ ...res, subject: res.subject, class: res.class, price: res.price || 39 })}
+                            className="py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black text-[9px] uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/10 active:scale-95 cursor-pointer"
+                          >
+                            Buy Now
+                          </button>
+                        </div>
+                      </div>
                    </div>
                 </div>
               );
@@ -247,6 +292,14 @@ export default function Landing({ user }: LandingProps) {
           </div>
         </div>
       </section>
+
+      {/* Premium Trust, Proof and Story Overlays */}
+      <WhyChooseUs />
+      <Testimonials />
+      <SocialProof />
+      <FounderSection />
+      <AboutSection />
+      <FaqSection />
 
       {/* Payment Modal */}
       <AnimatePresence>
@@ -585,11 +638,173 @@ export default function Landing({ user }: LandingProps) {
         )}
       </AnimatePresence>
 
-      <footer className="py-24 px-6 border-t border-white/5 text-center">
-        <Logo className="w-12 h-12 mx-auto mb-8 opacity-20" />
-        <p className="text-gray-600 text-[10px] font-black uppercase tracking-widest">
-           © 2026 NoteVix Academy • Powering India's Students
-        </p>
+      {/* Product Details Modal Overlay */}
+      <AnimatePresence>
+        {viewingDetailsProduct && (
+          <ProductDetailsModal 
+            product={viewingDetailsProduct} 
+            onClose={() => setViewingDetailsProduct(null)} 
+            onBuy={() => {
+              setSelectedPlan({ 
+                ...viewingDetailsProduct, 
+                subject: viewingDetailsProduct.subject, 
+                class: viewingDetailsProduct.class, 
+                price: viewingDetailsProduct.price || 39 
+              });
+            }} 
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Policy Modals */}
+      <AnimatePresence>
+        {activePolicyModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-2xl bg-[#09090c] border border-white/10 rounded-[3rem] p-8 md:p-12 overflow-hidden flex flex-col max-h-[85vh]"
+            >
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-indigo-600" />
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-black uppercase tracking-tight">
+                  {activePolicyModal === 'privacy' && "Privacy Policy"}
+                  {activePolicyModal === 'refund' && "Refund Policy"}
+                  {activePolicyModal === 'terms' && "Terms of Service"}
+                  {activePolicyModal === 'disclaimer' && "Curriculum Disclaimer"}
+                </h3>
+                <button 
+                  onClick={() => setActivePolicyModal(null)}
+                  className="text-gray-500 hover:text-white font-black text-lg p-2 hover:bg-white/5 rounded-full transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto pr-2 -mr-2 text-xs text-gray-400 leading-relaxed space-y-4 font-medium text-justify custom-scrollbar">
+                {activePolicyModal === 'privacy' && (
+                  <>
+                    <p className="font-bold text-white text-sm">Your Data Security is Our Utmost Priority.</p>
+                    <p>NoteVix Academy is dedicated to safeguarding your personal privacy. We never rent or sell your user profiles or transaction records to third-party databases.</p>
+                    <p className="font-bold text-white uppercase tracking-wider text-[10px] pt-2">1. Data We Collect</p>
+                    <p>We receive minimal parameters from your Google sign-in credentials (such as display photo, name, and email ID) to identify your legal access privileges to our secure resources.</p>
+                    <p className="font-bold text-white uppercase tracking-wider text-[10px] pt-2">2. Verification Processes</p>
+                    <p>For manual transaction verification, you submit your name, phone number, and transaction receipts. This information is preserved inside secure databases and is only audited for purchase confirmation.</p>
+                    <p className="font-bold text-white uppercase tracking-wider text-[10px] pt-2">3. Cookies & Session Storage</p>
+                    <p>We leverage native security tokens and functional local caches to ensure your login active sessions persist safely across page refreshes.</p>
+                  </>
+                )}
+
+                {activePolicyModal === 'refund' && (
+                  <>
+                    <p className="font-bold text-white text-sm">Sincere Refund & Access Commitment.</p>
+                    <p>Because NoteVix Academy deals purely with direct downloadable digital intellectual properties (vector PDF files), all sales are final once download links are accessed.</p>
+                    <p className="font-bold text-white uppercase tracking-wider text-[10px] pt-2">1. When is a Refund Possible?</p>
+                    <p>If you made a duplicate payment for the same syllabus package by mistake (double payment), or if you did not receive your access password within 24 hours of filing receipt details, contact us on +91 9236489649 for a 100% immediate cashback refund.</p>
+                    <p className="font-bold text-white uppercase tracking-wider text-[10px] pt-2">2. Processing Timeline</p>
+                    <p>Approved refunds are dispatched within 2 business days to your original UPI account or PayPal address with complete transaction logs.</p>
+                  </>
+                )}
+
+                {activePolicyModal === 'terms' && (
+                  <>
+                    <p className="font-bold text-white text-sm">Agreement of Intended Study Use.</p>
+                    <p>By purchasing, opening, and reading NoteVix Academy premium study packs, you agree to comply with our academic guidelines.</p>
+                    <p className="font-bold text-white uppercase tracking-wider text-[10px] pt-2">1. Intellectual Ownership</p>
+                    <p>All notes, custom diagrams, memory anchors, formulas, and visual maps are intellectual properties of NoteVix Academy. Sharing, distributing, or reselling our locked PDFs is strictly forbidden.</p>
+                    <p className="font-bold text-white uppercase tracking-wider text-[10px] pt-2">2. Single-User Access</p>
+                    <p>Each purchase grants a single-user personal academic license. Sharing passwords across secondary forums will result in immediate license revocation.</p>
+                  </>
+                )}
+
+                {activePolicyModal === 'disclaimer' && (
+                  <>
+                    <p className="font-bold text-white text-sm">NCERT and CBSE Official Curriculum Disclaimer.</p>
+                    <p>NoteVix is a fully independent educational brand operated by premium educators. We are not officially partnered, associated, or endorsed by the Central Board of Secondary Education (CBSE) or NCERT.</p>
+                    <p className="font-bold text-white uppercase tracking-wider text-[10px] pt-2">1. Educational Intent</p>
+                    <p>Our study guides are designed purely as complementary aids for revision purposes. While our team maintains maximum accuracy, students should crosscheck primary sources against official textbooks for final verification before board exams.</p>
+                  </>
+                )}
+              </div>
+
+              <div className="border-t border-white/5 pt-6 mt-6 flex justify-end">
+                <button 
+                  onClick={() => setActivePolicyModal(null)}
+                  className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                >
+                  Close Legals
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Footer Section */}
+      <footer className="pt-24 pb-16 px-6 border-t border-white/5 bg-[#050508] relative">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12 text-left mb-16">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+                <Logo className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-lg font-black tracking-tight uppercase">NoteVix</span>
+            </div>
+            <p className="text-xs text-gray-500 leading-relaxed font-medium">
+              NoteVix Academy is a leading premium EdTech resource hub for CBSE Class 8, 9, and 10 board aspirants. We design high-retention revision notes so students can excel in their exams.
+            </p>
+          </div>
+
+          <div>
+            <h4 className="text-xs font-black uppercase text-white tracking-widest mb-6">Subject Resources</h4>
+            <ul className="space-y-3 text-xs font-bold uppercase tracking-wider text-gray-500">
+              <li><button onClick={() => { setActiveClass('10'); document.getElementById('library')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-indigo-400 transition-colors cursor-pointer text-left">Class 10 CBSE Packs</button></li>
+              <li><button onClick={() => { setActiveClass('9'); document.getElementById('library')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-indigo-400 transition-colors cursor-pointer text-left">Class 9 CBSE Packs</button></li>
+              <li><button onClick={() => { setActiveClass('8'); document.getElementById('library')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-indigo-400 transition-colors cursor-pointer text-left">Class 8 CBSE Packs</button></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-xs font-black uppercase text-white tracking-widest mb-6">Policies & Legals</h4>
+            <ul className="space-y-3 text-xs font-bold uppercase tracking-wider text-gray-500">
+              <li><button onClick={() => setActivePolicyModal('privacy')} className="hover:text-indigo-400 transition-colors cursor-pointer text-left">Privacy Policy</button></li>
+              <li><button onClick={() => setActivePolicyModal('refund')} className="hover:text-indigo-400 transition-colors cursor-pointer text-left">Refund Policy</button></li>
+              <li><button onClick={() => setActivePolicyModal('terms')} className="hover:text-indigo-400 transition-colors cursor-pointer text-left">Terms of Service</button></li>
+              <li><button onClick={() => setActivePolicyModal('disclaimer')} className="hover:text-indigo-400 transition-colors cursor-pointer text-left">Disclaimer</button></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-xs font-black uppercase text-white tracking-widest mb-6">Get Support</h4>
+            <ul className="space-y-3 text-xs text-gray-500 font-medium leading-relaxed">
+              <li className="flex items-center gap-2">
+                <span className="font-extrabold uppercase text-[10px] tracking-wider text-gray-400">Email:</span>
+                <a href="mailto:expertnotevix@gmail.com" className="hover:text-indigo-400 transition-colors">expertnotevix@gmail.com</a>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="font-extrabold uppercase text-[10px] tracking-wider text-gray-400">Helpline:</span>
+                <a href="https://wa.me/919236489649" target="_blank" rel="noopener noreferrer" className="hover:text-indigo-400 transition-colors">+91 9236489649</a>
+              </li>
+              <li className="pt-2 flex gap-3 text-gray-400">
+                <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors"><Instagram size={16} /></a>
+                <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors"><Youtube size={16} /></a>
+                <a href="https://t.me" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors"><Send size={16} /></a>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="border-t border-white/5 pt-12 flex flex-col md:flex-row items-center justify-between gap-4">
+          <p className="text-gray-600 text-[10px] font-black uppercase tracking-widest text-center md:text-left">
+             © 2026 NoteVix Academy Ltd. • Made with love for CBSE Board Toppers
+          </p>
+          <div className="flex gap-4 text-gray-600 text-[9px] font-black uppercase tracking-wider">
+            <span>Secure SSL Encryption</span>
+            <span>•</span>
+            <span>Instant Download Access</span>
+          </div>
+        </div>
       </footer>
     </div>
   );

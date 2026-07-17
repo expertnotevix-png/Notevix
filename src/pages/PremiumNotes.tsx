@@ -12,6 +12,7 @@ import { dataBridge } from '../services/dataBridge';
 import { supabase } from '../lib/supabase';
 import { auth } from '../components/firebase';
 import { ProductCarousel } from '../components/ProductCarousel';
+import { ProductDetailsModal } from '../components/PremiumSections';
 
 interface PremiumNotesProps {
   user: AppUser | null;
@@ -39,6 +40,7 @@ const PREMIUM_PLANS = [
 export default function PremiumNotes({ user }: PremiumNotesProps) {
   const [activeClass, setActiveClass] = useState<'8' | '9' | '10'>('10');
   const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
+  const [viewingDetailsProduct, setViewingDetailsProduct] = useState<any | null>(null);
   const [resources, setResources] = useState<SubjectResource[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -212,45 +214,71 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
       {loading ? (
         <div className="h-64 bg-white/5 rounded-[40px] flex items-center justify-center animate-pulse" />
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {resources.map((res) => {
             return (
-              <div key={res.id} className="bg-[#0c0c0c] border border-white/5 rounded-[2rem] overflow-hidden flex flex-col group">
+              <div key={res.id} className="bg-[#09090c] border border-white/5 rounded-[2.5rem] overflow-hidden flex flex-col justify-between group hover:border-indigo-500/20 hover:shadow-[0_0_50px_rgba(99,102,241,0.06)] transition-all duration-300">
                 <div className="aspect-[3/4] relative overflow-hidden">
                   <ProductCarousel 
                     coverImage={res.cover_image} 
                     previewImages={res.preview_images} 
                     subject={res.subject} 
                   />
-                  <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-[10px] font-black text-white z-20">₹{res.price}</div>
+                  
+                  {/* Premium Badges */}
+                  <div className="absolute top-4 left-4 z-20 flex flex-col gap-1">
+                    <span className="bg-indigo-600 text-white text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border border-indigo-400/20 shadow-md">
+                      Updated 2026
+                    </span>
+                    <span className="bg-black/45 backdrop-blur-md text-indigo-400 text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border border-white/5 shadow-md">
+                      Premium Notes
+                    </span>
+                  </div>
+
+                  <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/10 text-[10px] font-black text-indigo-400 z-20 shadow-lg">
+                    ₹{res.price}
+                  </div>
                 </div>
 
                 <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-sm font-black uppercase truncate">{res.subject}</h3>
-                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Class {res.class}</p>
+                  <div className="space-y-1">
+                    <h3 className="text-base font-black uppercase tracking-tight text-white truncate">{res.subject}</h3>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Class {res.class} • Full Syllabus Pack</p>
+                    
+                    <div className="flex items-center gap-1 text-[9px] text-gray-500 font-bold uppercase pt-1">
+                      <Clock size={11} className="text-indigo-500/80" />
+                      <span>Last Updated: July 2026</span>
+                    </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <a 
-                      href={res.drive_link || '#'} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase transition-all"
-                    >
-                      <FileText size={14} className="text-gray-400" /> Open PDF
-                    </a>
-                    
+                  <div className="space-y-2 pt-2">
                     <button 
-                      onClick={() => {
-                        setIsSuccessStep(false);
-                        setSubmittedTxId('');
-                        setSelectedPlan({ ...PREMIUM_PLANS[0], subject: res.subject, class: res.class, price: res.price, description: res.description });
-                      }}
-                      className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase shadow-lg shadow-indigo-600/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                      onClick={() => setViewingDetailsProduct(res)}
+                      className="w-full py-3 bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-wider transition-all cursor-pointer"
                     >
-                      <Crown size={14} /> Buy Now
+                      <Info size={13} className="text-gray-400" /> What's Included?
                     </button>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <a 
+                        href={res.drive_link || '#'} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="py-3 bg-white/5 border border-white/5 hover:bg-white/10 text-white rounded-xl flex items-center justify-center gap-1.5 font-black text-[9px] uppercase tracking-wider transition-all"
+                      >
+                        <FileText size={12} className="text-gray-400" /> Preview
+                      </a>
+                      <button 
+                        onClick={() => {
+                          setIsSuccessStep(false);
+                          setSubmittedTxId('');
+                          setSelectedPlan({ ...PREMIUM_PLANS[0], subject: res.subject, class: res.class, price: res.price, description: res.description });
+                        }}
+                        className="py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black text-[9px] uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/10 active:scale-95 cursor-pointer"
+                      >
+                        Buy Now
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -593,6 +621,28 @@ export default function PremiumNotes({ user }: PremiumNotesProps) {
               )}
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Product Details Modal Overlay */}
+      <AnimatePresence>
+        {viewingDetailsProduct && (
+          <ProductDetailsModal 
+            product={viewingDetailsProduct} 
+            onClose={() => setViewingDetailsProduct(null)} 
+            onBuy={() => {
+              setIsSuccessStep(false);
+              setSubmittedTxId('');
+              setSelectedPlan({ 
+                ...PREMIUM_PLANS[0], 
+                subject: viewingDetailsProduct.subject, 
+                class: viewingDetailsProduct.class, 
+                price: viewingDetailsProduct.price, 
+                description: viewingDetailsProduct.description 
+              });
+              setViewingDetailsProduct(null);
+            }} 
+          />
         )}
       </AnimatePresence>
     </div>
