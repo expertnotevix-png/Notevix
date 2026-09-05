@@ -384,7 +384,7 @@ export function FounderSection() {
               "We noticed CBSE students spending 80% of their exam prep hours reading long chapters and only 20% practicing. We created NoteVix to flip that ratio."
             </p>
             <p>
-              Hi, I’m <strong className="text-white">Raj Expert</strong>, Founder of NoteVix. Over years of guiding Class 10 board aspirants, I realized that bulkier material doesn't equal higher scores. In fact, standard heavy textbooks often dilute focus, making revision incredibly stressful and exhausting.
+              Hi, I’m <strong className="text-white">NITESH YADAV</strong>, Founder of NoteVix. Over years of guiding Class 10 board aspirants, I realized that bulkier material doesn't equal higher scores. In fact, standard heavy textbooks often dilute focus, making revision incredibly stressful and exhausting.
             </p>
             <p>
               NoteVix was born out of a mission to provide <strong>highly condensed, toppers-grade summaries</strong>. Our design principles draw inspiration from premium technology platforms like Apple and Notion: minimal cognitive clutter, gorgeous visual anchors, and extreme portability.
@@ -396,7 +396,7 @@ export function FounderSection() {
 
           <div className="flex gap-4 items-center">
             <div className="space-y-0.5">
-              <h4 className="text-sm font-black uppercase text-white">Raj Expert</h4>
+              <h4 className="text-sm font-black uppercase text-white">NITESH YADAV</h4>
               <p className="text-[9px] text-indigo-400 font-black uppercase tracking-widest">Founder & Chief Educator</p>
             </div>
           </div>
@@ -408,10 +408,10 @@ export function FounderSection() {
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.15),transparent)] pointer-events-none" />
             <div className="text-center space-y-4 relative z-10">
               <div className="w-24 h-24 rounded-full bg-indigo-600/10 border border-indigo-500/20 flex items-center justify-center mx-auto text-indigo-400 text-3xl font-black shadow-lg">
-                RE
+                NY
               </div>
               <div>
-                <h4 className="text-base font-black uppercase tracking-wide text-white">Raj Expert</h4>
+                <h4 className="text-base font-black uppercase tracking-wide text-white">NITESH YADAV</h4>
                 <p className="text-[10px] text-gray-500 font-extrabold uppercase mt-1 tracking-widest">Educator • Tech Alchemist</p>
               </div>
               <p className="text-[10px] text-indigo-300 font-bold leading-relaxed">

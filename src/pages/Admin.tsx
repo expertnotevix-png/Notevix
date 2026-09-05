@@ -626,7 +626,7 @@ export default function Admin() {
               </button>
             )}
             <div className="flex flex-col items-end">
-              <p className="text-xs font-black tracking-tight">Raj Expert</p>
+              <p className="text-xs font-black tracking-tight">NITESH YADAV</p>
               <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">Master Admin</p>
             </div>
           </div>
