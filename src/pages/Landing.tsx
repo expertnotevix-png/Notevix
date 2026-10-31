@@ -275,7 +275,7 @@ export default function Landing({ user }: LandingProps) {
                             rel="noopener noreferrer"
                             className="py-3.5 bg-white/5 border border-white/5 hover:bg-white/10 text-white rounded-xl flex items-center justify-center gap-1.5 font-black text-[9px] uppercase tracking-wider transition-all"
                           >
-                            <FileText size={12} className="text-gray-400" /> Preview
+                            <FileText size={12} className="text-gray-400" /> OPEN PDF
                           </a>
                           <button 
                             onClick={() => setSelectedPlan({ ...res, subject: res.subject, class: res.class, price: res.price || 39 })}
